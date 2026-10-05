@@ -1,0 +1,130 @@
+"""Local HTTP interface for the first LogiOps vertical slice."""
+
+from __future__ import annotations
+
+import os
+import re
+from contextlib import asynccontextmanager
+from pathlib import Path
+from typing import Any
+
+from fastapi import FastAPI
+from fastapi.responses import JSONResponse
+from pydantic import BaseModel, Field
+
+from .agent import ConverseClient, investigate_with_bedrock
+from .bedrock import AwsCliConverse, BedrockError
+from .service import LogiOpsService, WorkflowError
+from .mcp_server import create_mcp_server
+from .replay import ReplayConverse
+from .security import install_security
+
+
+class ApprovalRequest(BaseModel):
+    plan_id: str = Field(min_length=1)
+    source_version: int = Field(ge=1)
+    approved_by: str = Field(min_length=1)
+
+
+class ExecutionRequest(BaseModel):
+    plan_id: str = Field(min_length=1)
+    source_version: int = Field(ge=1)
+
+
+class InventoryChange(BaseModel):
+    available: int = Field(ge=0)
+
+
+class AgentInvestigationRequest(BaseModel):
+    question: str = Field(default="What is happening, and which plan should we choose?", min_length=1, max_length=1000)
+
+
+def create_app(
+    db_path: str | Path | None = None,
+    bedrock_client: ConverseClient | None = None,
+    *,
+    access_token: str | None = None,
+    mcp_limit_per_minute: int = 60,
+) -> FastAPI:
+    access_token = access_token or os.environ.get("LOGIOPS_ACCESS_TOKEN")
+    public_host = os.environ.get("LOGIOPS_PUBLIC_HOST", "").strip().lower()
+    if public_host and (
+        not re.fullmatch(r"[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?", public_host)
+        or ".." in public_host
+    ):
+        raise RuntimeError("LOGIOPS_PUBLIC_HOST must be one exact hostname without a scheme or port")
+    if os.environ.get("LOGIOPS_PUBLIC") == "1" and (not access_token or len(access_token) < 32):
+        raise RuntimeError("Public mode requires LOGIOPS_ACCESS_TOKEN with at least 32 characters")
+    if os.environ.get("LOGIOPS_PUBLIC") == "1" and not public_host:
+        raise RuntimeError("Public mode requires LOGIOPS_PUBLIC_HOST")
+    path = Path(db_path or os.environ.get("LOGIOPS_DB_PATH", "data/logiops.sqlite3"))
+    service = LogiOpsService(path)
+    mcp = create_mcp_server(service, public_host=public_host or None)
+
+    @asynccontextmanager
+    async def lifespan(_app: FastAPI):
+        async with mcp.session_manager.run():
+            yield
+
+    app = FastAPI(title="LogiOps AI", version="0.1.0", lifespan=lifespan)
+    install_security(app, access_token, limit_per_minute=mcp_limit_per_minute)
+
+    @app.exception_handler(WorkflowError)
+    async def workflow_error_handler(_request: Any, exc: WorkflowError) -> JSONResponse:
+        return JSONResponse(status_code=exc.status_code, content={"detail": str(exc)})
+
+    @app.exception_handler(BedrockError)
+    async def bedrock_error_handler(_request: Any, exc: BedrockError) -> JSONResponse:
+        return JSONResponse(status_code=502, content={"detail": str(exc)})
+
+    @app.get("/healthz")
+    async def health() -> dict[str, str]:
+        return {"status": "ok"}
+
+    @app.post("/demo/reset")
+    async def reset() -> dict[str, Any]:
+        """Restore the synthetic scenario; local development only."""
+        return service.reset()
+
+    @app.post("/demo/inventory")
+    async def change_inventory(change: InventoryChange) -> dict[str, Any]:
+        """Inject a stock change to demonstrate stale-plan protection."""
+        return service.set_local_inventory("SHIP-421", change.available)
+
+    @app.get("/incidents/{incident_id}")
+    async def get_incident(incident_id: str) -> dict[str, Any]:
+        return service.get(incident_id)
+
+    @app.post("/incidents/{incident_id}/investigate")
+    async def investigate(incident_id: str) -> dict[str, Any]:
+        plans = service.investigate(incident_id)
+        return {"plans": plans, "source_version": plans[0]["source_version"]}
+
+    @app.post("/incidents/{incident_id}/agent/investigate")
+    async def agent_investigate(incident_id: str, request: AgentInvestigationRequest) -> dict[str, Any]:
+        source_version = service.get(incident_id)["source_version"]
+        mode = os.environ.get("LOGIOPS_AGENT_MODE", "bedrock")
+        if mode not in ("bedrock", "replay"):
+            raise BedrockError("LOGIOPS_AGENT_MODE must be bedrock or replay")
+        client = bedrock_client or (ReplayConverse() if mode == "replay" else AwsCliConverse())
+        run = await investigate_with_bedrock(
+            app, client, incident_id, request.question,
+            access_token=access_token,
+        )
+        run["mode"] = "custom" if bedrock_client else mode
+        recorded = service.record_agent_run(incident_id, source_version, run)
+        return {**run, **recorded}
+
+    @app.post("/incidents/{incident_id}/approvals")
+    async def approve(incident_id: str, request: ApprovalRequest) -> dict[str, Any]:
+        return service.approve(incident_id, request.plan_id, request.source_version, request.approved_by)
+
+    @app.post("/incidents/{incident_id}/execute")
+    async def execute(incident_id: str, request: ExecutionRequest) -> dict[str, Any]:
+        return service.execute(incident_id, request.plan_id, request.source_version)
+
+    app.mount("/", mcp.streamable_http_app())
+    return app
+
+
+app = create_app()
