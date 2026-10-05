@@ -19,6 +19,10 @@ async def check(url: str) -> None:
         async with streamable_http_client(url, http_client=http) as (read, write, _):
             async with ClientSession(read, write) as session:
                 initialized = await session.initialize()
+                if initialized.protocolVersion != "2025-11-25":
+                    raise RuntimeError(
+                        f"Unexpected MCP protocol version: {initialized.protocolVersion}"
+                    )
                 listed = await session.list_tools()
                 shipment = await session.call_tool("get_shipment", {"shipment_id": "SHIP-421"})
                 if shipment.isError:
