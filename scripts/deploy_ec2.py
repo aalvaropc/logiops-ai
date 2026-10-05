@@ -50,6 +50,24 @@ def terraform_outputs() -> dict[str, str]:
     return {key: value["value"] for key, value in raw.items()}
 
 
+def wait_for_ssm(region: str, instance_id: str) -> None:
+    for _ in range(120):
+        try:
+            described = command(
+                "aws", "--region", region, "ssm", "describe-instance-information",
+                "--filters", f"Key=InstanceIds,Values={instance_id}", "--output", "json",
+            )
+            if any(
+                item.get("PingStatus") == "Online"
+                for item in described.get("InstanceInformationList", [])
+            ):
+                return
+        except subprocess.CalledProcessError:
+            pass
+        time.sleep(5)
+    raise RuntimeError(f"Instance {instance_id} did not become available in Systems Manager")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--package-only", action="store_true")
@@ -68,6 +86,7 @@ def main() -> None:
         raise RuntimeError("Unexpected Terraform output")
     uri = f"s3://{bucket}/releases/{digest}.tar.gz"
     subprocess.run(["aws", "--region", region, "s3", "cp", str(archive), uri, "--only-show-errors"], check=True)
+    wait_for_ssm(region, instance_id)
 
     remote_command = (
         "for attempt in $(seq 1 120); do "
