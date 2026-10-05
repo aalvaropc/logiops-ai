@@ -1,0 +1,109 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+dnf install -y python3.12 python3.12-pip e2fsprogs tar gzip
+id logiops >/dev/null 2>&1 || useradd --system --home-dir /var/lib/logiops --shell /sbin/nologin logiops
+install -d -m 0755 /opt/logiops/releases
+install -d -m 0750 -o logiops -g logiops /var/lib/logiops
+
+# Amazon Linux creates a stable /dev/sdf symlink for the attached NVMe EBS volume.
+for attempt in $(seq 1 150); do
+  if test -b /dev/sdf; then break; fi
+  sleep 2
+done
+test -b /dev/sdf || { echo 'Data EBS volume did not attach' >&2; exit 1; }
+actual_serial=$(lsblk -dn -o SERIAL /dev/sdf | tr -d ' -')
+expected_serial=$(printf '%s' '${data_volume_id}' | tr -d ' -')
+test "$actual_serial" = "$expected_serial" || { echo 'Unexpected EBS volume at /dev/sdf' >&2; exit 1; }
+if ! blkid -s TYPE -o value /dev/sdf >/dev/null 2>&1; then
+  mkfs.ext4 -F /dev/sdf
+fi
+volume_uuid=$(blkid -s UUID -o value /dev/sdf)
+if ! grep -q ' /var/lib/logiops ' /etc/fstab; then
+  printf 'UUID=%s /var/lib/logiops ext4 defaults,nofail 0 2\n' "$volume_uuid" >> /etc/fstab
+fi
+mount /var/lib/logiops || true
+mountpoint -q /var/lib/logiops || { echo 'Data volume is not mounted' >&2; exit 1; }
+chown logiops:logiops /var/lib/logiops
+
+python3.12 -m venv /opt/logiops/tooling
+/opt/logiops/tooling/bin/pip install --no-cache-dir uv==0.11.8
+
+cat > /etc/systemd/system/logiops.service <<'UNIT'
+[Unit]
+Description=LogiOps AI demo API and MCP server
+After=network-online.target
+Wants=network-online.target
+RequiresMountsFor=/var/lib/logiops
+
+[Service]
+Type=simple
+User=logiops
+Group=logiops
+WorkingDirectory=/opt/logiops/current
+EnvironmentFile=/etc/logiops.env
+ExecStart=/opt/logiops/current/.venv/bin/uvicorn logiops.api:app --host 0.0.0.0 --port 8000
+Restart=always
+RestartSec=3
+NoNewPrivileges=true
+ProtectSystem=strict
+ReadWritePaths=/var/lib/logiops
+
+[Install]
+WantedBy=multi-user.target
+UNIT
+
+cat > /usr/local/sbin/logiops-deploy <<'DEPLOY'
+#!/usr/bin/env bash
+set -euo pipefail
+test "$#" -eq 3 || { echo 'Usage: logiops-deploy <s3-uri> <sha256> <public-host>' >&2; exit 2; }
+artifact_uri="$1"
+digest="$2"
+public_host="$3"
+[[ "$artifact_uri" =~ ^s3://[a-z0-9.-]+/releases/[a-f0-9]{64}\.tar\.gz$ ]] || exit 2
+[[ "$digest" =~ ^[a-f0-9]{64}$ ]] || exit 2
+[[ "$public_host" =~ ^[a-z0-9.-]+$ ]] || exit 2
+mountpoint -q /var/lib/logiops || { echo 'Data volume is not mounted' >&2; exit 1; }
+
+release="/opt/logiops/releases/$digest"
+if ! test -d "$release"; then
+  archive=$(mktemp /tmp/logiops-release.XXXXXX.tar.gz)
+  trap 'rm -f "$archive"' EXIT
+  aws s3 cp --region '${aws_region}' "$artifact_uri" "$archive" --only-show-errors
+  printf '%s  %s\n' "$digest" "$archive" | sha256sum -c -
+  mkdir -p "$release"
+  tar -xzf "$archive" -C "$release"
+  /opt/logiops/tooling/bin/uv sync --project "$release" --frozen --no-dev --python /usr/bin/python3.12
+  chown -R logiops:logiops "$release"
+fi
+
+token=$(aws ssm get-parameter --region '${aws_region}' --name '${token_param}' --with-decryption --query Parameter.Value --output text)
+[[ "$token" =~ ^[a-f0-9]{64}$ ]] || { echo 'Access token must be 64 lowercase hex characters' >&2; exit 1; }
+umask 027
+{
+  printf 'AWS_REGION=${aws_region}\n'
+  printf 'BEDROCK_MODEL_ID=${model_id}\n'
+  printf 'LOGIOPS_DB_PATH=/var/lib/logiops/logiops.sqlite3\n'
+  printf 'LOGIOPS_AGENT_MODE=bedrock\n'
+  printf 'LOGIOPS_PUBLIC=1\n'
+  printf 'LOGIOPS_PUBLIC_HOST=%s\n' "$public_host"
+  printf 'LOGIOPS_ACCESS_TOKEN=%s\n' "$token"
+} > /etc/logiops.env
+chown root:logiops /etc/logiops.env
+chmod 0640 /etc/logiops.env
+ln -sfn "$release" /opt/logiops/current
+systemctl daemon-reload
+systemctl enable logiops.service
+systemctl restart logiops.service
+for attempt in $(seq 1 30); do
+  if curl -fsS http://127.0.0.1:8000/healthz >/dev/null; then
+    echo 'LogiOps health check passed'
+    exit 0
+  fi
+  sleep 2
+done
+systemctl status logiops.service --no-pager >&2 || true
+exit 1
+DEPLOY
+chmod 0750 /usr/local/sbin/logiops-deploy
+systemctl daemon-reload
