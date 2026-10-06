@@ -87,7 +87,12 @@ def main() -> None:
     bucket = outputs["release_bucket"]
     instance_id = outputs["instance_id"]
     host = outputs["cloudfront_domain"]
-    if not re.fullmatch(r"[a-z0-9.-]+", bucket + host) or not re.fullmatch(r"i-[a-f0-9]+", instance_id):
+    sandbox_host = outputs["sandbox_domain"]
+    if (
+        not re.fullmatch(r"[a-z0-9.-]+", bucket + host + sandbox_host)
+        or sandbox_host == host
+        or not re.fullmatch(r"i-[a-f0-9]+", instance_id)
+    ):
         raise RuntimeError("Unexpected Terraform output")
     uri = f"s3://{bucket}/releases/{digest}.tar.gz"
     subprocess.run(["aws", "--region", region, "s3", "cp", str(archive), uri, "--only-show-errors"], check=True)
@@ -96,7 +101,7 @@ def main() -> None:
     remote_command = (
         "for attempt in $(seq 1 120); do "
         "test -x /usr/local/sbin/logiops-deploy && break; sleep 5; done; "
-        f"/usr/local/sbin/logiops-deploy {uri} {digest} {host}"
+        f"/usr/local/sbin/logiops-deploy {uri} {digest} {host} {sandbox_host}"
     )
     sent = command(
         "aws", "--region", region, "ssm", "send-command",

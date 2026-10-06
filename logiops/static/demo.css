@@ -114,4 +114,5 @@ footer { padding: 39px 0; color: #718e91; text-align: center; font-size: 11px; }
 .mcp-app[hidden] { display: none; }
 .mcp-app-label { display: block; margin: 0 0 8px; color: #75dcc5; font-size: 10px; font-weight: 800; letter-spacing: .14em; text-transform: uppercase; }
 .mcp-app-label code { color: #b9d8d2; letter-spacing: 0; text-transform: none; font-size: 11px; }
+.mcp-app.borderless { border-color: transparent; }
 .mcp-app iframe { display: block; width: 100%; height: 260px; border: 0; border-radius: 8px; background: #0d1c20; }

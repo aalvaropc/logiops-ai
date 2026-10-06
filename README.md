@@ -66,7 +66,8 @@ token into the page to connect. It stays in browser memory until the page is
 reloaded.
 
 The API reference is at <http://127.0.0.1:8000/docs>. The MCP endpoint is
-<http://127.0.0.1:8000/mcp> and negotiates protocol version 2025-11-25.
+<http://127.0.0.1:8000/mcp> and negotiates MCP protocol version 2025-11-25
+(the core protocol; MCP Apps, below, is an extension with its own version).
 The SQLite database is created at
 `data/logiops.sqlite3` and survives server restarts. Set `LOGIOPS_DB_PATH` to
 change the location. The default configuration is **local only**. Do not bind
@@ -120,12 +121,21 @@ starting with how/what/should/…) to the agent, never to approve or execute.
 
 `investigate_incident` declares an MCP Apps view (`_meta.ui.resourceUri` =
 `ui://logiops/resolution-options.html`, served as `text/html;profile=mcp-app`).
-A host that supports MCP Apps renders the calculated plans as cards next to
-the conversation. The card can only ask the host to **select** a plan; there
-is no approval tool, so approval stays with the operator. The browser demo
-acts as the host: it reads the resource over `/mcp`, renders it in a sandboxed
-iframe (`allow-scripts` only, no network via CSP) and accepts messages only
-from that frame.
+A host that supports MCP Apps (extension version 2026-01-26) renders the
+calculated plans as cards next to the conversation. The card can only ask the
+host to **select** a plan: there is no approval tool, and
+`execute_approved_plan` is marked model-only (`_meta.ui.visibility`), so no
+view can call it in any host. Approval stays with the operator.
+
+The browser demo is a spec-conformant web host. It reads the resource over
+`/mcp` and loads it through a **sandbox proxy** served from a different
+origin: `/mcp-app/sandbox.html` on `localhost` when the page is on
+`127.0.0.1` (and the reverse), or on `LOGIOPS_SANDBOX_HOST` in public mode.
+The proxy puts the view in an inner `allow-scripts` iframe (opaque origin)
+under a CSP with no network access, relays messages, and drops the view if it
+navigates away. The host checks the proxy's origin on every message, sends
+`ui/resource-teardown` before removing the view, and shows no card at all if
+no separate sandbox origin is available.
 
 In Swagger, run `POST /demo/reset`, `POST /incidents/SHIP-421/agent/investigate`
 (or the deterministic `/investigate` endpoint),

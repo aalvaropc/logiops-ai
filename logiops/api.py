@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import html
 import os
 import re
 import secrets
@@ -9,7 +10,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any, Literal
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse, JSONResponse, Response
 from pydantic import BaseModel, Field
 
@@ -18,7 +19,11 @@ from .bedrock import BedrockConverse, BedrockError
 from .service import LogiOpsService, WorkflowError
 from .mcp_server import create_mcp_server
 from .replay import ReplayConverse
-from .security import install_security
+from .security import SANDBOX_PATH, install_security
+
+HOSTNAME = re.compile(r"[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?")
+LOOPBACK_PAIRS = {"127.0.0.1": "localhost", "localhost": "127.0.0.1"}
+SANDBOX_META = '<meta name="logiops-sandbox-origin" content="">'
 
 
 class ApprovalRequest(BaseModel):
@@ -67,15 +72,18 @@ def create_app(
 ) -> FastAPI:
     access_token = access_token or os.environ.get("LOGIOPS_ACCESS_TOKEN")
     public_host = os.environ.get("LOGIOPS_PUBLIC_HOST", "").strip().lower()
-    if public_host and (
-        not re.fullmatch(r"[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?", public_host)
-        or ".." in public_host
-    ):
+    if public_host and (not HOSTNAME.fullmatch(public_host) or ".." in public_host):
         raise RuntimeError("LOGIOPS_PUBLIC_HOST must be one exact hostname without a scheme or port")
     if os.environ.get("LOGIOPS_PUBLIC") == "1" and (not access_token or len(access_token) < 32):
         raise RuntimeError("Public mode requires LOGIOPS_ACCESS_TOKEN with at least 32 characters")
     if os.environ.get("LOGIOPS_PUBLIC") == "1" and not public_host:
         raise RuntimeError("Public mode requires LOGIOPS_PUBLIC_HOST")
+    # MCP Apps: web hosts must render views through a sandbox proxy on another origin.
+    sandbox_host = os.environ.get("LOGIOPS_SANDBOX_HOST", "").strip().lower()
+    if sandbox_host and (not HOSTNAME.fullmatch(sandbox_host) or ".." in sandbox_host):
+        raise RuntimeError("LOGIOPS_SANDBOX_HOST must be one exact hostname without a scheme or port")
+    if sandbox_host and sandbox_host == public_host:
+        raise RuntimeError("LOGIOPS_SANDBOX_HOST must differ from LOGIOPS_PUBLIC_HOST")
     path = Path(db_path or os.environ.get("LOGIOPS_DB_PATH", "data/logiops.sqlite3"))
     service = LogiOpsService(path)
     mcp = create_mcp_server(service, public_host=public_host or None)
@@ -96,6 +104,7 @@ def create_app(
         limit_per_minute=mcp_limit_per_minute,
         agent_limit_per_minute=agent_limit_per_minute,
         trust_cloudfront=os.environ.get("LOGIOPS_TRUST_CLOUDFRONT") == "1",
+        sandbox_host=sandbox_host or None,
     )
     static_dir = Path(__file__).resolve().parent / "static"
     demo_assets = {
@@ -103,10 +112,50 @@ def create_app(
         "demo.css": (static_dir / "demo.css").read_bytes(),
         "demo.js": (static_dir / "demo.js").read_bytes(),
     }
+    sandbox_page = (static_dir / "mcp_app_sandbox.html").read_text(encoding="utf-8")
+
+    def origins(request: Request) -> tuple[str | None, str | None]:
+        """(page origin, sandbox origin) for this request; (None, None) if there is no safe pair.
+
+        Public mode uses the two configured HTTPS hostnames. Locally, 127.0.0.1 and
+        localhost are different origins on the same server, so each one sandboxes the other.
+        """
+        if public_host:
+            return f"https://{public_host}", (f"https://{sandbox_host}" if sandbox_host else None)
+        name, _, port = request.headers.get("host", "").partition(":")
+        other = LOOPBACK_PAIRS.get(name.lower())
+        if other is None or (port and not port.isdigit()):
+            return None, None
+        scheme = request.url.scheme
+        suffix = f":{port}" if port else ""
+        return f"{scheme}://{name.lower()}{suffix}", f"{scheme}://{other}{suffix}"
 
     @app.get("/demo", include_in_schema=False)
-    async def demo_page() -> HTMLResponse:
-        return HTMLResponse(demo_assets["demo.html"])
+    async def demo_page(request: Request) -> HTMLResponse:
+        _page, sandbox = origins(request)
+        page = demo_assets["demo.html"].decode("utf-8")
+        return HTMLResponse(page.replace(SANDBOX_META, SANDBOX_META.replace('content=""', f'content="{html.escape(sandbox or "")}"')))
+
+    @app.get(SANDBOX_PATH, include_in_schema=False)
+    async def mcp_app_sandbox(request: Request) -> Response:
+        """Sandbox proxy for MCP Apps views; served only on the sandbox origin, never with data."""
+        if public_host:
+            if not sandbox_host or request.headers.get("host", "").split(":")[0].lower() != sandbox_host:
+                return JSONResponse(status_code=404, content={"detail": "Not found"})
+            host_origin = f"https://{public_host}"
+        else:
+            _self, host_origin = origins(request)
+            if host_origin is None:
+                return JSONResponse(status_code=404, content={"detail": "Not found"})
+        # Views are loaded through srcdoc and inherit this policy, so it allows inline
+        # code but no network; each view also gets its own, stricter policy.
+        policy = (
+            "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:; "
+            f"connect-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors {host_origin}"
+        )
+        return HTMLResponse(sandbox_page, headers={
+            "Content-Security-Policy": policy, "Referrer-Policy": "no-referrer", "Cache-Control": "no-store",
+        })
 
     @app.get("/assets/demo.css", include_in_schema=False)
     async def demo_style() -> Response:

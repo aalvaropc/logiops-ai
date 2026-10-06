@@ -2,10 +2,19 @@
 
 const $ = (id) => document.getElementById(id);
 const state = { token: "", snapshot: null, selectedPlanId: null, busy: false, conversation: [], speaking: false, app: null };
-// MCP Apps host (protocol 2026-01-26). The view runs in a sandboxed iframe with an opaque origin,
-// no network and no access to the token; it can only ask the host to select a plan.
-const MCP_APP = { uri: "ui://logiops/resolution-options.html", mime: "text/html;profile=mcp-app", protocol: "2026-01-26" };
-const APP_CSP = "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'";
+// MCP Apps host (protocol 2026-01-26). As the spec requires for web hosts, the view runs
+// behind a sandbox proxy served from a different origin (127.0.0.1 <-> localhost locally,
+// a second hostname in public mode). The view has no network and never sees the token;
+// it can only ask the host to select a plan.
+const MCP_APP = { uri: "ui://logiops/resolution-options.html", mime: "text/html;profile=mcp-app", protocol: "2026-01-26", proxyPath: "/mcp-app/sandbox.html" };
+const SANDBOX_ORIGIN = (() => {
+  const value = document.querySelector('meta[name="logiops-sandbox-origin"]')?.content || "";
+  try {
+    const url = new URL(value);
+    return /^https?:$/.test(url.protocol) && url.origin !== location.origin ? url.origin : null;
+  } catch (_) { return null; }  // no separate origin configured: fail closed, no MCP App
+})();
+const app = { generation: 0, resource: null, nextId: 1 };
 const eventLabels = {
   scenario_reset: "Synthetic incident reset",
   incident_investigated: "MCP investigation completed",
@@ -64,30 +73,85 @@ async function mcpRequest(method, params) {
   return body.result;
 }
 
+function loadAppResource() {
+  // The view is static: read it once per page, not on every investigation (MCP budget).
+  app.resource ??= (async () => {
+    const listed = await mcpRequest("tools/list", {});
+    const tool = listed.tools.find((item) => item.name === "investigate_incident");
+    const uri = tool?._meta?.ui?.resourceUri ?? tool?._meta?.["ui/resourceUri"];
+    if (uri !== MCP_APP.uri) return null;
+    const read = await mcpRequest("resources/read", { uri });
+    const content = read.contents?.[0];
+    if (!content || content.mimeType !== MCP_APP.mime || typeof content.text !== "string") return null;
+    const ui = content._meta?.ui || {};
+    return { html: content.text, csp: ui.csp || {}, prefersBorder: ui.prefersBorder !== false };
+  })().catch((error) => { app.resource = null; throw error; });
+  return app.resource;
+}
+
 async function showMcpApp(run) {
   const step = run.tool_trace?.find((item) => item.tool === "investigate_incident" && !item.is_error);
   if (!step) return;
-  const listed = await mcpRequest("tools/list", {});
-  const tool = listed.tools.find((item) => item.name === "investigate_incident");
-  const uri = tool?._meta?.ui?.resourceUri ?? tool?._meta?.["ui/resourceUri"];
-  if (uri !== MCP_APP.uri) return;
-  const read = await mcpRequest("resources/read", { uri });
-  const content = read.contents?.[0];
-  if (!content || content.mimeType !== MCP_APP.mime || typeof content.text !== "string") return;
+  if (!SANDBOX_ORIGIN) {
+    console.info("MCP App not shown: no sandbox origin separate from this page is configured.");
+    return;
+  }
+  const generation = ++app.generation;
+  const resource = await loadAppResource();
+  // A reset, stock change or newer investigation may have happened while loading.
+  if (!resource || generation !== app.generation || !state.snapshot
+      || step.output.source_version !== visibleVersion(state.snapshot)) return;
+  await teardownMcpApp("replaced", { invalidate: false });
+  if (generation !== app.generation) return;
   state.app = {
     version: step.output.source_version,
     input: step.input,
     result: { content: [{ type: "text", text: JSON.stringify(step.output) }], structuredContent: step.output },
+    resource,
+    ready: false,
   };
-  const frame = $("mcp-app-frame");
-  frame.srcdoc = content.text.replace(/<head>/i, `<head><meta http-equiv="Content-Security-Policy" content="${APP_CSP}">`);
+  const frame = document.createElement("iframe");
+  frame.id = "mcp-app-frame";
+  frame.title = "Resolution options (MCP App)";
+  // The proxy needs both tokens (spec); its different origin is what isolates it from this page.
+  frame.setAttribute("sandbox", "allow-scripts allow-same-origin");
+  frame.setAttribute("referrerpolicy", "no-referrer");
+  frame.src = `${SANDBOX_ORIGIN}${MCP_APP.proxyPath}?host=${encodeURIComponent(location.origin)}`;
+  $("mcp-app-slot").replaceChildren(frame);
+  $("mcp-app").classList.toggle("borderless", !resource.prefersBorder);
   $("mcp-app").hidden = false;
 }
 
-function hideMcpApp() {
+// The spec requires ui/resource-teardown before the view goes away; wait briefly for its answer.
+function teardownMcpApp(reason, { invalidate = true } = {}) {
+  const current = state.app;
+  const frame = $("mcp-app-frame");
   state.app = null;
+  if (invalidate) app.generation += 1;  // also cancels a view that is still loading
   $("mcp-app").hidden = true;
-  $("mcp-app-frame").removeAttribute("srcdoc");
+  if (!frame) return Promise.resolve();
+  return new Promise((resolve) => {
+    let finished = false;
+    const id = `teardown-${app.nextId++}`;
+    const finish = () => {
+      if (finished) return;
+      finished = true;
+      window.removeEventListener("message", onReply);
+      frame.remove();
+      resolve();
+    };
+    const onReply = (event) => {
+      if (event.source === frame.contentWindow && event.origin === SANDBOX_ORIGIN && event.data?.id === id) finish();
+    };
+    if (!current?.ready) return finish();
+    window.addEventListener("message", onReply);
+    frame.contentWindow.postMessage({ jsonrpc: "2.0", id, method: "ui/resource-teardown", params: { reason } }, SANDBOX_ORIGIN);
+    setTimeout(finish, 500);
+  });
+}
+
+function hideMcpApp(reason = "hidden") {
+  teardownMcpApp(reason);
 }
 
 // Selection from the view is resolved against the host's own snapshot; labels, prices or
@@ -95,7 +159,8 @@ function hideMcpApp() {
 function selectFromApp(params) {
   const text = params?.content?.type === "text" ? String(params.content.text) : "";
   const match = text.match(/^Select plan (\S+)$/);
-  if (!match || !state.snapshot) return false;
+  // Never change the selection under the operator while an action is running.
+  if (!match || !state.snapshot || state.busy) return false;
   const plan = visiblePlans(state.snapshot).find((item) => item.id === match[1]);
   if (!plan || visibleApproval(state.snapshot) || state.snapshot.executions.length) return false;
   state.selectedPlanId = plan.id;
@@ -107,12 +172,16 @@ function selectFromApp(params) {
 
 window.addEventListener("message", (event) => {
   const frame = $("mcp-app-frame");
-  if (!state.app || event.source !== frame.contentWindow) return;
+  if (!state.app || !frame || event.source !== frame.contentWindow || event.origin !== SANDBOX_ORIGIN) return;
   const msg = event.data;
   if (!msg || msg.jsonrpc !== "2.0" || typeof msg.method !== "string") return;
-  const target = frame.contentWindow;
-  const reply = (payload) => target.postMessage({ jsonrpc: "2.0", id: msg.id, ...payload }, "*");
-  if (msg.method === "ui/initialize") {
+  const send = (payload) => frame.contentWindow.postMessage({ jsonrpc: "2.0", ...payload }, SANDBOX_ORIGIN);
+  const reply = (payload) => { if (msg.id !== undefined) send({ id: msg.id, ...payload }); };
+  if (msg.method === "ui/notifications/sandbox-proxy-ready") {
+    send({ method: "ui/notifications/sandbox-resource-ready", params: { html: state.app.resource.html, csp: state.app.resource.csp } });
+  } else if (msg.method === "logiops/sandbox-view-removed") {
+    hideMcpApp("view navigated");
+  } else if (msg.method === "ui/initialize") {
     reply({ result: {
       protocolVersion: MCP_APP.protocol,
       hostInfo: { name: "LogiOps Alexa+-style demo", version: "1.0.0" },
@@ -120,14 +189,15 @@ window.addEventListener("message", (event) => {
       hostContext: { theme: "dark", displayMode: "inline" },
     } });
   } else if (msg.method === "ui/notifications/initialized") {
-    target.postMessage({ jsonrpc: "2.0", method: "ui/notifications/tool-input", params: { arguments: state.app.input } }, "*");
-    target.postMessage({ jsonrpc: "2.0", method: "ui/notifications/tool-result", params: state.app.result }, "*");
+    state.app.ready = true;
+    send({ method: "ui/notifications/tool-input", params: { arguments: state.app.input } });
+    send({ method: "ui/notifications/tool-result", params: state.app.result });
   } else if (msg.method === "ui/notifications/size-changed") {
     const height = Number(msg.params?.height);
     if (Number.isFinite(height)) frame.style.height = `${Math.min(Math.max(height, 80), 640)}px`;
   } else if (msg.method === "ui/message") {
-    reply(selectFromApp(msg.params) ? { result: {} } : { error: { code: -32000, message: "Unknown or unavailable plan" } });
-  } else if (msg.id !== undefined) {
+    reply(selectFromApp(msg.params) ? { result: {} } : { error: { code: -32000, message: "Unknown or unavailable plan, or the operator panel is busy" } });
+  } else {
     reply({ error: { code: -32601, message: "Method not supported by this host" } });
   }
 });
@@ -293,6 +363,9 @@ function renderControls() {
   $("mic").disabled = state.busy || !snapshot;
   for (const chip of document.querySelectorAll(".chip")) chip.disabled = state.busy || !snapshot;
   $("approve").disabled = state.busy || !hasCurrentPlan || !state.selectedPlanId || approved || executed;
+  // Name the plan on the button, so a selection made elsewhere (the MCP App) is visible.
+  const selected = snapshot && !approved && !executed && visiblePlans(snapshot).find((plan) => plan.id === state.selectedPlanId);
+  $("approve").textContent = selected ? `Approve “${selected.label}”` : "Approve selected plan";
   $("execute").disabled = state.busy || !approved || executed;
   $("reset").disabled = state.busy;
   $("set-stock").disabled = state.busy || !snapshot || executed;

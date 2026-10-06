@@ -4,6 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="dark">
+  <meta name="logiops-sandbox-origin" content="">
   <title>LogiOps AI · SHIP-421</title>
   <link rel="stylesheet" href="/assets/demo.css">
   <script src="/assets/demo.js" defer></script>
@@ -51,7 +52,7 @@
             <ol id="conversation" class="conversation" aria-live="polite" aria-label="Conversation"></ol>
             <div id="mcp-app" class="mcp-app" hidden>
               <span class="mcp-app-label">MCP App · <code>ui://logiops/resolution-options.html</code></span>
-              <iframe id="mcp-app-frame" title="Resolution options (MCP App)" sandbox="allow-scripts" referrerpolicy="no-referrer"></iframe>
+              <div id="mcp-app-slot"></div>
             </div>
             <div class="suggestions" aria-label="Suggested requests">
               <button type="button" class="chip" data-say="What's happening with shipment SHIP-421, and which plan should we choose?">What's happening with SHIP-421?</button>

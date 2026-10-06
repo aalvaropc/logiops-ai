@@ -102,7 +102,9 @@ def create_mcp_server(service: LogiOpsService, *, public_host: str | None = None
             ],
         }
 
-    @server.tool()
+    # The only state-changing tool. MCP Apps lets views call server tools unless
+    # visibility says otherwise, so keep it model-only: no view can execute.
+    @server.tool(meta={"ui": {"visibility": ["model"]}})
     async def execute_approved_plan(shipment_id: str, plan_id: str, source_version: int) -> dict[str, Any]:
         """Execute only a plan already approved by a human through the local API."""
         try:

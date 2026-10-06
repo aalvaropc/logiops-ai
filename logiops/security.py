@@ -13,7 +13,8 @@ from fastapi.responses import JSONResponse
 from .agent import INTERNAL_HEADER
 
 
-PUBLIC_PATHS = ("/healthz", "/docs", "/openapi.json", "/redoc", "/demo")
+SANDBOX_PATH = "/mcp-app/sandbox.html"
+PUBLIC_PATHS = ("/healthz", "/docs", "/openapi.json", "/redoc", "/demo", SANDBOX_PATH)
 
 
 class _SlidingWindow:
@@ -66,6 +67,7 @@ def install_security(
     limit_per_minute: int = 60,
     agent_limit_per_minute: int = 5,
     trust_cloudfront: bool = False,
+    sandbox_host: str | None = None,
 ) -> None:
     mcp_limiter = _SlidingWindow(limit_per_minute, 60)
     agent_limiter = _SlidingWindow(agent_limit_per_minute, 60)
@@ -73,6 +75,9 @@ def install_security(
     @app.middleware("http")
     async def guard(request: Request, call_next: Any) -> Any:
         path = request.url.path
+        # The MCP Apps sandbox origin serves its proxy page and nothing else.
+        if sandbox_host and request.headers.get("host", "").split(":")[0].lower() == sandbox_host and path != SANDBOX_PATH:
+            return JSONResponse(status_code=404, content={"detail": "Not found"})
         if path in PUBLIC_PATHS or path.startswith("/assets/"):
             return await call_next(request)
         if access_token:
