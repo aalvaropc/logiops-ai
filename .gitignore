@@ -8,6 +8,16 @@ __pycache__/
 *.pyc
 .venv/
 venv/
+data/
+.secrets/
+
+# terraform
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+terraform.tfvars
+terraform.tfvars.json
 
 # node
 node_modules/

@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <title>LogiOps AI · SHIP-421</title>
+  <link rel="stylesheet" href="/assets/demo.css">
+  <script src="/assets/demo.js" defer></script>
+</head>
+<body>
+  <div class="shell">
+    <header class="topbar">
+      <div class="brand"><span class="brand-mark">L</span><span>LogiOps <strong>AI</strong></span></div>
+      <div class="topbar-right"><span class="track">Simulated Alexa+ experience · MCP · Amazon Bedrock</span><span id="connection" class="connection">Connecting</span></div>
+    </header>
+
+    <main>
+      <section class="hero" aria-labelledby="page-title">
+        <div class="eyebrow">Incident command center <span>·</span> Synthetic scenario</div>
+        <div class="hero-grid">
+          <div>
+            <h1 id="page-title">A delay is a decision.<br><em>Resolve it with evidence.</em></h1>
+            <p>Investigate shipment SHIP-421, compare delivery options, approve one plan, and verify the operational result.</p>
+          </div>
+          <div class="hero-actions">
+            <label for="access-token">Demo access token <span>(public deployment only)</span></label>
+            <div class="token-row"><input id="access-token" type="password" autocomplete="off" placeholder="Paste operator token"><button id="connect" type="button" class="secondary">Connect</button></div>
+            <label for="stock-input" class="stock-label">Simulate a stock change <span>(invalidates approvals)</span></label>
+            <div class="token-row"><input id="stock-input" type="number" min="0" max="20" step="1" value="11"><button id="set-stock" type="button" class="secondary">Apply</button></div>
+            <button id="reset" type="button" class="quiet">↺ Reset synthetic incident</button>
+          </div>
+        </div>
+      </section>
+
+      <div id="message" class="message" role="status" aria-live="polite"></div>
+
+      <section class="overview" aria-label="Incident summary">
+        <div class="overview-heading"><span class="section-index">01 / INCIDENT</span><h2>SHIP-421 <span id="incident-status" class="status-chip">Loading</span></h2><p>Lima <span class="route-arrow">→</span> Arequipa · 20 laptops</p></div>
+        <div class="metric"><span>Original ETA</span><strong id="original-eta">—</strong><small>Customer promise</small></div>
+        <div class="metric warning"><span>Delayed ETA</span><strong id="delayed-eta">—</strong><small id="delay-hours">—</small></div>
+        <div class="metric"><span>Local stock</span><strong id="stock-value">—</strong><small>Arequipa warehouse</small></div>
+      </section>
+
+      <section class="workbench">
+        <div class="main-column">
+          <section class="panel assistant-panel" aria-labelledby="assistant-title">
+            <div class="panel-heading"><span class="section-index">02 / ASK LOGIOPS</span><span id="agent-mode" class="mode-chip">Agent</span></div>
+            <h2 id="assistant-title">Talk to the operations agent</h2>
+            <p>Ask in plain language, by text or voice. The agent calls the MCP tools for shipment, order, inventory, and carrier facts, then calculates the plans. Say “approve the split plan” or “execute it” to act; every action still checks the exact plan and version.</p>
+            <ol id="conversation" class="conversation" aria-live="polite" aria-label="Conversation"></ol>
+            <div class="suggestions" aria-label="Suggested requests">
+              <button type="button" class="chip" data-say="What's happening with shipment SHIP-421, and which plan should we choose?">What's happening with SHIP-421?</button>
+              <button type="button" class="chip" data-say="Approve the recommended plan">Approve the recommended plan</button>
+              <button type="button" class="chip" data-say="Execute the approved plan">Execute it</button>
+            </div>
+            <form id="ask-form" class="ask-row">
+              <label class="visually-hidden" for="ask-input">Message to LogiOps</label>
+              <input id="ask-input" type="text" maxlength="500" autocomplete="off" placeholder="Ask LogiOps about SHIP-421">
+              <button id="mic" type="button" class="secondary mic" aria-pressed="false" hidden>Speak</button>
+              <button id="ask" type="submit" class="secondary">Send</button>
+            </form>
+            <label id="speak-toggle" class="speak-toggle" hidden><input id="speak-replies" type="checkbox"> Read replies aloud</label>
+          </section>
+
+          <section class="panel plans-panel" aria-labelledby="plans-title">
+            <div class="panel-heading"><span class="section-index">03 / DECIDE</span><span class="muted">Human approval required</span></div>
+            <h2 id="plans-title">Compare the options</h2>
+            <p>Completion times are projections from synthetic carrier quotes. Physical delivery is not verified.</p>
+            <div id="plans" class="plans"><div class="empty">Run the investigation to see the options.</div></div>
+            <div class="approval-row"><label for="approver">Approved by</label><input id="approver" type="text" maxlength="80" value="demo-operator"><button id="approve" class="secondary" type="button" disabled>Approve selected plan</button></div>
+          </section>
+
+          <section class="panel execute-panel" aria-labelledby="execution-title">
+            <div class="panel-heading"><span class="section-index">04 / EXECUTE</span><span id="execution-state" class="muted">Waiting for approval</span></div>
+            <h2 id="execution-title">Put the plan into motion</h2>
+            <p>Execution updates the synthetic fulfillment state, simulates notifications, and checks all 20 units are accounted for.</p>
+            <button id="execute" class="primary" type="button" disabled>Execute approved plan <span>→</span></button>
+            <div id="execution-result" class="result" hidden></div>
+          </section>
+        </div>
+
+        <aside class="side-column" aria-label="Operational trace">
+          <section class="panel trace-panel"><div class="panel-heading"><span class="section-index">AUDIT TRAIL</span><span id="event-count" class="muted">0 events</span></div><h2>Every step, recorded.</h2><ol id="timeline" class="timeline"></ol></section>
+          <div class="boundary"><strong>Operator boundary</strong><p>The agent can investigate and recommend. Only the operator can approve; execution checks the exact plan and source version.</p></div>
+        </aside>
+      </section>
+    </main>
+    <footer>LogiOps AI · Synthetic logistics workflow · Operational verification ≠ physical delivery</footer>
+  </div>
+</body>
+</html>
