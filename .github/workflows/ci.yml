@@ -37,7 +37,7 @@ jobs:
         with:
           python-version: "3.12"
       - run: docker build -t logiops-ai .
-      - run: docker run -d --name logiops -p 127.0.0.1:8000:8000 logiops-ai
+      - run: docker run -d --name logiops -e LOGIOPS_AGENT_LIMIT_PER_MINUTE=60 -p 127.0.0.1:8000:8000 logiops-ai
       - name: Health
         run: curl --fail --silent --retry 20 --retry-all-errors --retry-delay 1 http://127.0.0.1:8000/healthz
       - name: Replay investigation through MCP

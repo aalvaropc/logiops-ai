@@ -38,10 +38,20 @@ def walk(client: httpx.Client) -> None:
     def kind(plans: list[dict[str, Any]], wanted: str) -> dict[str, Any]:
         return next(plan for plan in plans if plan["kind"] == wanted)
 
+    def investigate() -> dict[str, Any]:
+        """The agent run, or a clear failure (for example HTTP 429 from the agent rate limit)."""
+        response = post(f"/incidents/{INCIDENT}/agent/investigate")
+        if response.status_code != 200:
+            raise SystemExit(f"FAIL  investigation returned HTTP {response.status_code}: {response.text[:150]}"
+                             + ("\n(The agent rate limit is 5 per minute; start the server with"
+                                " LOGIOPS_AGENT_LIMIT_PER_MINUTE=60 for repeated walkthroughs.)"
+                                if response.status_code == 429 else ""))
+        return response.json()
+
     check("server is healthy", client.get("/healthz").status_code == 200)
     check("reset the synthetic incident", post("/demo/reset").status_code == 200)
 
-    run = post(f"/incidents/{INCIDENT}/agent/investigate").json()
+    run = investigate()
     plans = run.get("plans", [])
     check("replay investigation: three plans, zero tokens, grounded-style answer",
           len(plans) == 3 and run.get("mode") == "replay" and run["usage"] == {"inputTokens": 0, "outputTokens": 0},
@@ -62,7 +72,7 @@ def walk(client: httpx.Client) -> None:
     check("one execution and one approval recorded", len(state["executions"]) == 1 and len(state["approvals"]) == 1)
 
     post("/demo/reset")
-    plans = post(f"/incidents/{INCIDENT}/agent/investigate").json()["plans"]
+    plans = investigate()["plans"]
     split = kind(plans, "split-express")
     body = {"plan_id": split["id"], "source_version": split["source_version"]}
     post(f"/incidents/{INCIDENT}/approvals", approved_by="rehearsal", **body)
@@ -70,7 +80,7 @@ def walk(client: httpx.Client) -> None:
     check("stock change accepted", changed.status_code == 200)
     refused = post(f"/incidents/{INCIDENT}/execute", **body)
     check("the stale approval is refused", refused.status_code == 409, str(refused.status_code))
-    replanned = post(f"/incidents/{INCIDENT}/agent/investigate").json()["plans"]
+    replanned = investigate()["plans"]
     check("a new investigation offers only the feasible plans (no split)",
           {plan["kind"] for plan in replanned} == {"wait", "reroute"}, str({plan["kind"] for plan in replanned}))
     post("/demo/reset")
