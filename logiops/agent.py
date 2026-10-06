@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 from typing import Any, Protocol
 
 import httpx
@@ -33,6 +34,16 @@ Clearly say delivery is projected, not physically confirmed. Never claim an acti
 was approved or executed unless a tool reports it. Human approval is required
 before execution. Do not invent plan IDs, quantities, prices, or timestamps."""
 
+FOLLOWUP_PROMPT = """You are LogiOps AI, answering a follow-up question about a synthetic
+logistics incident you already investigated. The <context> block holds the
+current calculated plans, your latest assessment, and any current approval; the
+<history> block is the recent conversation. Answer briefly from that context,
+using its exact numbers and plan ids. Call a read tool only if the context lacks
+a fact you need. Never claim a plan was approved or executed unless the context
+says so; a person approves and executes through the operator interface.
+Delivery is projected, not physically confirmed."""
+FOLLOWUP_DEADLINE_SECONDS = 30.0
+
 
 class ConverseClient(Protocol):
     async def converse(
@@ -40,13 +51,12 @@ class ConverseClient(Protocol):
     ) -> dict[str, Any]: ...
 
 
-async def _investigate_with_bedrock(
-    app: Any, client: ConverseClient, shipment_id: str, question: str, *,
+async def _converse_loop(
+    app: Any, client: ConverseClient, shipment_id: str, first_message: str, *,
+    system: str, required_tool: str | None,
     access_token: str | None = None, internal_key: str | None = None, max_turns: int = 8
 ) -> dict[str, Any]:
-    messages: list[dict[str, Any]] = [
-        {"role": "user", "content": [{"text": f"Shipment: {shipment_id}. {question}"}]}
-    ]
+    messages: list[dict[str, Any]] = [{"role": "user", "content": [{"text": first_message}]}]
     trace: list[dict[str, Any]] = []
     usage = {"inputTokens": 0, "outputTokens": 0}
     headers = {"Authorization": f"Bearer {access_token}"} if access_token else {}
@@ -72,7 +82,7 @@ async def _investigate_with_bedrock(
                 if {spec["toolSpec"]["name"] for spec in tool_specs} != READ_TOOLS:
                     raise BedrockError("The read-only MCP toolset is incomplete")
                 for _ in range(max_turns):
-                    response = await client.converse(messages, SYSTEM_PROMPT, tool_specs)
+                    response = await client.converse(messages, system, tool_specs)
                     turn_usage = response.get("usage", {})
                     for key in usage:
                         usage[key] += turn_usage.get(key, 0)
@@ -85,7 +95,9 @@ async def _investigate_with_bedrock(
                     if stop_reason == "max_tokens" and has_tool_use:
                         raise BedrockError("Bedrock response was truncated in the middle of a tool call")
                     if stop_reason in ("end_turn", "max_tokens"):
-                        if not any(step["tool"] == "investigate_incident" and not step["is_error"] for step in trace):
+                        if required_tool and not any(
+                            step["tool"] == required_tool and not step["is_error"] for step in trace
+                        ):
                             raise BedrockError("Agent ended before calculating the incident plans")
                         answer = "\n".join(
                             block["text"] for block in assistant_message.get("content", []) if "text" in block
@@ -133,30 +145,59 @@ async def _investigate_with_bedrock(
     raise BedrockError(f"Agent exceeded {max_turns} Converse turns")
 
 
-async def investigate_with_bedrock(
-    app: Any, client: ConverseClient, shipment_id: str, question: str, *,
-    access_token: str | None = None, internal_key: str | None = None, max_turns: int = 8,
-    deadline_seconds: float = DEFAULT_DEADLINE_SECONDS,
-) -> dict[str, Any]:
+def _bedrock_error(error: BaseException) -> BedrockError | None:
+    if isinstance(error, BedrockError):
+        return error
+    if isinstance(error, BaseExceptionGroup):
+        return next((found for child in error.exceptions if (found := _bedrock_error(child))), None)
+    return None
+
+
+async def _with_deadline(coroutine: Any, deadline_seconds: float) -> dict[str, Any]:
     try:
         async with asyncio.timeout(deadline_seconds):
-            return await _investigate_with_bedrock(
-                app, client, shipment_id, question,
-                access_token=access_token, internal_key=internal_key, max_turns=max_turns,
-            )
+            return await coroutine
     except TimeoutError as exc:
         raise BedrockError(f"Agent did not finish within {deadline_seconds:g} seconds; try again") from exc
     except BaseExceptionGroup as group:
         # AnyIO wraps exceptions raised inside MCP's task groups. Preserve our
         # controlled API error without leaking a transport traceback to callers.
-        def bedrock_error(error: BaseException) -> BedrockError | None:
-            if isinstance(error, BedrockError):
-                return error
-            if isinstance(error, BaseExceptionGroup):
-                return next((found for child in error.exceptions if (found := bedrock_error(child))), None)
-            return None
-
-        found = bedrock_error(group)
+        found = _bedrock_error(group)
         if found is not None:
             raise found from None
         raise
+
+
+async def investigate_with_bedrock(
+    app: Any, client: ConverseClient, shipment_id: str, question: str, *,
+    access_token: str | None = None, internal_key: str | None = None, max_turns: int = 8,
+    deadline_seconds: float = DEFAULT_DEADLINE_SECONDS,
+) -> dict[str, Any]:
+    return await _with_deadline(_converse_loop(
+        app, client, shipment_id, f"Shipment: {shipment_id}. {question}",
+        system=SYSTEM_PROMPT, required_tool="investigate_incident",
+        access_token=access_token, internal_key=internal_key, max_turns=max_turns,
+    ), deadline_seconds)
+
+
+def followup_message(shipment_id: str, question: str, context: dict[str, Any], history: list[dict[str, str]]) -> str:
+    """One user message: Converse needs alternating turns, and the browser history may start with the agent."""
+    return (
+        f"Shipment: {shipment_id}. Follow-up question: {question}\n"
+        f"<context>{json.dumps(context, sort_keys=True)}</context>\n"
+        f"<history>{json.dumps(history)}</history>"
+    )
+
+
+async def ask_with_bedrock(
+    app: Any, client: ConverseClient, shipment_id: str, question: str,
+    context: dict[str, Any], history: list[dict[str, str]], *,
+    access_token: str | None = None, internal_key: str | None = None, max_turns: int = 4,
+    deadline_seconds: float = FOLLOWUP_DEADLINE_SECONDS,
+) -> dict[str, Any]:
+    """Answer a follow-up from the stored investigation, without forcing a new one."""
+    return await _with_deadline(_converse_loop(
+        app, client, shipment_id, followup_message(shipment_id, question, context, history),
+        system=FOLLOWUP_PROMPT, required_tool=None,
+        access_token=access_token, internal_key=internal_key, max_turns=max_turns,
+    ), deadline_seconds)

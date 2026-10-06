@@ -320,11 +320,19 @@ async function handleUtterance(raw) {
       const execution = state.snapshot.executions[0];
       say("assistant", `The plan was executed. ${executionSummary(state.snapshot, execution)} Delivery is projected, not physically confirmed.`);
     } else {
+      // Follow-ups reuse the latest investigation of the data on screen; anything that
+      // asks to (re)investigate, or arrives after the data changed, runs a fresh one.
+      const current = latestAgentEvent(state.snapshot);
+      const stale = !current || current.data.source_version !== visibleVersion(state.snapshot);
+      const fresh = stale || /\b(investigate|re-?check|refresh|start again|what(?:'s| is) happening)\b/.test(lower);
+      const history = state.conversation.slice(0, -1).slice(-6).map(({ role, text: turn }) => ({ role, text: turn.slice(0, 1000) }));
       let run;
       await act(async () => {
-        run = await request("/incidents/SHIP-421/agent/investigate", "POST", { question: text });
+        run = fresh
+          ? await request("/incidents/SHIP-421/agent/investigate", "POST", { question: text })
+          : await request("/incidents/SHIP-421/agent/ask", "POST", { question: text, history });
       }, "");
-      say("assistant", run.answer, traceSummary(run));
+      say("assistant", run.answer, `${fresh ? "investigation" : "follow-up"} · ${traceSummary(run)}`);
     }
   } catch (error) {
     say("assistant", `I couldn't do that: ${error.message || error}`);

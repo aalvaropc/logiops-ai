@@ -89,7 +89,7 @@ def install_security(
         # cut off by, the viewer's MCP budget halfway through an investigation.
         if path.startswith("/mcp") and not internal and not mcp_limiter.allow(key):
             return JSONResponse(status_code=429, content={"detail": "MCP rate limit exceeded"})
-        if path.endswith("/agent/investigate") and not agent_limiter.allow(key):
+        if "/agent/" in path and not agent_limiter.allow(key):
             return JSONResponse(
                 status_code=429,
                 content={"detail": "Agent rate limit exceeded; each run calls a paid model"},

@@ -7,13 +7,13 @@ import re
 import secrets
 from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 from fastapi import FastAPI
 from fastapi.responses import HTMLResponse, JSONResponse, Response
 from pydantic import BaseModel, Field
 
-from .agent import ConverseClient, investigate_with_bedrock
+from .agent import ConverseClient, ask_with_bedrock, investigate_with_bedrock
 from .bedrock import BedrockConverse, BedrockError
 from .service import LogiOpsService, WorkflowError
 from .mcp_server import create_mcp_server
@@ -40,10 +40,27 @@ class AgentInvestigationRequest(BaseModel):
     question: str = Field(default="What is happening, and which plan should we choose?", min_length=1, max_length=1000)
 
 
+class ConversationTurn(BaseModel):
+    role: Literal["user", "assistant"]
+    text: str = Field(min_length=1, max_length=1000)
+
+
+class AgentAskRequest(BaseModel):
+    question: str = Field(min_length=1, max_length=1000)
+    history: list[ConversationTurn] = Field(default_factory=list, max_length=8)
+
+
+PLAN_FIELDS = (
+    "id", "kind", "label", "allocations", "projected_completion_eta",
+    "projected_customer_delay_hours", "incremental_cost_usd", "source_version",
+)
+
+
 def create_app(
     db_path: str | Path | None = None,
     bedrock_client: ConverseClient | None = None,
     *,
+    followup_client: ConverseClient | None = None,
     access_token: str | None = None,
     mcp_limit_per_minute: int = 60,
     agent_limit_per_minute: int | None = None,
@@ -152,6 +169,42 @@ def create_app(
         run["mode"] = run_mode
         recorded = service.record_agent_run(incident_id, source_version, run)
         return {**run, **recorded}
+
+    @app.post("/incidents/{incident_id}/agent/ask")
+    async def agent_ask(incident_id: str, request: AgentAskRequest) -> dict[str, Any]:
+        """Answer a follow-up from the latest investigation of the data being shown."""
+        snapshot = service.get(incident_id)
+        executions = snapshot["executions"]
+        # After execution the version moves on; follow-ups still refer to the executed plans.
+        version = executions[0]["source_version"] if executions else snapshot["source_version"]
+        latest = next((
+            event for event in reversed(snapshot["events"])
+            if event["name"] == "agent_investigation_completed" and event["data"]["source_version"] == version
+        ), None)
+        if latest is None:
+            raise WorkflowError("Ask for an investigation of the current data first")
+        context = {
+            "source_version": version,
+            "status": snapshot["state"]["status"],
+            "latest_assessment": latest["data"]["answer"],
+            "plans": [
+                {key: plan[key] for key in PLAN_FIELDS}
+                for plan in snapshot["plans"] if plan["source_version"] == version
+            ],
+            "current_approval": next((item for item in snapshot["approvals"] if item["is_current"]), None),
+            "execution": executions[0] if executions else None,
+        }
+        mode = os.environ.get("LOGIOPS_AGENT_MODE", "bedrock")
+        if mode not in ("bedrock", "replay"):
+            raise BedrockError("LOGIOPS_AGENT_MODE must be bedrock or replay")
+        custom = followup_client or bedrock_client
+        client = custom or (ReplayConverse() if mode == "replay" else BedrockConverse())
+        run = await ask_with_bedrock(
+            app, client, incident_id, request.question, context,
+            [turn.model_dump() for turn in request.history],
+            access_token=access_token, internal_key=internal_key,
+        )
+        return {**run, "mode": "custom" if custom else mode, "source_version": version}
 
     @app.post("/incidents/{incident_id}/approvals")
     async def approve(incident_id: str, request: ApprovalRequest) -> dict[str, Any]:
