@@ -91,6 +91,8 @@ umask 027
   printf 'LOGIOPS_DB_PATH=/var/lib/logiops/logiops.sqlite3\n'
   printf 'LOGIOPS_AGENT_MODE=bedrock\n'
   printf 'LOGIOPS_PUBLIC=1\n'
+  # The origin security group only admits CloudFront, so its viewer header can be trusted.
+  printf 'LOGIOPS_TRUST_CLOUDFRONT=1\n'
   printf 'LOGIOPS_PUBLIC_HOST=%s\n' "$public_host"
   printf 'LOGIOPS_ACCESS_TOKEN=%s\n' "$token"
 } > /etc/logiops.env

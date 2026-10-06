@@ -7,6 +7,11 @@ data "aws_ssm_parameter" "al2023_ami" {
 data "aws_ec2_managed_prefix_list" "cloudfront" {
   name = "com.amazonaws.global.cloudfront.origin-facing"
 }
+# Forwards Host (checked by the app in public mode) plus CloudFront-Viewer-Address,
+# which the rate limiter uses to tell viewers apart behind shared edge servers.
+data "aws_cloudfront_origin_request_policy" "all_viewer_and_cloudfront" {
+  name = "Managed-AllViewerAndCloudFrontHeaders-2022-06"
+}
 
 locals {
   foundation_model_id = replace(var.bedrock_model_id, "global.", "")
@@ -182,6 +187,14 @@ resource "aws_instance" "app" {
 
   credit_specification { cpu_credits = "standard" }
 
+  # The AMI comes from a "latest" parameter; without this, every new Amazon Linux
+  # release would make `plan` replace the instance. To roll out a new AMI or a
+  # changed bootstrap template, run `terraform apply -replace=aws_instance.app`
+  # and then scripts/deploy_ec2.py again (data survives on the EBS volume).
+  lifecycle {
+    ignore_changes = [ami, user_data]
+  }
+
   depends_on = [aws_route_table_association.public, aws_iam_role_policy_attachment.ssm]
 }
 
@@ -189,6 +202,31 @@ resource "aws_volume_attachment" "data" {
   device_name = "/dev/sdf"
   volume_id   = aws_ebs_volume.data.id
   instance_id = aws_instance.app.id
+  # Stop SQLite cleanly before the volume is detached on replacement or destroy.
+  stop_instance_before_detaching = true
+}
+
+# CloudFront's managed CachingDisabled policy cannot forward Authorization, so GET
+# requests (incident reads from the UI and verify_remote.py) would reach the app
+# without the bearer token. This policy forwards it; the app answers with
+# Cache-Control: no-store, so nothing is actually cached.
+resource "aws_cloudfront_cache_policy" "authorized_no_store" {
+  name        = "logiops-ai-authorized-no-store"
+  comment     = "Forward Authorization on every method; origin sends no-store"
+  min_ttl     = 0
+  default_ttl = 0
+  max_ttl     = 1
+
+  parameters_in_cache_key_and_forwarded_to_origin {
+    enable_accept_encoding_brotli = false
+    enable_accept_encoding_gzip   = false
+    cookies_config { cookie_behavior = "none" }
+    headers_config {
+      header_behavior = "whitelist"
+      headers { items = ["Authorization"] }
+    }
+    query_strings_config { query_string_behavior = "all" }
+  }
 }
 
 resource "aws_eip" "app" {
@@ -216,7 +254,8 @@ resource "aws_cloudfront_distribution" "app" {
       https_port             = 443
       origin_protocol_policy = "http-only"
       origin_ssl_protocols   = ["TLSv1.2"]
-      origin_read_timeout    = 120
+      # 60 s is the default quota; the agent enforces a 50 s deadline to fit inside it.
+      origin_read_timeout = 60
     }
   }
 
@@ -225,8 +264,8 @@ resource "aws_cloudfront_distribution" "app" {
     viewer_protocol_policy   = "redirect-to-https"
     allowed_methods          = ["GET", "HEAD", "OPTIONS", "PUT", "POST", "PATCH", "DELETE"]
     cached_methods           = ["GET", "HEAD"]
-    cache_policy_id          = "4135ea2d-6df8-44a3-9df3-4b5a84be39ad" # CachingDisabled
-    origin_request_policy_id = "216adef6-5c7f-47e4-b989-5492eafa07d3" # AllViewer
+    cache_policy_id          = aws_cloudfront_cache_policy.authorized_no_store.id
+    origin_request_policy_id = data.aws_cloudfront_origin_request_policy.all_viewer_and_cloudfront.id
     compress                 = false
   }
 
