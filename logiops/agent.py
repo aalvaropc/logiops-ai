@@ -110,7 +110,8 @@ async def _investigate_with_bedrock(
                         arguments = use.get("input", {})
                         if not isinstance(arguments, dict):
                             raise BedrockError("Bedrock tool input must be an object")
-                        if "shipment_id" in arguments and arguments["shipment_id"] != shipment_id:
+                        requested = arguments.get("shipment_id")
+                        if requested is not None and str(requested).strip().casefold() != shipment_id.casefold():
                             raise BedrockError("Bedrock requested a different shipment")
                         result = await session.call_tool(name, arguments)
                         payload = result.structuredContent

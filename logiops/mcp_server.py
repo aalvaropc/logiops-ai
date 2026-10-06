@@ -11,6 +11,10 @@ from mcp.server.transport_security import TransportSecuritySettings
 from .service import LogiOpsService, WorkflowError
 
 
+def _same(value: str, expected: str) -> bool:
+    return value.strip().casefold() == expected.casefold()
+
+
 def create_mcp_server(service: LogiOpsService, *, public_host: str | None = None) -> FastMCP:
     allowed_hosts = ["127.0.0.1:*", "localhost:*", "[::1]:*"]
     allowed_origins = ["http://127.0.0.1:*", "http://localhost:*", "http://[::1]:*"]
@@ -30,27 +34,28 @@ def create_mcp_server(service: LogiOpsService, *, public_host: str | None = None
 
     @server.tool()
     async def get_shipment(shipment_id: str) -> dict[str, Any]:
-        """Read the current shipment and its delayed ETA."""
+        """Read the current shipment, its delayed ETA, and the linked order id."""
         try:
-            return service.get(shipment_id)["state"]["shipment"]
+            state = service.get(shipment_id.strip().upper())["state"]
         except WorkflowError as exc:
-            raise ToolError(str(exc)) from exc
+            raise ToolError(f"{exc}. The incident under investigation is SHIP-421.") from exc
+        return {**state["shipment"], "order_id": state["order"]["id"]}
 
     @server.tool()
     async def get_order(order_id: str) -> dict[str, Any]:
-        """Read the order associated with a shipment."""
+        """Read the customer order linked to a shipment (order ids look like ORD-421)."""
         order = service.get("SHIP-421")["state"]["order"]
-        if order["id"] != order_id:
-            raise ToolError(f"Unknown order: {order_id}")
+        if not _same(order_id, order["id"]):
+            raise ToolError(f"Unknown order: {order_id}. The order linked to SHIP-421 is {order['id']}.")
         return order
 
     @server.tool()
     async def get_inventory(warehouse_id: str, sku: str) -> dict[str, Any]:
         """Read synthetic available stock at a warehouse."""
         state = service.get("SHIP-421")["state"]
-        if warehouse_id != "arequipa" or sku != state["order"]["sku"]:
-            raise ToolError("Unknown warehouse or SKU")
-        return {"warehouse_id": warehouse_id, **state["inventory"][warehouse_id]}
+        if not _same(warehouse_id, "arequipa") or not _same(sku, state["order"]["sku"]):
+            raise ToolError(f"Unknown warehouse or SKU. Use warehouse_id 'arequipa' and sku '{state['order']['sku']}'.")
+        return {"warehouse_id": "arequipa", **state["inventory"]["arequipa"]}
 
     @server.tool()
     async def find_alternative_carriers(shipment_id: str) -> dict[str, Any]:

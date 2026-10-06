@@ -160,3 +160,21 @@ def test_public_mode_requires_exact_host_and_token(tmp_path, monkeypatch):
     monkeypatch.setenv("LOGIOPS_PUBLIC_HOST", "*.cloudfront.net")
     with pytest.raises(RuntimeError, match="exact hostname"):
         create_app(tmp_path / "wildcard.sqlite3", access_token="a" * 40)
+
+
+def test_tool_errors_carry_hints_so_the_model_can_correct_itself(tmp_path):
+    async def run():
+        app = create_app(tmp_path / "hints.sqlite3")
+        async with app.router.lifespan_context(app):
+            async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url=BASE_URL) as http_client:
+                async with streamable_http_client(f"{BASE_URL}/mcp", http_client=http_client) as (read, write, _):
+                    async with ClientSession(read, write) as session:
+                        await session.initialize()
+                        shipment = await session.call_tool("get_shipment", {"shipment_id": "ship-421"})
+                        assert shipment.structuredContent["order_id"] == "ORD-421"
+                        wrong = await session.call_tool("get_order", {"order_id": "SHIP-421"})
+                        assert wrong.isError and "ORD-421" in wrong.content[0].text
+                        stock = await session.call_tool("get_inventory", {"warehouse_id": "Arequipa", "sku": "laptop-01"})
+                        assert stock.isError is False and stock.structuredContent["available"] == 12
+
+    asyncio.run(run())
