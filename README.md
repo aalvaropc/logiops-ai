@@ -19,8 +19,9 @@ Bedrock.
 
 The SHIP-421 workflow, MCP Streamable HTTP endpoint, Bedrock Converse tool
 loop, approval gate, and operational verification run locally. A replay mode
-runs the same MCP calls without AWS charges. A web interface and public HTTPS
-deployment are pending. See `docs/hackathon/decisions.md` for decisions and
+runs the same MCP calls without AWS charges. A browser interface is available
+at `/demo`; public HTTPS deployment is pending. See
+`docs/hackathon/decisions.md` for decisions and
 `docs/demo-scenario.md` for the synthetic data.
 
 The AWS demo infrastructure and deployment procedure live in
@@ -38,7 +39,15 @@ uv sync --extra dev
 uv run uvicorn logiops.api:app --host 127.0.0.1 --port 8000
 ```
 
-Open <http://127.0.0.1:8000/docs>. The MCP endpoint is
+Open the browser demo at <http://127.0.0.1:8000/demo>. Use
+`LOGIOPS_AGENT_MODE=replay` when rehearsing without Bedrock charges. In the
+demo, investigate SHIP-421, compare the three projected plans, select one,
+approve it as the operator, and execute it. The timeline shows the audit
+events; reset restores the synthetic incident. On the public deployment,
+paste the operator token into the page to connect. It stays in browser memory
+until the page is reloaded.
+
+The API reference is at <http://127.0.0.1:8000/docs>. The MCP endpoint is
 <http://127.0.0.1:8000/mcp> and negotiates protocol version 2025-11-25.
 The SQLite database is created at
 `data/logiops.sqlite3` and survives server restarts. Set `LOGIOPS_DB_PATH` to

@@ -21,7 +21,12 @@ INFRA = ROOT / "infra" / "amazon"
 
 
 def package() -> tuple[Path, str]:
-    files = [ROOT / "pyproject.toml", ROOT / "uv.lock", *sorted((ROOT / "logiops").glob("*.py"))]
+    files = [
+        ROOT / "pyproject.toml",
+        ROOT / "uv.lock",
+        *sorted((ROOT / "logiops").glob("*.py")),
+        *sorted((ROOT / "logiops" / "static").glob("*")),
+    ]
     if not all(path.is_file() for path in files):
         raise RuntimeError("The app, pyproject.toml, or uv.lock is missing")
     output = Path(tempfile.gettempdir()) / "logiops-ai-release.tar.gz"

@@ -29,8 +29,11 @@ CloudFront origin-facing prefix list. The API requires a bearer token.
    through Systems Manager. No GitHub or SSH credentials enter the instance.
 
 The first deployment starts Uvicorn after the EBS volume is mounted. The
-instance uses its role's temporary credentials for Bedrock Converse; no
-static AWS key is stored on disk. The SSM command fetches the bearer token
+browser demo is at `https://<cloudfront-domain>/demo`; use the local
+`.secrets/access-token` in its access-token field. The web assets are bundled
+in the same release archive as the API, so the deployed UI and backend share
+one version. The instance uses its role's temporary credentials for Bedrock
+Converse; no static AWS key is stored on disk. The SSM command fetches the bearer token
 into `/etc/logiops.env` with mode 0640. The data file is
 `/var/lib/logiops/logiops.sqlite3` on the separate volume.
 

@@ -17,7 +17,7 @@ def install_security(app: FastAPI, access_token: str | None, *, limit_per_minute
     @app.middleware("http")
     async def guard(request: Request, call_next: Any) -> Any:
         path = request.url.path
-        if path in ("/healthz", "/docs", "/openapi.json", "/redoc"):
+        if path in ("/healthz", "/docs", "/openapi.json", "/redoc", "/demo") or path.startswith("/assets/"):
             return await call_next(request)
         if access_token:
             supplied = request.headers.get("authorization", "")

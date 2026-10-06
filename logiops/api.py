@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Any
 
 from fastapi import FastAPI
-from fastapi.responses import JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse, Response
 from pydantic import BaseModel, Field
 
 from .agent import ConverseClient, investigate_with_bedrock
@@ -68,6 +68,24 @@ def create_app(
 
     app = FastAPI(title="LogiOps AI", version="0.1.0", lifespan=lifespan)
     install_security(app, access_token, limit_per_minute=mcp_limit_per_minute)
+    static_dir = Path(__file__).resolve().parent / "static"
+    demo_assets = {
+        "demo.html": (static_dir / "demo.html").read_bytes(),
+        "demo.css": (static_dir / "demo.css").read_bytes(),
+        "demo.js": (static_dir / "demo.js").read_bytes(),
+    }
+
+    @app.get("/demo", include_in_schema=False)
+    async def demo_page() -> HTMLResponse:
+        return HTMLResponse(demo_assets["demo.html"])
+
+    @app.get("/assets/demo.css", include_in_schema=False)
+    async def demo_style() -> Response:
+        return Response(demo_assets["demo.css"], media_type="text/css")
+
+    @app.get("/assets/demo.js", include_in_schema=False)
+    async def demo_script() -> Response:
+        return Response(demo_assets["demo.js"], media_type="text/javascript")
 
     @app.exception_handler(WorkflowError)
     async def workflow_error_handler(_request: Any, exc: WorkflowError) -> JSONResponse:
