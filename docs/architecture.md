@@ -12,8 +12,9 @@ tools over Streamable HTTP at `/mcp`. `logiops/agent.py` runs the Bedrock
 Converse tool loop through that MCP endpoint; `logiops/bedrock.py` invokes the
 AWS CLI with the user's `aws login` credentials. `logiops/replay.py` provides
 an explicit deterministic local replay. `logiops/security.py` enforces a
-bearer token when configured and a per-process MCP request limit. A React UI
-and public HTTPS deployment are not yet connected.
+bearer token when configured and a per-process MCP request limit. The browser
+demo at `/demo` calls the same API and shows plans, approval, execution, and
+audit history. Public HTTPS deployment is not yet connected.
 
 `infra/amazon/` prepares a single-instance AWS demo. CloudFront gives the
 public HTTPS URL; EC2 serves the API and MCP endpoint with an IAM instance
@@ -28,10 +29,10 @@ and Bedrock modules are the Amazon-specific layer. The model sees only read and 
 REST, and the backend checks the exact plan ID and source version before
 execution through REST or MCP.
 
-## Target architecture
+## Runtime architecture
 
 ```text
-                    React UI
+                Browser demo (/demo)
                        |
                   API / Backend
                        |
@@ -48,17 +49,19 @@ execution through REST or MCP.
                                            Actions
 ```
 
-## Modules
+## AWS services and their purpose
 
-```text
-domain/      shipment, order, inventory, routing, incident, resolution_plan
-agent/       planner, executor, evaluator, policy, memory
-tools/       get_shipment, get_inventory, get_route_status, find_alternative,
-             execute_plan, notify
-transport/   http/, mcp/
-frontend/    react/
-```
+- **Bedrock Converse:** the agent chooses MCP read tools and explains the
+  calculated resolution plans. A deterministic replay supports offline review.
+- **EC2:** runs FastAPI, MCP, and the browser demo in one process. The instance
+  role supplies temporary Bedrock, S3, and Systems Manager permissions.
+- **EBS:** stores SQLite separately from the EC2 root filesystem so the audit
+  history survives instance restarts.
+- **S3 and Systems Manager:** transfer a checksum-verified release and run its
+  installation without SSH or long-lived credentials on the instance.
+- **CloudFront:** gives judges a stable HTTPS address. The EC2 security group
+  accepts origin traffic only from CloudFront's origin-facing prefix list;
+  CloudFront to EC2 currently uses HTTP, with bearer authentication for the
+  incident and MCP routes.
 
-## AWS services (justify each one here as they're added)
-
-_TODO — fill in during phase F6, only services with a real reason to be there._
+These resources are defined in `infra/amazon/` but have not been provisioned.

@@ -46,10 +46,18 @@ function formatDate(iso) {
   return new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit", timeZone: "America/Lima" }).format(new Date(iso));
 }
 
+function visibleVersion(snapshot) {
+  return snapshot.executions[0]?.source_version ?? snapshot.source_version;
+}
+
+function visibleApproval(snapshot) {
+  return snapshot.approvals.find((approval) => approval.source_version === visibleVersion(snapshot));
+}
+
 function renderPlans(snapshot) {
   const container = $("plans");
   container.replaceChildren();
-  const activeVersion = snapshot.approvals[0]?.source_version || snapshot.source_version;
+  const activeVersion = visibleVersion(snapshot);
   const plans = snapshot.plans.filter((plan) => plan.source_version === activeVersion);
   if (!plans.length) {
     const empty = document.createElement("div");
@@ -58,8 +66,11 @@ function renderPlans(snapshot) {
     container.append(empty);
     return;
   }
-  if (!plans.some((plan) => plan.id === state.selectedPlanId)) {
-    state.selectedPlanId = snapshot.approvals[0]?.plan_id || plans.find((plan) => plan.kind === "split-express")?.id || plans[0].id;
+  const approval = visibleApproval(snapshot);
+  if (approval) {
+    state.selectedPlanId = approval.plan_id;
+  } else if (!plans.some((plan) => plan.id === state.selectedPlanId)) {
+    state.selectedPlanId = plans.find((plan) => plan.kind === "split-express")?.id || plans[0].id;
   }
   for (const plan of plans) {
     const card = document.createElement("label");
@@ -69,7 +80,7 @@ function renderPlans(snapshot) {
     radio.name = "plan";
     radio.value = plan.id;
     radio.checked = plan.id === state.selectedPlanId;
-    radio.disabled = Boolean(snapshot.approvals.length || snapshot.executions.length);
+    radio.disabled = Boolean(approval || snapshot.executions.length);
     radio.addEventListener("change", () => {
       state.selectedPlanId = plan.id;
       renderPlans(snapshot);
@@ -121,7 +132,7 @@ function renderTimeline(events) {
 
 function renderControls() {
   const snapshot = state.snapshot;
-  const approved = Boolean(snapshot?.approvals.length);
+  const approved = Boolean(snapshot && visibleApproval(snapshot));
   const executed = Boolean(snapshot?.executions.length);
   const hasCurrentPlan = Boolean(snapshot?.plans.some((plan) => plan.source_version === snapshot.source_version));
   $("investigate").disabled = state.busy || !snapshot || executed;
@@ -137,7 +148,8 @@ function render(snapshot) {
   $("connection").className = "connection ready";
   $("incident-status").textContent = snapshot.state.status;
   $("stock-value").textContent = `${snapshot.state.inventory.arequipa.available} units`;
-  const agentEvent = [...snapshot.events].reverse().find((event) => event.name === "agent_investigation_completed");
+  const agentEvent = [...snapshot.events].reverse().find((event) =>
+    event.name === "agent_investigation_completed" && event.data.source_version === visibleVersion(snapshot));
   const answer = $("agent-answer");
   answer.hidden = !agentEvent;
   if (agentEvent) {
@@ -150,7 +162,7 @@ function render(snapshot) {
   renderPlans(snapshot);
   renderTimeline(snapshot.events);
   const execution = snapshot.executions[0];
-  $("execution-state").textContent = execution ? "Operationally verified" : snapshot.approvals.length ? "Approved · ready" : "Waiting for approval";
+  $("execution-state").textContent = execution ? "Operationally verified" : visibleApproval(snapshot) ? "Approved · ready" : "Waiting for approval";
   $("execution-result").hidden = !execution;
   if (execution) {
     const accounted = snapshot.state.shipment.units_on_delayed_route + execution.fulfillments.reduce((sum, item) => sum + item.units, 0);
@@ -201,7 +213,7 @@ $("approve").addEventListener("click", () => act(async () => {
   });
 }, "The selected plan was approved by the operator."));
 $("execute").addEventListener("click", () => act(async () => {
-  const approval = state.snapshot.approvals[0];
+  const approval = visibleApproval(state.snapshot);
   await request("/incidents/SHIP-421/execute", "POST", {
     plan_id: approval.plan_id, source_version: approval.source_version,
   });

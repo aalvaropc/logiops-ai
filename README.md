@@ -30,18 +30,20 @@ yet; local tests do not claim a remote or live Bedrock run.
 
 ## Setup
 
-Install Python 3.12 or newer, [uv](https://docs.astral.sh/uv/), and the AWS CLI.
-For the live agent, sign in with `aws login` and ensure the Bedrock model in
-`.env.example` is accessible in `us-east-1`. Then run:
+Install Python 3.12 or newer and [uv](https://docs.astral.sh/uv/). For a
+reproducible demo without AWS credentials, run:
 
 ```sh
 uv sync --extra dev
-uv run uvicorn logiops.api:app --host 127.0.0.1 --port 8000
+LOGIOPS_AGENT_MODE=replay uv run uvicorn logiops.api:app --host 127.0.0.1 --port 8000
 ```
 
-Open the browser demo at <http://127.0.0.1:8000/demo>. Use
-`LOGIOPS_AGENT_MODE=replay` when rehearsing without Bedrock charges. In the
-demo, investigate SHIP-421, compare the three projected plans, select one,
+For the live agent, also install the AWS CLI, sign in with `aws login`, and
+ensure the Bedrock model in `.env.example` is accessible in `us-east-1`.
+Start the same server without `LOGIOPS_AGENT_MODE=replay`.
+
+Open the browser demo at <http://127.0.0.1:8000/demo>. In the demo,
+investigate SHIP-421, compare the three projected plans, select one,
 approve it as the operator, and execute it. The timeline shows the audit
 events; reset restores the synthetic incident. On the public deployment,
 paste the operator token into the page to connect. It stays in browser memory
