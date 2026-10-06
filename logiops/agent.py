@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from typing import Any, Protocol
 
 import httpx
@@ -12,6 +13,9 @@ from .bedrock import BedrockError
 
 
 BASE_URL = "http://127.0.0.1:8000"
+INTERNAL_HEADER = "x-logiops-internal"
+# CloudFront closes the origin request after 60 s; finish (or fail clearly) first.
+DEFAULT_DEADLINE_SECONDS = 50.0
 READ_TOOLS = {
     "get_shipment",
     "get_order",
@@ -37,7 +41,7 @@ class ConverseClient(Protocol):
 
 async def _investigate_with_bedrock(
     app: Any, client: ConverseClient, shipment_id: str, question: str, *,
-    access_token: str | None = None, max_turns: int = 8
+    access_token: str | None = None, internal_key: str | None = None, max_turns: int = 8
 ) -> dict[str, Any]:
     messages: list[dict[str, Any]] = [
         {"role": "user", "content": [{"text": f"Shipment: {shipment_id}. {question}"}]}
@@ -45,6 +49,8 @@ async def _investigate_with_bedrock(
     trace: list[dict[str, Any]] = []
     usage = {"inputTokens": 0, "outputTokens": 0}
     headers = {"Authorization": f"Bearer {access_token}"} if access_token else {}
+    if internal_key:
+        headers[INTERNAL_HEADER] = internal_key
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=app), base_url=BASE_URL, headers=headers
     ) as http_client:
@@ -74,7 +80,10 @@ async def _investigate_with_bedrock(
                         raise BedrockError("Bedrock returned no assistant message")
                     messages.append(assistant_message)
                     stop_reason = response["stopReason"]
-                    if stop_reason == "end_turn":
+                    has_tool_use = any("toolUse" in block for block in assistant_message.get("content", []))
+                    if stop_reason == "max_tokens" and has_tool_use:
+                        raise BedrockError("Bedrock response was truncated in the middle of a tool call")
+                    if stop_reason in ("end_turn", "max_tokens"):
                         if not any(step["tool"] == "investigate_incident" and not step["is_error"] for step in trace):
                             raise BedrockError("Agent ended before calculating the incident plans")
                         answer = "\n".join(
@@ -82,7 +91,10 @@ async def _investigate_with_bedrock(
                         ).strip()
                         if not answer:
                             raise BedrockError("Bedrock returned an empty explanation")
-                        return {"answer": answer, "tool_trace": trace, "usage": usage}
+                        result = {"answer": answer, "tool_trace": trace, "usage": usage}
+                        if stop_reason == "max_tokens":
+                            result["truncated"] = True
+                        return result
                     if stop_reason != "tool_use":
                         raise BedrockError(f"Bedrock stopped unexpectedly: {stop_reason}")
                     tool_uses = [
@@ -121,12 +133,17 @@ async def _investigate_with_bedrock(
 
 async def investigate_with_bedrock(
     app: Any, client: ConverseClient, shipment_id: str, question: str, *,
-    access_token: str | None = None, max_turns: int = 8
+    access_token: str | None = None, internal_key: str | None = None, max_turns: int = 8,
+    deadline_seconds: float = DEFAULT_DEADLINE_SECONDS,
 ) -> dict[str, Any]:
     try:
-        return await _investigate_with_bedrock(
-            app, client, shipment_id, question, access_token=access_token, max_turns=max_turns
-        )
+        async with asyncio.timeout(deadline_seconds):
+            return await _investigate_with_bedrock(
+                app, client, shipment_id, question,
+                access_token=access_token, internal_key=internal_key, max_turns=max_turns,
+            )
+    except TimeoutError as exc:
+        raise BedrockError(f"Agent did not finish within {deadline_seconds:g} seconds; try again") from exc
     except BaseExceptionGroup as group:
         # AnyIO wraps exceptions raised inside MCP's task groups. Preserve our
         # controlled API error without leaking a transport traceback to callers.

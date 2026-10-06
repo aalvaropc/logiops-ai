@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import re
+import secrets
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any
@@ -13,7 +14,7 @@ from fastapi.responses import HTMLResponse, JSONResponse, Response
 from pydantic import BaseModel, Field
 
 from .agent import ConverseClient, investigate_with_bedrock
-from .bedrock import AwsCliConverse, BedrockError
+from .bedrock import BedrockConverse, BedrockError
 from .service import LogiOpsService, WorkflowError
 from .mcp_server import create_mcp_server
 from .replay import ReplayConverse
@@ -45,6 +46,7 @@ def create_app(
     *,
     access_token: str | None = None,
     mcp_limit_per_minute: int = 60,
+    agent_limit_per_minute: int | None = None,
 ) -> FastAPI:
     access_token = access_token or os.environ.get("LOGIOPS_ACCESS_TOKEN")
     public_host = os.environ.get("LOGIOPS_PUBLIC_HOST", "").strip().lower()
@@ -67,7 +69,17 @@ def create_app(
             yield
 
     app = FastAPI(title="LogiOps AI", version="0.1.0", lifespan=lifespan)
-    install_security(app, access_token, limit_per_minute=mcp_limit_per_minute)
+    # Per-process secret that marks the agent's in-process MCP calls; never leaves the server.
+    internal_key = secrets.token_hex(32)
+    if agent_limit_per_minute is None:
+        agent_limit_per_minute = int(os.environ.get("LOGIOPS_AGENT_LIMIT_PER_MINUTE", "5"))
+    install_security(
+        app, access_token,
+        internal_key=internal_key,
+        limit_per_minute=mcp_limit_per_minute,
+        agent_limit_per_minute=agent_limit_per_minute,
+        trust_cloudfront=os.environ.get("LOGIOPS_TRUST_CLOUDFRONT") == "1",
+    )
     static_dir = Path(__file__).resolve().parent / "static"
     demo_assets = {
         "demo.html": (static_dir / "demo.html").read_bytes(),
@@ -124,10 +136,10 @@ def create_app(
         mode = os.environ.get("LOGIOPS_AGENT_MODE", "bedrock")
         if mode not in ("bedrock", "replay"):
             raise BedrockError("LOGIOPS_AGENT_MODE must be bedrock or replay")
-        client = bedrock_client or (ReplayConverse() if mode == "replay" else AwsCliConverse())
+        client = bedrock_client or (ReplayConverse() if mode == "replay" else BedrockConverse())
         run = await investigate_with_bedrock(
             app, client, incident_id, request.question,
-            access_token=access_token,
+            access_token=access_token, internal_key=internal_key,
         )
         run["mode"] = "custom" if bedrock_client else mode
         recorded = service.record_agent_run(incident_id, source_version, run)

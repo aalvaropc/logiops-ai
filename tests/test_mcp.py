@@ -64,6 +64,14 @@ def test_mcp_protocol_and_human_approval_boundary(tmp_path):
                         assert repeated.structuredContent == executed.structuredContent
                         snapshot = (await http_client.get("/incidents/SHIP-421")).json()
                         assert len(snapshot["executions"]) == 1
+                        status = (await session.call_tool(
+                            "get_execution_status", {"shipment_id": "SHIP-421"}
+                        )).structuredContent
+                        assert status["status"] == "verified"
+                        # Execution bumped the version, so the version-1 approval is no longer current.
+                        assert status["source_version"] == 2 and status["approvals"] == []
+                        # Event payloads (including old agent traces) stay out of the model context.
+                        assert status["events"] and all(set(e) == {"sequence", "name", "recorded_at"} for e in status["events"])
 
     asyncio.run(run())
 

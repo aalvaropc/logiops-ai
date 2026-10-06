@@ -71,16 +71,22 @@ def create_mcp_server(service: LogiOpsService, *, public_host: str | None = None
 
     @server.tool()
     async def get_execution_status(shipment_id: str) -> dict[str, Any]:
-        """Read approvals, execution status, and audit events."""
+        """Read the current approval, execution status, and audit event names."""
         try:
             snapshot = service.get(shipment_id)
         except WorkflowError as exc:
             raise ToolError(str(exc)) from exc
+        # Agent traces are stored as events; returning them here would feed every
+        # previous trace back into the next model run, so only summarize events.
         return {
             "status": snapshot["state"]["status"],
-            "approvals": snapshot["approvals"],
+            "source_version": snapshot["source_version"],
+            "approvals": [item for item in snapshot["approvals"] if item["is_current"]],
             "executions": snapshot["executions"],
-            "events": snapshot["events"],
+            "events": [
+                {"sequence": event["sequence"], "name": event["name"], "recorded_at": event["recorded_at"]}
+                for event in snapshot["events"]
+            ],
         }
 
     @server.tool()
