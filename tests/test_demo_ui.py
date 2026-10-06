@@ -49,3 +49,15 @@ def test_questions_are_never_routed_to_actions():
     for action in ("reset|start over", "\\bapprove\\b", "execute|go ahead"):
         line = next(line for line in script.splitlines() if action in line and "test(lower)" in line)
         assert "!question" in line, line
+
+
+def test_demo_has_basic_accessibility_hooks():
+    root = Path(__file__).resolve().parents[1] / "logiops" / "static"
+    script, style = (root / "demo.js").read_text(), (root / "demo.css").read_text()
+    assert "prefers-reduced-motion: reduce" in style
+    assert "grid-template-columns: minmax(0, 1fr)" in style  # no horizontal overflow on narrow screens
+    assert 'aria-label="Conversation" tabindex="0"' in (root / "demo.html").read_text()  # scrollable, so focusable
+    assert 'box.setAttribute("role", success || !text ? "status" : "alert")' in script  # errors are announced assertively
+    assert 'container.setAttribute("role", "radiogroup")' in script
+    html = (root / "demo.html").read_text()
+    assert 'lang="en"' in html and 'aria-live="polite"' in html and 'frame.title = "Resolution options' in script

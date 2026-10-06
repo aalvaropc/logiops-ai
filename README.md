@@ -15,6 +15,48 @@ Bedrock.
 |---|---|---|
 | _pending_ | _pending_ | _pending (hosting optional, see docs/hackathon/decisions.md D-AMZ-1)_ |
 
+## For judges
+
+No AWS account is needed: `docker compose up --build` (or `uv sync --extra dev` and
+the replay command in `docs/hackathon/testing-instructions.md`) runs the whole demo.
+`uv run python scripts/rehearse_api.py` walks through it headless and prints PASS or FAIL.
+
+## Architecture
+
+```text
+ Browser (/demo): conversation, voice, MCP App card in a sandbox proxy (other origin)
+        |  REST (approve, execute, reset)          |  MCP over Streamable HTTP (/mcp)
+        v                                          v
+ +--------------------------------------------------------------+
+ |  FastAPI app: bearer token, rate limits, no-store            |
+ |  +-----------------------+   +----------------------------+  |
+ |  | MCP server (7 tools,  |   | Workflow core + SQLite     |  |
+ |  | no approval tool)     |-->| versioned plans, approvals |  |
+ |  +-----------------------+   | bound to plan + version,   |  |
+ |        ^                     | idempotent execution,      |  |
+ |        | in-process MCP      | audit events               |  |
+ |  +-----------------------+   +----------------------------+  |
+ |  | Agent: Bedrock        |                                   |
+ |  | Converse tool loop    |  (replay mode: scripted model)    |
+ +--+-----------------------+-----------------------------------+
+```
+
+More detail in `docs/architecture.md`.
+
+## Settings
+
+| Variable | Purpose | Default |
+|---|---|---|
+| `LOGIOPS_AGENT_MODE` | `bedrock` or `replay` (scripted model, zero tokens) | `bedrock` |
+| `LOGIOPS_DB_PATH` | SQLite database | `data/logiops.sqlite3` |
+| `LOGIOPS_PUBLIC` | `1` for public mode (requires the token and `LOGIOPS_PUBLIC_HOST`) | off |
+| `LOGIOPS_ACCESS_TOKEN` | bearer token, at least 32 characters in public mode | none |
+| `LOGIOPS_PUBLIC_HOST` | the one public hostname (also the MCP allowed host) | none |
+| `LOGIOPS_SANDBOX_HOST` | second hostname that serves only the MCP Apps sandbox proxy | `127.0.0.1`/`localhost` pair locally |
+| `LOGIOPS_TRUST_CLOUDFRONT` | identify viewers by `CloudFront-Viewer-Address` | off |
+| `LOGIOPS_AGENT_LIMIT_PER_MINUTE` | paid agent calls per viewer per minute | `5` |
+| `AWS_REGION`, `BEDROCK_MODEL_ID` | Bedrock region and model profile | `us-east-1`, `global.anthropic.claude-sonnet-4-6` |
+
 ## Status
 
 The SHIP-421 workflow, MCP Streamable HTTP endpoint, Bedrock Converse tool

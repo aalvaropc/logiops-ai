@@ -17,6 +17,7 @@ bottom.
 | D-AMZ-5 | One shared bearer token for the demo, given to judges with the submission. Approve and execute stay out of the model's toolset; per-viewer limits (60 MCP/min, 5 agent calls/min shared by investigations and follow-ups) protect cost. A separate operator token is not worth the friction for a single-incident demo. | 2026-10-05 | `logiops/security.py`, `tests/test_security.py`. |
 | D-AMZ-6 | The Alexa+ experience is a browser conversation (text plus Web Speech API voice) over the same REST and MCP endpoints, not a separate voice service. Approve/execute intents reuse the REST endpoints, so the human approval boundary is unchanged. | 2026-10-05 | `logiops/static/demo.js`; browser test with Playwright. |
 | D-AMZ-7 | Expose the plan comparison as an MCP Apps view (extension 2026-01-26) on `investigate_incident`. The view can only ask the host to select a plan (`ui/message`); there is no approval tool, and `execute_approved_plan` is `visibility: ["model"]` because views may call tools by default. The demo is a web host, so it follows the spec's sandbox proxy: a different origin (127.0.0.1/localhost locally, a second CloudFront hostname in public mode) serves `/mcp-app/sandbox.html`, which loads the view in an `allow-scripts` iframe with a CSP placed before any markup and relays messages. Without a separate origin the host shows no card (fail closed). Replaces the earlier single-iframe version. | 2026-10-06 | `logiops/static/mcp_app_sandbox.html`, `logiops/static/demo.js`, `logiops/api.py`, `tests/test_mcp_app.py`, `infra/amazon/main.tf`; Playwright (replay): cross-origin proxy, view origin `null`, `fetch` blocked by CSP, selection without approval, teardown on reset. |
+| D0 | The same synthetic scenario may appear in two hackathons because each submission is a separate repository with a different product around it. The rules text does not address this; asked in `rules-verification.md` (7). | 2026-10-06 | `rules-verification.md`. |
 
 ## Still open
 
@@ -28,3 +29,14 @@ bottom.
   only if this repo stays private at submission time.
 - Whether the AWS promotional credits, once approved, actually cover Bedrock
   usage for Claude (vs. only AWS-native services).
+
+## Release checklist (before tagging `amazon-v1.0`)
+
+- [ ] All pull requests merged in order (#4, #2, #3, #5, #6, then the judge-readiness one).
+- [ ] `scripts/clean_room.sh main` passes on a clean clone (tests, Docker build, `check_mcp.py`).
+- [ ] `gitleaks git` over the full history reports no leaks (CI also runs it).
+- [ ] Test count recorded: ____ passed. Commit: ____.
+- [ ] README Submission table lists the repository, the tag and the video.
+- [ ] Repository public, or the reviewers from the rules invited (`rules-verification.md` 6).
+- [ ] Tag `amazon-v1.0` on that commit and a GitHub Release created.
+- [ ] Submitted at least one day before the deadline (target 22 Oct; deadline 23 Oct, 14:00 Peru).

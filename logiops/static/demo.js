@@ -35,6 +35,9 @@ function message(text, success = false) {
   const box = $("message");
   box.textContent = text;
   box.className = text ? `message visible${success ? " success" : ""}` : "message";
+  // Problems interrupt the screen reader; confirmations wait politely.
+  box.setAttribute("role", success || !text ? "status" : "alert");
+  box.setAttribute("aria-live", success || !text ? "polite" : "assertive");
 }
 
 function setBusy(busy) {
@@ -239,6 +242,8 @@ function recommendedPlan(snapshot) {
 function renderPlans(snapshot) {
   const container = $("plans");
   container.replaceChildren();
+  container.setAttribute("role", "radiogroup");
+  container.setAttribute("aria-label", "Resolution plans");
   const plans = visiblePlans(snapshot);
   if (!plans.length) {
     const empty = document.createElement("div");

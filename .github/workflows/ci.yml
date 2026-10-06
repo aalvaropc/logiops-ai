@@ -48,5 +48,11 @@ jobs:
         run: |
           uv sync --frozen
           uv run python scripts/check_mcp.py http://127.0.0.1:8000/mcp
+      - name: Headless walkthrough against the container
+        run: uv run python scripts/rehearse_api.py --url http://127.0.0.1:8000
+      - name: MCP Apps sandbox origin
+        run: |
+          curl --fail --silent http://127.0.0.1:8000/demo | grep -q 'content="http://localhost:8000"'
+          curl --fail --silent -H 'Host: localhost:8000' http://127.0.0.1:8000/mcp-app/sandbox.html | grep -q sandbox-proxy-ready
       - if: failure()
         run: docker logs logiops
