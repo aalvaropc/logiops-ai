@@ -87,7 +87,8 @@ class BedrockConverse:
         except (ReadTimeoutError, ConnectTimeoutError, EndpointConnectionError) as exc:
             raise BedrockError("Bedrock request timed out or could not connect") from exc
         except BotoCoreError as exc:
-            raise BedrockError("Bedrock Converse failed") from exc
+            # The class name (e.g. MissingDependencyException) says what to fix without leaking details.
+            raise BedrockError(f"Bedrock Converse failed ({type(exc).__name__})") from exc
         if not isinstance(response, dict) or "stopReason" not in response:
             raise BedrockError("Bedrock returned an invalid Converse response")
         response.pop("ResponseMetadata", None)
