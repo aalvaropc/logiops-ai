@@ -121,7 +121,12 @@ class LogiOpsService:
         with self._connection() as connection:
             state, version = self._snapshot(connection, incident_id)
             plans = [json.loads(row[0]) for row in connection.execute("SELECT plan_json FROM plans ORDER BY rowid")]
-            approvals = [dict(row) for row in connection.execute("SELECT * FROM approvals ORDER BY rowid")]
+            # Approvals from earlier versions stay in the audit trail, but only the
+            # current version's approval can be executed, so flag it explicitly.
+            approvals = [
+                {**dict(row), "is_current": row["source_version"] == version}
+                for row in connection.execute("SELECT * FROM approvals ORDER BY rowid")
+            ]
             executions = [json.loads(row[0]) for row in connection.execute("SELECT result_json FROM executions ORDER BY rowid")]
             events = [
                 {
@@ -200,7 +205,9 @@ class LogiOpsService:
             state["status"] = "approved"
             state["selected_plan_id"] = plan_id
             connection.execute("UPDATE snapshot SET state_json = ? WHERE incident_id = ?", (_json(state), incident_id))
-            self._event(connection, "plan_approved", {"plan_id": plan_id, "approved_by": approved_by.strip()})
+            self._event(connection, "plan_approved", {
+                "plan_id": plan_id, "source_version": source_version, "approved_by": approved_by.strip(),
+            })
             return {
                 "plan_id": plan_id,
                 "source_version": source_version,

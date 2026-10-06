@@ -4,10 +4,8 @@ import asyncio
 from copy import deepcopy
 
 import httpx
-import pytest
 
 from logiops.api import create_app
-from logiops.service import LogiOpsService, WorkflowError
 
 
 BASE_URL = "http://127.0.0.1:8000"
@@ -121,20 +119,6 @@ def test_explicit_replay_produces_three_live_plans_without_aws(tmp_path, monkeyp
     asyncio.run(run())
 
 
-def test_agent_trace_rejects_stale_snapshot(tmp_path):
-    service = LogiOpsService(tmp_path / "stale-agent.sqlite3")
-    service.investigate("SHIP-421")
-    service.set_local_inventory("SHIP-421", 5)
-    with pytest.raises(WorkflowError, match="Source data changed"):
-        service.record_agent_run("SHIP-421", 1, {
-            "answer": "stale", "tool_trace": [], "usage": {}, "mode": "replay",
-        })
-    assert not any(
-        event["name"] == "agent_investigation_completed"
-        for event in service.get("SHIP-421")["events"]
-    )
-
-
 def test_public_agent_can_reach_internal_mcp_with_token(tmp_path, monkeypatch):
     monkeypatch.setenv("LOGIOPS_PUBLIC", "1")
     monkeypatch.setenv("LOGIOPS_PUBLIC_HOST", "d123example.cloudfront.net")
@@ -151,5 +135,44 @@ def test_public_agent_can_reach_internal_mcp_with_token(tmp_path, monkeypatch):
                 response = await http.post("/incidents/SHIP-421/agent/investigate", json={})
                 assert response.status_code == 200, response.text
                 assert len(response.json()["plans"]) == 3
+
+    asyncio.run(run())
+
+
+def test_agent_fails_clearly_when_the_deadline_passes(tmp_path):
+    from logiops.agent import investigate_with_bedrock
+    from logiops.bedrock import BedrockError
+
+    class SlowConverse:
+        async def converse(self, messages, system, tools):
+            await asyncio.sleep(5)
+
+    async def run():
+        app = create_app(tmp_path / "slow.sqlite3")
+        async with app.router.lifespan_context(app):
+            try:
+                await investigate_with_bedrock(app, SlowConverse(), "SHIP-421", "?", deadline_seconds=0.2)
+            except BedrockError as exc:
+                return str(exc)
+        return "no error"
+
+    assert "did not finish within" in asyncio.run(run())
+
+
+def test_truncated_final_answer_is_kept_but_flagged(tmp_path):
+    class TruncatingConverse(FakeConverse):
+        async def converse(self, messages, system, tools):
+            response = await super().converse(messages, system, tools)
+            if response["stopReason"] == "end_turn":
+                response["stopReason"] = "max_tokens"
+            return response
+
+    async def run():
+        app = create_app(tmp_path / "truncated.sqlite3", TruncatingConverse())
+        async with app.router.lifespan_context(app):
+            async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url=BASE_URL) as http:
+                response = await http.post("/incidents/SHIP-421/agent/investigate", json={})
+                assert response.status_code == 200, response.text
+                assert response.json()["truncated"] is True
 
     asyncio.run(run())

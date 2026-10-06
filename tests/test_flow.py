@@ -7,6 +7,7 @@ import httpx
 import pytest
 
 from logiops.api import create_app
+from logiops.service import LogiOpsService, WorkflowError
 
 
 @asynccontextmanager
@@ -80,9 +81,15 @@ def test_inventory_change_invalidates_approved_plan(tmp_path):
             assert (await client.post(
                 "/incidents/SHIP-421/approvals", json={**body, "approved_by": "demo-operator"}
             )).status_code == 200
+            approved = (await client.get("/incidents/SHIP-421")).json()["approvals"]
+            assert [item["is_current"] for item in approved] == [True]
             changed = await client.post("/demo/inventory", json={"available": 11})
             assert changed.status_code == 200
             assert changed.json()["source_version"] == 2
+            # The old approval stays in the audit trail but is no longer current.
+            assert [item["is_current"] for item in changed.json()["approvals"]] == [False]
+            approval_event = next(e for e in changed.json()["events"] if e["name"] == "plan_approved")
+            assert approval_event["data"]["source_version"] == 1
             assert (await client.post("/incidents/SHIP-421/execute", json=body)).status_code == 409
             new_plans = await plans_from(client)
             assert set(new_plans) == {"wait", "reroute"}
@@ -135,3 +142,17 @@ def test_other_approved_options_preserve_all_units(
             assert state["inventory"]["arequipa"]["available"] == local_stock
 
     asyncio.run(run())
+
+
+def test_agent_trace_rejects_stale_snapshot(tmp_path):
+    service = LogiOpsService(tmp_path / "stale-agent.sqlite3")
+    service.investigate("SHIP-421")
+    service.set_local_inventory("SHIP-421", 5)
+    with pytest.raises(WorkflowError, match="Source data changed"):
+        service.record_agent_run("SHIP-421", 1, {
+            "answer": "stale", "tool_trace": [], "usage": {}, "mode": "replay",
+        })
+    assert not any(
+        event["name"] == "agent_investigation_completed"
+        for event in service.get("SHIP-421")["events"]
+    )
