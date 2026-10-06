@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Resolution options</title>
+<style>
+  :root { color-scheme: dark; font-family: Inter, ui-sans-serif, system-ui, sans-serif; color: #e9f0ee; background: #0d1c20; }
+  body { margin: 0; padding: 14px; }
+  h1 { margin: 0 0 4px; font-size: 15px; }
+  p.note { margin: 0 0 12px; color: #9fb6b8; font-size: 12px; }
+  .plans { display: grid; gap: 8px; }
+  .plan { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px 14px; align-items: center; padding: 12px; border: 1px solid #345156; border-radius: 9px; background: #102429; }
+  .plan.best { border-color: #76dcc5; }
+  .plan strong { font-size: 13px; }
+  .plan small { display: block; margin-top: 3px; color: #91acaf; font-size: 11px; }
+  .figures { text-align: right; font-size: 13px; font-weight: 700; white-space: nowrap; }
+  .figures small { font-weight: 400; }
+  button { grid-column: 1 / -1; justify-self: start; padding: 6px 11px; border: 1px solid #44726d; border-radius: 7px; background: #1b3939; color: #d9eee9; font: inherit; font-size: 12px; font-weight: 700; cursor: pointer; }
+  button:hover { background: #27504d; }
+  .waiting { color: #9fb6b8; font-size: 13px; }
+</style>
+</head>
+<body>
+<div id="root" class="waiting">Waiting for the investigation result…</div>
+<script>
+"use strict";
+(() => {
+  // MCP Apps view (protocol 2026-01-26). It renders the plans from the tool result and can only
+  // ask the host to select one; approval stays with the operator in the host interface.
+  const PROTOCOL = "2026-01-26";
+  let nextId = 1;
+  const pending = new Map();
+  const send = (message) => window.parent.postMessage(message, "*");
+  const request = (method, params) => new Promise((resolve, reject) => {
+    const id = nextId++;
+    pending.set(id, { resolve, reject });
+    send({ jsonrpc: "2.0", id, method, params });
+  });
+  const notify = (method, params) => send({ jsonrpc: "2.0", method, params });
+
+  function el(tag, className, text) {
+    const node = document.createElement(tag);
+    if (className) node.className = className;
+    if (text !== undefined) node.textContent = text;
+    return node;
+  }
+
+  function render(result) {
+    const plans = Array.isArray(result?.structuredContent?.plans) ? result.structuredContent.plans : [];
+    const root = document.getElementById("root");
+    root.className = "";
+    root.replaceChildren();
+    root.append(el("h1", "", "Resolution options"),
+      el("p", "note", "Projections from synthetic carrier quotes. Selecting a plan does not approve it."));
+    const list = el("div", "plans");
+    const best = plans.length ? [...plans].sort((a, b) =>
+      a.projected_customer_delay_hours - b.projected_customer_delay_hours || a.incremental_cost_usd - b.incremental_cost_usd)[0].id : null;
+    for (const plan of plans) {
+      const card = el("div", `plan${plan.id === best ? " best" : ""}`);
+      const text = el("div");
+      text.append(el("strong", "", plan.label),
+        el("small", "", plan.allocations.map((a) => `${a.units} via ${String(a.source).replaceAll("-", " ")}`).join(" · ")));
+      const figures = el("div", "figures", `$${plan.incremental_cost_usd}`);
+      figures.append(el("small", "", `${plan.projected_customer_delay_hours} h delay`));
+      const select = el("button", "", "Select for approval");
+      select.type = "button";
+      select.addEventListener("click", () => {
+        request("ui/message", { role: "user", content: { type: "text", text: `Select plan ${plan.id}` } })
+          .then(() => { select.textContent = "Selected — approve it in the operator panel"; })
+          .catch(() => { select.textContent = "The host did not accept the selection"; });
+      });
+      card.append(text, figures, select);
+      list.append(card);
+    }
+    root.append(list);
+  }
+
+  window.addEventListener("message", (event) => {
+    if (event.source !== window.parent) return;
+    const message = event.data;
+    if (!message || message.jsonrpc !== "2.0") return;
+    if (message.id !== undefined && pending.has(message.id)) {
+      const { resolve, reject } = pending.get(message.id);
+      pending.delete(message.id);
+      if (message.error) reject(message.error); else resolve(message.result);
+      return;
+    }
+    if (message.method === "ui/notifications/tool-result") render(message.params);
+  });
+
+  // Measure the body, not the document: the document is never shorter than the iframe, so its
+  // scroll height would let the frame grow but never shrink.
+  new ResizeObserver(() => {
+    const box = document.body.getBoundingClientRect();
+    notify("ui/notifications/size-changed", { width: Math.ceil(box.width), height: Math.ceil(box.height) });
+  }).observe(document.body);
+
+  request("ui/initialize", {
+    appInfo: { name: "LogiOps resolution options", version: "1.0.0" },
+    appCapabilities: {},
+    protocolVersion: PROTOCOL,
+  }).then(() => notify("ui/notifications/initialized", {}));
+})();
+</script>
+</body>
+</html>

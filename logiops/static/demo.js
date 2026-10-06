@@ -1,7 +1,11 @@
 "use strict";
 
 const $ = (id) => document.getElementById(id);
-const state = { token: "", snapshot: null, selectedPlanId: null, busy: false, conversation: [], speaking: false };
+const state = { token: "", snapshot: null, selectedPlanId: null, busy: false, conversation: [], speaking: false, app: null };
+// MCP Apps host (protocol 2026-01-26). The view runs in a sandboxed iframe with an opaque origin,
+// no network and no access to the token; it can only ask the host to select a plan.
+const MCP_APP = { uri: "ui://logiops/resolution-options.html", mime: "text/html;profile=mcp-app", protocol: "2026-01-26" };
+const APP_CSP = "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'";
 const eventLabels = {
   scenario_reset: "Synthetic incident reset",
   incident_investigated: "MCP investigation completed",
@@ -46,6 +50,87 @@ async function request(path, method = "GET", body) {
   }
   return response.json();
 }
+
+async function mcpRequest(method, params) {
+  const headers = { "Content-Type": "application/json", Accept: "application/json, text/event-stream" };
+  if (state.token) headers.Authorization = `Bearer ${state.token}`;
+  const response = await fetch("/mcp", {
+    method: "POST", headers, cache: "no-store",
+    body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, params }),
+  });
+  if (!response.ok) throw new Error(`MCP HTTP ${response.status}`);
+  const body = await response.json();
+  if (body.error) throw new Error(body.error.message || "MCP error");
+  return body.result;
+}
+
+async function showMcpApp(run) {
+  const step = run.tool_trace?.find((item) => item.tool === "investigate_incident" && !item.is_error);
+  if (!step) return;
+  const listed = await mcpRequest("tools/list", {});
+  const tool = listed.tools.find((item) => item.name === "investigate_incident");
+  const uri = tool?._meta?.ui?.resourceUri ?? tool?._meta?.["ui/resourceUri"];
+  if (uri !== MCP_APP.uri) return;
+  const read = await mcpRequest("resources/read", { uri });
+  const content = read.contents?.[0];
+  if (!content || content.mimeType !== MCP_APP.mime || typeof content.text !== "string") return;
+  state.app = {
+    version: step.output.source_version,
+    input: step.input,
+    result: { content: [{ type: "text", text: JSON.stringify(step.output) }], structuredContent: step.output },
+  };
+  const frame = $("mcp-app-frame");
+  frame.srcdoc = content.text.replace(/<head>/i, `<head><meta http-equiv="Content-Security-Policy" content="${APP_CSP}">`);
+  $("mcp-app").hidden = false;
+}
+
+function hideMcpApp() {
+  state.app = null;
+  $("mcp-app").hidden = true;
+  $("mcp-app-frame").removeAttribute("srcdoc");
+}
+
+// Selection from the view is resolved against the host's own snapshot; labels, prices or
+// versions sent by the iframe are never trusted, and nothing here can approve a plan.
+function selectFromApp(params) {
+  const text = params?.content?.type === "text" ? String(params.content.text) : "";
+  const match = text.match(/^Select plan (\S+)$/);
+  if (!match || !state.snapshot) return false;
+  const plan = visiblePlans(state.snapshot).find((item) => item.id === match[1]);
+  if (!plan || visibleApproval(state.snapshot) || state.snapshot.executions.length) return false;
+  state.selectedPlanId = plan.id;
+  renderPlans(state.snapshot);
+  renderControls();
+  message(`“${plan.label}” selected from the MCP App. Approve it with the operator button below.`, true);
+  return true;
+}
+
+window.addEventListener("message", (event) => {
+  const frame = $("mcp-app-frame");
+  if (!state.app || event.source !== frame.contentWindow) return;
+  const msg = event.data;
+  if (!msg || msg.jsonrpc !== "2.0" || typeof msg.method !== "string") return;
+  const target = frame.contentWindow;
+  const reply = (payload) => target.postMessage({ jsonrpc: "2.0", id: msg.id, ...payload }, "*");
+  if (msg.method === "ui/initialize") {
+    reply({ result: {
+      protocolVersion: MCP_APP.protocol,
+      hostInfo: { name: "LogiOps Alexa+-style demo", version: "1.0.0" },
+      hostCapabilities: {},
+      hostContext: { theme: "dark", displayMode: "inline" },
+    } });
+  } else if (msg.method === "ui/notifications/initialized") {
+    target.postMessage({ jsonrpc: "2.0", method: "ui/notifications/tool-input", params: { arguments: state.app.input } }, "*");
+    target.postMessage({ jsonrpc: "2.0", method: "ui/notifications/tool-result", params: state.app.result }, "*");
+  } else if (msg.method === "ui/notifications/size-changed") {
+    const height = Number(msg.params?.height);
+    if (Number.isFinite(height)) frame.style.height = `${Math.min(Math.max(height, 80), 640)}px`;
+  } else if (msg.method === "ui/message") {
+    reply(selectFromApp(msg.params) ? { result: {} } : { error: { code: -32000, message: "Unknown or unavailable plan" } });
+  } else if (msg.id !== undefined) {
+    reply({ error: { code: -32601, message: "Method not supported by this host" } });
+  }
+});
 
 function formatDate(iso) {
   return new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit", timeZone: "America/Lima" }).format(new Date(iso));
@@ -216,6 +301,8 @@ function renderControls() {
 
 function render(snapshot) {
   state.snapshot = snapshot;
+  // The view shows the plans of one data version; hide it once that version is gone.
+  if (state.app && state.app.version !== visibleVersion(snapshot)) hideMcpApp();
   $("connection").textContent = "Connected";
   $("connection").className = "connection ready";
   $("incident-status").textContent = snapshot.state.status;
@@ -312,6 +399,7 @@ async function handleUtterance(raw) {
       await act(() => request("/demo/reset", "POST"), "");
       state.selectedPlanId = null;
       state.conversation = [];
+      hideMcpApp();
       say("assistant", "Done. SHIP-421 is back to its original delayed state.");
     } else if (!question && /\bapprove\b/.test(lower)) {
       if (!visiblePlans(state.snapshot).length) {
@@ -345,6 +433,7 @@ async function handleUtterance(raw) {
           : await request("/incidents/SHIP-421/agent/ask", "POST", { question: text, history });
       }, "");
       say("assistant", run.answer, `${fresh ? "investigation" : "follow-up"} · ${traceSummary(run)}`);
+      if (fresh) showMcpApp(run).catch(() => hideMcpApp());
     }
   } catch (error) {
     say("assistant", `I couldn't do that: ${error.message || error}`);
@@ -395,6 +484,7 @@ $("reset").addEventListener("click", () => act(async () => {
   await request("/demo/reset", "POST");
   state.selectedPlanId = null;
   state.conversation = [];
+  hideMcpApp();
 }, "Synthetic incident reset.").catch(() => {}));
 $("set-stock").addEventListener("click", () => act(async () => {
   const available = Number.parseInt($("stock-input").value, 10);

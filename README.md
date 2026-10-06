@@ -116,6 +116,17 @@ nothing and are not stored; failed calls are audited as `agent_run_failed`
 with `job: "ask"`. The browser routes questions (anything ending in `?` or
 starting with how/what/should/…) to the agent, never to approve or execute.
 
+### Interactive plan card (MCP Apps)
+
+`investigate_incident` declares an MCP Apps view (`_meta.ui.resourceUri` =
+`ui://logiops/resolution-options.html`, served as `text/html;profile=mcp-app`).
+A host that supports MCP Apps renders the calculated plans as cards next to
+the conversation. The card can only ask the host to **select** a plan; there
+is no approval tool, so approval stays with the operator. The browser demo
+acts as the host: it reads the resource over `/mcp`, renders it in a sandboxed
+iframe (`allow-scripts` only, no network via CSP) and accepts messages only
+from that frame.
+
 In Swagger, run `POST /demo/reset`, `POST /incidents/SHIP-421/agent/investigate`
 (or the deterministic `/investigate` endpoint),
 `POST /incidents/SHIP-421/approvals`, `POST /incidents/SHIP-421/execute`, and

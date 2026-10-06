@@ -49,6 +49,10 @@
             <h2 id="assistant-title">Talk to the operations agent</h2>
             <p>Ask in plain language, by text or voice. The agent calls the MCP tools for shipment, order, inventory, and carrier facts, then calculates the plans. Say “approve the split plan” or “execute it” to act; every action still checks the exact plan and version.</p>
             <ol id="conversation" class="conversation" aria-live="polite" aria-label="Conversation"></ol>
+            <div id="mcp-app" class="mcp-app" hidden>
+              <span class="mcp-app-label">MCP App · <code>ui://logiops/resolution-options.html</code></span>
+              <iframe id="mcp-app-frame" title="Resolution options (MCP App)" sandbox="allow-scripts" referrerpolicy="no-referrer"></iframe>
+            </div>
             <div class="suggestions" aria-label="Suggested requests">
               <button type="button" class="chip" data-say="What's happening with shipment SHIP-421, and which plan should we choose?">What's happening with SHIP-421?</button>
               <button type="button" class="chip" data-say="Approve the recommended plan">Approve the recommended plan</button>
