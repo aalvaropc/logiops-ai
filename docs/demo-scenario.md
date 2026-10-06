@@ -34,16 +34,21 @@ delayed shipment while also claiming 0 h delay, which didn't add up.)
 ## Agent flow
 
 ```text
-1. get_shipment(SHIP-421)         -> detect delay
-2. get_order(...)                 -> 20 laptops
-3. get_inventory / find_nearby_inventory(Arequipa) -> 12 units available
-4. find_alternative_carriers(...) -> express option for remaining 8 units
-5. calculate_reroute_cost(...)    -> compare options (wait / reroute / split+express)
-6. request_human_approval(...)    -> present the 3 options, user approves split+express
-7. create_split_fulfillment(...) + update_shipment(...) -> execute
-8. notify_customer / notify_operations
-9. get_execution_status(...)      -> verify
+1. get_shipment(SHIP-421)              -> detect the 12 h delay
+2. get_order(ORD-421)                  -> 20 laptops
+3. get_inventory(arequipa, LAPTOP-01)  -> 12 units in local stock
+4. find_alternative_carriers(SHIP-421) -> express option for the remaining 8
+5. investigate_incident(SHIP-421)      -> server computes wait / reroute / split+express
+6. operator approves one plan          -> POST /incidents/SHIP-421/approvals
+7. execute_approved_plan (MCP) or POST /incidents/SHIP-421/execute
+8. get_execution_status(SHIP-421)      -> verify allocations, notifications, audit
 ```
+
+No MCP tool can approve a plan. A person approves one exact plan
+(`plan_id` + `source_version`) through the REST API. The Bedrock agent only
+gets the read and investigation tools. MCP clients can call
+`execute_approved_plan`, but execution re-checks the exact approval before
+applying anything.
 
 For the first local implementation, verification means the selected plan's
 inventory, route, notifications, and audit events were applied exactly once.
