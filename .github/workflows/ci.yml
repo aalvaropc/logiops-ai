@@ -1,0 +1,53 @@
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.12"
+          enable-cache: true
+      - run: uv sync --frozen --extra dev
+      - run: uv run pytest -q
+
+  gitleaks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.12"
+      - run: docker build -t logiops-ai .
+      - run: docker run -d --name logiops -p 127.0.0.1:8000:8000 logiops-ai
+      - name: Health
+        run: curl --fail --silent --retry 20 --retry-all-errors --retry-delay 1 http://127.0.0.1:8000/healthz
+      - name: Replay investigation through MCP
+        run: |
+          curl --fail --silent -X POST http://127.0.0.1:8000/incidents/SHIP-421/agent/investigate \
+            -H 'Content-Type: application/json' -d '{}' | python3 -c 'import json,sys; b=json.load(sys.stdin); assert b["mode"]=="replay" and len(b["plans"])==3, b'
+      - name: MCP client against the container
+        run: |
+          uv sync --frozen
+          uv run python scripts/check_mcp.py http://127.0.0.1:8000/mcp
+      - if: failure()
+        run: docker logs logiops

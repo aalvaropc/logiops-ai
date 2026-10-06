@@ -28,6 +28,17 @@ The AWS demo infrastructure and deployment procedure live in
 [`infra/amazon/README.md`](infra/amazon/README.md). It has not been provisioned
 yet; local tests do not claim a remote or live Bedrock run.
 
+## Run with Docker
+
+```sh
+docker compose up --build
+```
+
+Then open <http://127.0.0.1:8000/demo>. The container runs in replay mode: the
+full MCP workflow with a scripted model, no AWS credentials and no cost. The
+port is published on loopback only. See `compose.yaml` for running against
+live Bedrock with short-lived credentials passed at runtime.
+
 ## Setup
 
 Install Python 3.12 or newer and [uv](https://docs.astral.sh/uv/). For a
