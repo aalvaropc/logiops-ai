@@ -38,16 +38,21 @@ uv sync --extra dev
 LOGIOPS_AGENT_MODE=replay uv run uvicorn logiops.api:app --host 127.0.0.1 --port 8000
 ```
 
-For the live agent, also install the AWS CLI, sign in with `aws login`, and
-ensure the Bedrock model in `.env.example` is accessible in `us-east-1`.
-Start the same server without `LOGIOPS_AGENT_MODE=replay`.
+For the live agent, sign in with `aws login` (boto3 picks up that session, or
+any other credentials in its default chain) and ensure
+`global.anthropic.claude-sonnet-4-6` is accessible in `us-east-1`. Start the
+same server without `LOGIOPS_AGENT_MODE=replay`.
 
-Open the browser demo at <http://127.0.0.1:8000/demo>. In the demo,
-investigate SHIP-421, compare the three projected plans, select one,
-approve it as the operator, and execute it. The timeline shows the audit
-events; reset restores the synthetic incident. On the public deployment,
-paste the operator token into the page to connect. It stays in browser memory
-until the page is reloaded.
+Open the browser demo at <http://127.0.0.1:8000/demo>. It simulates the
+Alexa+ experience as a conversation: ask "What's happening with SHIP-421?" by
+text, or by voice in browsers with speech recognition (Chrome, Edge), and
+optionally have replies read aloud. Say "approve the recommended plan" and
+then "execute it"; those requests use the same REST approval and execution
+endpoints as the buttons, so the version checks are identical. The plan
+cards, timeline, and a stock-change control show how a data change
+invalidates an earlier approval. On the public deployment, paste the operator
+token into the page to connect. It stays in browser memory until the page is
+reloaded.
 
 The API reference is at <http://127.0.0.1:8000/docs>. The MCP endpoint is
 <http://127.0.0.1:8000/mcp> and negotiates protocol version 2025-11-25.
@@ -56,9 +61,14 @@ The SQLite database is created at
 change the location. The default configuration is **local only**. Do not bind
 it to a public interface without `LOGIOPS_PUBLIC=1`, a random
 `LOGIOPS_ACCESS_TOKEN` of at least 32 characters, and HTTPS. In public mode the
-token guards both REST and MCP; MCP requests are limited to 60 per minute per
-client IP in a single process. A production deployment needs shared rate
-limiting and appropriate proxy configuration.
+token guards both REST and MCP. In a single process, MCP requests are limited
+to 60 per minute and agent runs (each one calls a paid model) to 5 per minute
+per viewer. Behind CloudFront, set `LOGIOPS_TRUST_CLOUDFRONT=1` so viewers are
+identified by the `CloudFront-Viewer-Address` header instead of the shared
+edge IP; only do this when the origin accepts traffic exclusively from
+CloudFront. The agent's own in-process MCP calls are exempt from the MCP
+limit. Responses carry `Cache-Control: no-store`. A production deployment
+needs shared rate limiting.
 
 ### Agent investigation
 
@@ -74,7 +84,9 @@ response, and token usage are recorded in the incident's events. The API
 returns the calculated plans separately from the model's explanation. For a
 deterministic rehearsal, launch the server with `LOGIOPS_AGENT_MODE=replay`;
 the response says `mode: replay` and reports zero tokens. Normal mode is
-`bedrock`. It uses AWS CLI credentials and calls Converse on each agent turn.
+`bedrock`. It calls Converse through boto3 with SDK retries, and a run stops
+with a clear error after 50 seconds so it always answers before CloudFront's
+60-second origin timeout.
 
 In Swagger, run `POST /demo/reset`, `POST /incidents/SHIP-421/agent/investigate`
 (or the deterministic `/investigate` endpoint),
@@ -86,8 +98,11 @@ to demonstrate that an old approval cannot execute a stale plan.
 
 The result verifies operational state changes, **not physical delivery**. The
 zero-hour customer delay is a projection from the synthetic carrier times.
-Run tests with `uv run pytest`. The MCP interoperability tests use the
-official Python MCP client against the in-process ASGI app.
+Run tests with `uv run pytest`, in a shell without `LOGIOPS_ACCESS_TOKEN`,
+`LOGIOPS_AGENT_MODE`, or `LOGIOPS_TRUST_CLOUDFRONT` exported. The MCP
+interoperability tests use the official Python MCP client against the
+in-process ASGI app, and the Bedrock tests validate request shapes against
+botocore's service model without a paid call.
 
 ## License
 
