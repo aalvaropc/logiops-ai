@@ -137,11 +137,19 @@ def create_app(
         if mode not in ("bedrock", "replay"):
             raise BedrockError("LOGIOPS_AGENT_MODE must be bedrock or replay")
         client = bedrock_client or (ReplayConverse() if mode == "replay" else BedrockConverse())
-        run = await investigate_with_bedrock(
-            app, client, incident_id, request.question,
-            access_token=access_token, internal_key=internal_key,
-        )
-        run["mode"] = "custom" if bedrock_client else mode
+        run_mode = "custom" if bedrock_client else mode
+        try:
+            run = await investigate_with_bedrock(
+                app, client, incident_id, request.question,
+                access_token=access_token, internal_key=internal_key,
+            )
+        except BedrockError as exc:
+            # Failed runs belong in the audit trail too, not only in the HTTP response.
+            service.record_agent_event(
+                incident_id, "agent_run_failed", {"job": "investigate", "mode": run_mode, "error": str(exc)}
+            )
+            raise
+        run["mode"] = run_mode
         recorded = service.record_agent_run(incident_id, source_version, run)
         return {**run, **recorded}
 

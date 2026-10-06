@@ -304,6 +304,17 @@ class LogiOpsService:
             self._event(connection, "inventory_changed", {"available": available, "source_version": version + 1})
         return self.get(incident_id)
 
+    AGENT_EVENTS = frozenset({"agent_run_failed", "agent_verification_completed"})
+
+    def record_agent_event(self, incident_id: str, name: str, data: dict[str, Any]) -> dict[str, Any]:
+        """Audit agent activity that is not a completed investigation (failures, verifications)."""
+        if name not in self.AGENT_EVENTS:
+            raise WorkflowError(f"Unsupported agent event: {name}", 422)
+        with self._connection(write=True) as connection:
+            _state, version = self._snapshot(connection, incident_id)
+            self._event(connection, name, {**data, "incident_id": incident_id, "source_version": version})
+        return {"source_version": version}
+
     def record_agent_run(
         self, incident_id: str, expected_version: int, run: dict[str, Any]
     ) -> dict[str, Any]:

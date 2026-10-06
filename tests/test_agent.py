@@ -96,6 +96,9 @@ def test_agent_rejects_model_requested_execution(tmp_path):
                 snapshot = (await http.get("/incidents/SHIP-421")).json()
                 assert snapshot["state"]["status"] == "detected"
                 assert not snapshot["executions"]
+                failure = snapshot["events"][-1]
+                assert failure["name"] == "agent_run_failed"
+                assert "disallowed tool" in failure["data"]["error"]
 
     asyncio.run(run())
 

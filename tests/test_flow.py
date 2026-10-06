@@ -156,3 +156,15 @@ def test_agent_trace_rejects_stale_snapshot(tmp_path):
         event["name"] == "agent_investigation_completed"
         for event in service.get("SHIP-421")["events"]
     )
+
+
+def test_agent_events_are_audited_with_the_current_version(tmp_path):
+    service = LogiOpsService(tmp_path / "agent-events.sqlite3")
+    service.set_local_inventory("SHIP-421", 11)
+    recorded = service.record_agent_event("SHIP-421", "agent_run_failed", {"error": "timeout", "source_version": 99})
+    assert recorded == {"source_version": 2}
+    event = service.get("SHIP-421")["events"][-1]
+    assert event["name"] == "agent_run_failed"
+    assert event["data"] == {"error": "timeout", "incident_id": "SHIP-421", "source_version": 2}
+    with pytest.raises(WorkflowError, match="Unsupported agent event"):
+        service.record_agent_event("SHIP-421", "plan_executed", {})
