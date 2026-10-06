@@ -191,7 +191,10 @@ def create_app(
                 {key: plan[key] for key in PLAN_FIELDS}
                 for plan in snapshot["plans"] if plan["source_version"] == version
             ],
-            "current_approval": next((item for item in snapshot["approvals"] if item["is_current"]), None),
+            # After execution the version moves on, so match the approval to the plans shown.
+            "current_approval": next(
+                (item for item in snapshot["approvals"] if item["source_version"] == version), None
+            ),
             "execution": executions[0] if executions else None,
         }
         mode = os.environ.get("LOGIOPS_AGENT_MODE", "bedrock")
@@ -199,12 +202,20 @@ def create_app(
             raise BedrockError("LOGIOPS_AGENT_MODE must be bedrock or replay")
         custom = followup_client or bedrock_client
         client = custom or (ReplayConverse() if mode == "replay" else BedrockConverse())
-        run = await ask_with_bedrock(
-            app, client, incident_id, request.question, context,
-            [turn.model_dump() for turn in request.history],
-            access_token=access_token, internal_key=internal_key,
-        )
-        return {**run, "mode": "custom" if custom else mode, "source_version": version}
+        run_mode = "custom" if custom else mode
+        try:
+            run = await ask_with_bedrock(
+                app, client, incident_id, request.question, context,
+                [turn.model_dump() for turn in request.history],
+                access_token=access_token, internal_key=internal_key,
+            )
+        except BedrockError as exc:
+            # Answers change nothing and are not stored, but failed paid calls are audited.
+            service.record_agent_event(
+                incident_id, "agent_run_failed", {"job": "ask", "mode": run_mode, "error": str(exc)}
+            )
+            raise
+        return {**run, "mode": run_mode, "source_version": version}
 
     @app.post("/incidents/{incident_id}/approvals")
     async def approve(incident_id: str, request: ApprovalRequest) -> dict[str, Any]:

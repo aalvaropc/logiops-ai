@@ -2,6 +2,7 @@
 
 import asyncio
 import tarfile
+from pathlib import Path
 
 import httpx
 
@@ -33,3 +34,18 @@ def test_release_archive_contains_browser_demo():
     with tarfile.open(archive, "r:gz") as release:
         names = set(release.getnames())
     assert {"logiops/static/demo.html", "logiops/static/demo.css", "logiops/static/demo.js"} <= names
+
+
+def test_questions_are_never_routed_to_actions():
+    import re
+    script = (Path(__file__).resolve().parents[1] / "logiops" / "static" / "demo.js").read_text()
+    source = re.search(r"const QUESTION = /(.+)/;", script).group(1).replace("\\/", "/")
+    question = re.compile(source)
+    for text in ("should we approve the split plan?", "what happens if i execute it", "how do i reset?",
+                 "can we do it tomorrow", "is the reroute approved?"):
+        assert question.search(text), text
+    for text in ("approve the recommended plan", "execute it", "reset", "approve the split plan.", "yes, do it"):
+        assert not question.search(text), text
+    for action in ("reset|start over", "\\bapprove\\b", "execute|go ahead"):
+        line = next(line for line in script.splitlines() if action in line and "test(lower)" in line)
+        assert "!question" in line, line

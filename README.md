@@ -73,8 +73,8 @@ change the location. The default configuration is **local only**. Do not bind
 it to a public interface without `LOGIOPS_PUBLIC=1`, a random
 `LOGIOPS_ACCESS_TOKEN` of at least 32 characters, and HTTPS. In public mode the
 token guards both REST and MCP. In a single process, MCP requests are limited
-to 60 per minute and agent runs (each one calls a paid model) to 5 per minute
-per viewer. Behind CloudFront, set `LOGIOPS_TRUST_CLOUDFRONT=1` so viewers are
+to 60 per minute and agent calls (investigations and follow-ups, each one
+calls a paid model) share a budget of 5 per minute per viewer. Behind CloudFront, set `LOGIOPS_TRUST_CLOUDFRONT=1` so viewers are
 identified by the `CloudFront-Viewer-Address` header instead of the shared
 edge IP; only do this when the origin accepts traffic exclusively from
 CloudFront. The agent's own in-process MCP calls are exempt from the MCP
@@ -98,6 +98,23 @@ the response says `mode: replay` and reports zero tokens. Normal mode is
 `bedrock`. It calls Converse through boto3 with SDK retries, and a run stops
 with a clear error after 50 seconds so it always answers before CloudFront's
 60-second origin timeout.
+
+### Follow-up questions
+
+```sh
+curl -sS -X POST http://127.0.0.1:8000/incidents/SHIP-421/agent/ask \
+  -H 'Content-Type: application/json' \
+  -d '{"question": "How much is the reroute?", "history": []}'
+```
+
+A follow-up answers from the latest investigation of the data being shown
+(plans, assessment, approval and execution), with read tools only, so it never
+recalculates plans. It returns 409 if there is no investigation for the
+current data. The question and up to 8 history turns are sent as quoted JSON
+after the context, so user text cannot open or close a block. Answers change
+nothing and are not stored; failed calls are audited as `agent_run_failed`
+with `job: "ask"`. The browser routes questions (anything ending in `?` or
+starting with how/what/should/…) to the agent, never to approve or execute.
 
 In Swagger, run `POST /demo/reset`, `POST /incidents/SHIP-421/agent/investigate`
 (or the deterministic `/investigate` endpoint),

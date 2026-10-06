@@ -297,17 +297,23 @@ function planFromUtterance(text) {
 
 // A thin intent layer, like an Alexa+ action: approval and execution go through the
 // same REST endpoints as the buttons; anything else is a question for the agent.
+// Questions are never actions: "Should we approve the split plan?" asks, it does not approve.
+const QUESTION = /\?\s*$|^(how|what|why|when|which|who|should|can|could|would|will|is|are|do|does|did|if)\b/;
+const isQuestion = (lower) => QUESTION.test(lower);
+
 async function handleUtterance(raw) {
   const text = raw.trim();
   if (!text || state.busy) return;
   say("user", text);
   const lower = text.toLowerCase();
+  const question = isQuestion(lower);
   try {
-    if (/\b(reset|start over)\b/.test(lower)) {
+    if (!question && /\b(reset|start over)\b/.test(lower)) {
       await act(() => request("/demo/reset", "POST"), "");
       state.selectedPlanId = null;
+      state.conversation = [];
       say("assistant", "Done. SHIP-421 is back to its original delayed state.");
-    } else if (/\bapprove\b/.test(lower)) {
+    } else if (!question && /\bapprove\b/.test(lower)) {
       if (!visiblePlans(state.snapshot).length) {
         say("assistant", "There are no plans for the current data yet. Ask me to investigate first.");
         return;
@@ -315,16 +321,22 @@ async function handleUtterance(raw) {
       const plan = planFromUtterance(lower);
       await act(() => approvePlan(plan), "");
       say("assistant", `Approved “${plan.label}” for version ${plan.source_version}: ${plan.projected_customer_delay_hours} hours of delay, $${plan.incremental_cost_usd} extra. Say “execute it” when you're ready.`);
-    } else if (/\b(execute|go ahead|do it|run it)\b/.test(lower) || (/^yes\b/.test(lower) && visibleApproval(state.snapshot))) {
+    } else if (!question && (/\b(execute|go ahead|do it|run it)\b/.test(lower) || (/^yes\b/.test(lower) && visibleApproval(state.snapshot)))) {
       await act(executeApproved, "");
       const execution = state.snapshot.executions[0];
       say("assistant", `The plan was executed. ${executionSummary(state.snapshot, execution)} Delivery is projected, not physically confirmed.`);
     } else {
       // Follow-ups reuse the latest investigation of the data on screen; anything that
       // asks to (re)investigate, or arrives after the data changed, runs a fresh one.
+      // An executed incident cannot be re-planned, so its questions are always follow-ups.
       const current = latestAgentEvent(state.snapshot);
       const stale = !current || current.data.source_version !== visibleVersion(state.snapshot);
-      const fresh = stale || /\b(investigate|re-?check|refresh|start again|what(?:'s| is) happening)\b/.test(lower);
+      const executed = Boolean(state.snapshot?.executions.length);
+      if (executed && stale) {
+        say("assistant", "This incident was already executed without an investigation to refer to. Reset the synthetic incident to start over.");
+        return;
+      }
+      const fresh = !executed && (stale || /\b(investigate|re-?check|refresh|start again|what(?:'s| is) happening)\b/.test(lower));
       const history = state.conversation.slice(0, -1).slice(-6).map(({ role, text: turn }) => ({ role, text: turn.slice(0, 1000) }));
       let run;
       await act(async () => {

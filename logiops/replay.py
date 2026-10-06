@@ -6,11 +6,14 @@ import json
 import re
 from typing import Any
 
+from .bedrock import BedrockError
+
 PLAN_KEYWORDS = (
     ("split-express", re.compile(r"\b(split|express)\b", re.I)),
-    ("reroute", re.compile(r"\b(reroute|re-route|economy)\b", re.I)),
-    ("wait", re.compile(r"\bwait\b", re.I)),
+    ("reroute", re.compile(r"\b(reroute|re-route|rerouting|economy)\b", re.I)),
+    ("wait", re.compile(r"\bwait(ing)?\b", re.I)),
 )
+CHEAPEST = re.compile(r"\b(cheap(er|est)?|lowest cost|least expensive)\b", re.I)
 
 
 class ReplayConverse:
@@ -38,10 +41,12 @@ class ReplayConverse:
                 ]}},
             }
         results = messages[-1]["content"]
-        plans = next(
-            item["toolResult"]["content"][0]["json"]["plans"]
-            for item in results if item["toolResult"]["toolUseId"] == "investigate_incident"
-        )
+        result = next(item["toolResult"] for item in results if item["toolResult"]["toolUseId"] == "investigate_incident")
+        if result.get("status") == "error":
+            # Same outcome as a real model that cannot calculate plans: a clear agent error.
+            raise BedrockError("Agent could not calculate the incident plans: "
+                               + json.dumps(result["content"][0].get("json", {}))[:200])
+        plans = result["content"][0]["json"]["plans"]
         selected = min(plans, key=lambda plan: (
             plan["projected_customer_delay_hours"], plan["incremental_cost_usd"]
         ))
@@ -64,12 +69,16 @@ class ReplayConverse:
     @staticmethod
     def _follow_up(text: str) -> dict[str, Any]:
         """Answer from the <context> block alone, with no tool calls, like a cheap follow-up turn."""
-        question = text.split("Follow-up question:", 1)[1].split("\n", 1)[0].strip()
+        question = json.loads(text.rsplit("Follow-up question:", 1)[1])
         context = json.loads(text.split("<context>", 1)[1].split("</context>", 1)[0])
         plans = context["plans"]
+        fastest = min(plans, key=lambda p: (p["projected_customer_delay_hours"], p["incremental_cost_usd"]))
+        cheapest = min(plans, key=lambda p: (p["incremental_cost_usd"], p["projected_customer_delay_hours"]))
+        # Once executed, an open question is about what actually ran.
+        executed = next((p for p in plans if context.get("execution") and p["id"] == context["execution"]["plan_id"]), None)
         plan = next(
             (p for kind, pattern in PLAN_KEYWORDS if pattern.search(question) for p in plans if p["kind"] == kind),
-            min(plans, key=lambda p: (p["projected_customer_delay_hours"], p["incremental_cost_usd"])),
+            cheapest if CHEAPEST.search(question) else executed or fastest,
         )
         answer = (
             f"{plan['label']} ({plan['id']}): {plan['projected_customer_delay_hours']} h projected delay, "
