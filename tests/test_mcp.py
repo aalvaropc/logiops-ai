@@ -182,3 +182,32 @@ def test_tool_errors_carry_hints_so_the_model_can_correct_itself(tmp_path):
                             assert result.isError is False, (name, result.content)
 
     asyncio.run(run())
+
+
+def test_tools_serve_every_incident(tmp_path):
+    async def run():
+        app = create_app(tmp_path / "incidents.sqlite3")
+        async with app.router.lifespan_context(app):
+            async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url=BASE_URL) as http_client:
+                async with streamable_http_client(f"{BASE_URL}/mcp", http_client=http_client) as (read, write, _):
+                    async with ClientSession(read, write) as session:
+                        await session.initialize()
+                        names = {tool.name for tool in (await session.list_tools()).tools}
+                        assert "list_incidents" in names and len(names) == 8
+                        inbox = (await session.call_tool("list_incidents", {})).structuredContent["incidents"]
+                        assert [item["incident_id"] for item in inbox][:2] == ["SHIP-421", "SHIP-452"]
+                        shipment = (await session.call_tool("get_shipment", {"shipment_id": "SHIP-433"})).structuredContent
+                        assert shipment["order_ids"] == ["ORD-433A", "ORD-433B"] and "order_id" not in shipment
+                        assert shipment["warehouse_id"] is None
+                        order = (await session.call_tool("get_order", {"order_id": "ord-433a"})).structuredContent
+                        assert order["priority"] == "critical" and order["quantity"] == 12
+                        hint = await session.call_tool("get_order", {"order_id": "SHIP-433"})
+                        assert hint.isError and "ORD-433A and ORD-433B" in hint.content[0].text
+                        stock = (await session.call_tool("get_inventory", {"warehouse_id": "lima", "sku": "ROUTER-05"})).structuredContent
+                        assert stock["available"] == 25
+                        none = await session.call_tool("get_inventory", {"warehouse_id": "cusco", "sku": "TABLET-03", "shipment_id": "SHIP-433"})
+                        assert none.isError and "no local warehouse" in none.content[0].text
+                        unknown = await session.call_tool("get_shipment", {"shipment_id": "SHIP-999"})
+                        assert unknown.isError and "SHIP-460" in unknown.content[0].text
+
+    asyncio.run(run())

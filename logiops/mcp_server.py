@@ -9,7 +9,9 @@ from mcp.server.fastmcp import FastMCP
 from mcp.server.fastmcp.exceptions import ToolError
 from mcp.server.transport_security import TransportSecuritySettings
 
+from .scenario import INCIDENT_IDS
 from .service import LogiOpsService, WorkflowError
+from .tools import inventory_hint, inventory_view, order_view, orders_hint, shipment_view
 
 
 # MCP Apps (SEP-1865, 2026-01-26): investigate_incident declares an interactive
@@ -19,8 +21,7 @@ UI_MIME_TYPE = "text/html;profile=mcp-app"
 UI_HTML = (Path(__file__).resolve().parent / "static" / "resolution_options.html").read_text(encoding="utf-8")
 
 
-def _same(value: str, expected: str) -> bool:
-    return value.strip().casefold() == expected.casefold()
+OPEN_INCIDENTS = "Incidents: " + ", ".join(INCIDENT_IDS) + "."
 
 
 def create_mcp_server(service: LogiOpsService, *, public_host: str | None = None) -> FastMCP:
@@ -44,34 +45,53 @@ def create_mcp_server(service: LogiOpsService, *, public_host: str | None = None
         # Models write "ship-421" or " SHIP-421"; every tool resolves the same incident.
         return str(shipment_id).strip().upper()
 
+    def state_of(shipment_id: str) -> dict[str, Any]:
+        try:
+            return service.get(incident(shipment_id))["state"]
+        except WorkflowError as exc:
+            raise ToolError(f"{exc}. {OPEN_INCIDENTS}") from exc
+
+    @server.tool()
+    async def list_incidents() -> dict[str, Any]:
+        """List every open and resolved incident with its kind, priority, due time and status."""
+        return {"incidents": service.list_incidents()}
+
     @server.tool()
     async def get_shipment(shipment_id: str) -> dict[str, Any]:
-        """Read the current shipment, its delayed ETA, and the linked order id."""
-        try:
-            state = service.get(incident(shipment_id))["state"]
-        except WorkflowError as exc:
-            raise ToolError(f"{exc}. The incident under investigation is SHIP-421.") from exc
-        return {**state["shipment"], "order_id": state["order"]["id"]}
+        """Read the shipment behind an incident: route, delayed ETA, its order ids and its local warehouse."""
+        return shipment_view(state_of(shipment_id))
 
     @server.tool()
     async def get_order(order_id: str) -> dict[str, Any]:
-        """Read the customer order linked to a shipment (order ids look like ORD-421)."""
-        order = service.get("SHIP-421")["state"]["order"]
-        if not _same(order_id, order["id"]):
-            raise ToolError(f"Unknown order: {order_id}. The order linked to SHIP-421 is {order['id']}.")
-        return order
+        """Read a customer order (quantity, priority, due time); order ids look like ORD-421."""
+        states = [service.get(item)["state"] for item in INCIDENT_IDS]
+        for state in states:
+            order = order_view(state, order_id)
+            if order is not None:
+                return order
+        # A shipment id passed by mistake: point to that shipment's orders.
+        linked = next((state for state in states if state["incident_id"] == incident(order_id)), None)
+        hint = orders_hint(linked) if linked else "Read the shipment first; it lists its order ids."
+        raise ToolError(f"Unknown order: {order_id}. {hint}")
 
     @server.tool()
-    async def get_inventory(warehouse_id: str, sku: str) -> dict[str, Any]:
-        """Read synthetic available stock at a warehouse."""
-        state = service.get("SHIP-421")["state"]
-        if not _same(warehouse_id, "arequipa") or not _same(sku, state["order"]["sku"]):
-            raise ToolError(f"Unknown warehouse or SKU. Use warehouse_id 'arequipa' and sku '{state['order']['sku']}'.")
-        return {"warehouse_id": "arequipa", **state["inventory"]["arequipa"]}
+    async def get_inventory(warehouse_id: str, sku: str, shipment_id: str | None = None) -> dict[str, Any]:
+        """Read synthetic available stock at an incident's local warehouse (the shipment lists its warehouse_id)."""
+        if shipment_id is not None:
+            candidates = [state_of(shipment_id)]
+        else:
+            # Warehouse ids are unique across incidents, so the warehouse alone finds the incident.
+            candidates = [service.get(item)["state"] for item in INCIDENT_IDS]
+        for state in candidates:
+            stock = inventory_view(state, warehouse_id, sku)
+            if stock is not None:
+                return stock
+        hint = inventory_hint(candidates[0]) if len(candidates) == 1 else "Read the shipment first; it names its warehouse."
+        raise ToolError(f"Unknown warehouse or SKU. {hint}")
 
     @server.tool()
     async def find_alternative_carriers(shipment_id: str) -> dict[str, Any]:
-        """Read carrier capacity, ETA, and incremental cost quotes."""
+        """Read alternative carrier and service quotes: capacity, ETA and incremental cost."""
         try:
             return service.get(incident(shipment_id))["state"]["carriers"]
         except WorkflowError as exc:

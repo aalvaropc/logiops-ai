@@ -1,12 +1,15 @@
 """The demo's financial, inventory, approval, and retry invariants."""
 
 import asyncio
+import json
+import sqlite3
 from contextlib import asynccontextmanager
 
 import httpx
 import pytest
 
 from logiops.api import create_app
+from logiops.scenario import INCIDENT_IDS, best_plan, build_plans, known_figures, seed_state
 from logiops.service import LogiOpsService, WorkflowError
 
 
@@ -190,3 +193,159 @@ def test_agent_events_are_audited_with_the_current_version(tmp_path):
     assert event["data"] == {"error": "timeout", "incident_id": "SHIP-421", "source_version": 2}
     with pytest.raises(WorkflowError, match="Unsupported agent event"):
         service.record_agent_event("SHIP-421", "plan_executed", {})
+
+
+# --- Several incidents (R1, 2026-10-08) -------------------------------------------
+
+
+def _summary(plans):
+    return {plan["kind"]: (plan["incremental_cost_usd"], plan["projected_customer_delay_hours"], plan["late_units"])
+            for plan in plans}
+
+
+EXPECTED_PLANS = {
+    "SHIP-421": ({"wait": (0, 12, 20), "reroute": (80, 3, 20), "split-express": (120, 0, 0)}, "split-express"),
+    "SHIP-433": ({"wait": (0, 24, 30), "reroute": (150, 8, 30), "priority-air": (240, 24, 18),
+                  "priority-air-ground": (390, 8, 18)}, "priority-air-ground"),
+    "SHIP-452": ({"wait": (0, 72, 40), "expedite": (350, 18, 40), "split-wait": (0, 72, 15),
+                  "split-expedite": (350, 18, 15)}, "split-expedite"),
+    "SHIP-460": ({"priority-first": (0, 6, 15), "first-come": (0, 30, 15), "express-transfer": (300, 0, 0)},
+                 "express-transfer"),
+}
+
+
+@pytest.mark.parametrize("incident_id", INCIDENT_IDS)
+def test_each_incident_offers_its_own_plans_and_a_defensible_best(incident_id):
+    plans = build_plans(seed_state(incident_id), 1)
+    expected, best = EXPECTED_PLANS[incident_id]
+    assert _summary(plans) == expected
+    assert best_plan(plans)["kind"] == best
+    for plan in plans:
+        assert plan["id"].startswith(f"{incident_id}:") and plan["delivery_status"] == "projected"
+        assert sum(order["quantity"] for order in plan["orders"]) == sum(a["units"] for a in plan["allocations"])
+
+
+def test_the_inbox_lists_every_incident_open_first_by_due_time(tmp_path):
+    async def run():
+        async with client_for(tmp_path / "inbox.sqlite3") as client:
+            inbox = (await client.get("/incidents")).json()["incidents"]
+            assert [item["incident_id"] for item in inbox] == ["SHIP-421", "SHIP-452", "SHIP-433", "SHIP-460"]
+            assert {item["kind"] for item in inbox} == {"delay", "carrier_outage", "customs_hold", "stock_conflict"}
+            assert all(item["simulated"] and item["status"] == "detected" for item in inbox)
+            assert {item["incident_id"]: item["priority"] for item in inbox} == {
+                "SHIP-421": "standard", "SHIP-452": "standard", "SHIP-433": "critical", "SHIP-460": "critical"}
+            assert next(item for item in inbox if item["incident_id"] == "SHIP-433")["warehouse_id"] is None
+
+    asyncio.run(run())
+
+
+def test_incidents_are_isolated_from_each_other(tmp_path):
+    async def run():
+        async with client_for(tmp_path / "isolated.sqlite3") as client:
+            ship_421_plan = (await plans_from(client))["split-express"]
+            response = await client.post("/incidents/SHIP-433/investigate")
+            plan = {item["kind"]: item for item in response.json()["plans"]}["priority-air-ground"]
+            request = {"plan_id": plan["id"], "source_version": plan["source_version"]}
+            assert (await client.post("/incidents/SHIP-433/approvals",
+                                      json={**request, "approved_by": "demo-operator"})).status_code == 200
+            executed = await client.post("/incidents/SHIP-433/execute", json=request)
+            assert executed.status_code == 200 and executed.json()["accounted_units"] == 30
+            # SHIP-421 at the same version keeps its own plans, approvals and events.
+            other = (await client.get("/incidents/SHIP-421")).json()
+            assert other["state"]["status"] == "investigated" and other["approvals"] == [] and other["executions"] == []
+            assert {event["name"] for event in other["events"]} == {"scenario_reset", "incident_investigated"}
+            assert all(item["id"].startswith("SHIP-421:") for item in other["plans"])
+            # A plan id from one incident is unknown under another.
+            foreign = {"plan_id": ship_421_plan["id"], "source_version": 1}
+            assert (await client.post("/incidents/SHIP-433/approvals",
+                                      json={**foreign, "approved_by": "demo-operator"})).status_code == 404
+            assert (await client.post("/incidents/SHIP-433/execute", json=foreign)).status_code in (404, 409)
+
+    asyncio.run(run())
+
+
+def test_two_orders_share_the_stock_and_every_unit_is_accounted_for(tmp_path):
+    async def run():
+        async with client_for(tmp_path / "conflict.sqlite3") as client:
+            response = await client.post("/incidents/SHIP-460/investigate")
+            plan = {item["kind"]: item for item in response.json()["plans"]}["priority-first"]
+            request = {"plan_id": plan["id"], "source_version": plan["source_version"]}
+            await client.post("/incidents/SHIP-460/approvals", json={**request, "approved_by": "demo-operator"})
+            result = (await client.post("/incidents/SHIP-460/execute", json=request)).json()
+            assert result["accounted_units"] == 45
+            assert result["orders"] == [{"order_id": "ORD-460", "units": 20}, {"order_id": "ORD-461", "units": 25}]
+            state = (await client.get("/incidents/SHIP-460")).json()["state"]
+            assert state["inventory"]["trujillo"]["available"] == 0
+            assert state["shipment"]["units_on_delayed_route"] == 15  # the school's shortfall waits
+            assert len(state["notifications"]) == 3  # one customer per order, plus operations
+
+    asyncio.run(run())
+
+
+def test_execution_rejects_a_plan_that_does_not_match_its_incident(tmp_path):
+    service = LogiOpsService(tmp_path / "tampered.sqlite3")
+    plan = {item["kind"]: item for item in service.investigate("SHIP-452")}["split-expedite"]
+    service.approve("SHIP-452", plan["id"], 1, "demo-operator")
+    for change, message in (
+        ({"source": "teleport"}, "Unknown allocation source"),
+        ({"units": 14}, "does not account for the full order"),
+        ({"order_id": "ORD-999"}, "unknown order"),
+    ):
+        tampered = {**plan, "allocations": [{**plan["allocations"][-1], **change}, *plan["allocations"][:-1]]}
+        with service._connection(write=True) as connection:
+            connection.execute("UPDATE plans SET plan_json = ? WHERE plan_id = ?", (json.dumps(tampered), plan["id"]))
+        with pytest.raises(WorkflowError, match=message):
+            service.execute("SHIP-452", plan["id"], 1)
+    assert service.get("SHIP-452")["state"]["inventory"]["lima"]["available"] == 25  # nothing changed
+
+
+def test_the_stock_control_targets_each_incident_own_warehouse(tmp_path):
+    async def run():
+        async with client_for(tmp_path / "stock.sqlite3") as client:
+            changed = await client.post("/demo/inventory", json={"incident_id": "SHIP-460", "available": 20})
+            assert changed.status_code == 200 and changed.json()["source_version"] == 2
+            kinds = {item["kind"] for item in (await client.post("/incidents/SHIP-460/investigate")).json()["plans"]}
+            assert kinds == {"priority-first", "first-come"}
+            assert (await client.get("/incidents/SHIP-421")).json()["source_version"] == 1
+            no_stock = await client.post("/demo/inventory", json={"incident_id": "SHIP-433", "available": 5})
+            assert no_stock.status_code == 422
+            await client.post("/demo/inventory", json={"incident_id": "SHIP-460", "available": 10})
+            infeasible = await client.post("/incidents/SHIP-460/investigate")
+            assert infeasible.status_code == 409 and "No feasible plan" in infeasible.json()["detail"]
+
+    asyncio.run(run())
+
+
+def test_reset_restores_one_incident_or_all_of_them(tmp_path):
+    service = LogiOpsService(tmp_path / "reset.sqlite3")
+    service.set_local_inventory("SHIP-452", 3)
+    service.set_local_inventory("SHIP-421", 3)
+    service.reset("SHIP-452")
+    assert service.get("SHIP-452")["state"]["inventory"]["lima"]["available"] == 25
+    assert service.get("SHIP-421")["source_version"] == 2
+    service.reset()
+    for incident_id in INCIDENT_IDS:
+        snapshot = service.get(incident_id)
+        assert snapshot["source_version"] == 1 and [e["name"] for e in snapshot["events"]] == ["scenario_reset"]
+
+
+def test_an_older_single_incident_database_is_rebuilt_once(tmp_path):
+    path = tmp_path / "v1.sqlite3"
+    with sqlite3.connect(path) as connection:
+        connection.executescript(
+            "CREATE TABLE snapshot (incident_id TEXT PRIMARY KEY, version INTEGER, state_json TEXT);"
+            "CREATE TABLE plans (plan_id TEXT PRIMARY KEY, source_version INTEGER, plan_json TEXT);"
+            "CREATE TABLE events (sequence INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, data_json TEXT, recorded_at TEXT);"
+            "INSERT INTO snapshot VALUES ('SHIP-421', 7, '{}');"
+        )
+    service = LogiOpsService(path)
+    assert [item["incident_id"] for item in service.list_incidents()] == ["SHIP-421", "SHIP-452", "SHIP-433", "SHIP-460"]
+    assert [e["name"] for e in service.get("SHIP-433")["events"]] == ["scenario_reset", "schema_migrated"]
+    plans = service.investigate("SHIP-421")
+    reopened = LogiOpsService(path)  # the current layout is kept as it is
+    assert [plan["id"] for plan in reopened.get("SHIP-421")["plans"]] == [plan["id"] for plan in plans]
+
+
+def test_known_figures_are_the_numbers_an_answer_may_quote():
+    assert known_figures(seed_state("SHIP-421")) == {"dollars": [80, 120], "hours": [12]}
+    assert known_figures(seed_state("SHIP-460")) == {"dollars": [300], "hours": [6, 30, 48]}
