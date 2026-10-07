@@ -58,10 +58,20 @@ LOGIOPS_AGENT_MODE=replay uv run uvicorn logiops.api:app --host 127.0.0.1 --port
    each plan card shows every order's delay. SHIP-421 keeps its own conversation
    and state. SHIP-452 (customs hold) and SHIP-460 (two orders competing for
    stock) work the same way; see `docs/demo-scenario.md`.
-8. **Stale data.** Reset, investigate and approve again, then apply a stock change of
+8. **Briefing and preferences.** Ask "Any delays today?": the agent reads the inbox
+   with `list_incidents` and ranks the open incidents, and the one to start with
+   is marked "Start here". Say "remember my spend cap is $250", then open SHIP-433
+   and ask what's happening: the "Your preference" line and badge point to flying
+   only the hospital order ($240) instead of the $390 default, the agent
+   recommends it and says what it trades away, and nothing is approved until you
+   approve it. The preference is kept after a reload (the operator panel shows
+   when it was saved); "forget my preferences" or "Reset all incidents and
+   preferences" clears it. With "Read replies aloud" on, only the short spoken
+   line is read.
+9. **Stale data.** Reset, investigate and approve again, then apply a stock change of
    11 units: the approval no longer applies, "execute it" is refused, and a new
    investigation offers only the plans that are still feasible.
-9. **Idempotence.** Repeat `POST /incidents/SHIP-421/execute` with the approved
+10. **Idempotence.** Repeat `POST /incidents/SHIP-421/execute` with the approved
    `plan_id` and `source_version`: the response is identical and nothing is duplicated.
 
 Or run the whole flow headless: `uv run python scripts/rehearse_api.py` prints PASS or

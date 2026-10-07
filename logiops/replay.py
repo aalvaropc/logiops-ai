@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import re
+from datetime import datetime
 from typing import Any
 
 from .bedrock import BedrockError
@@ -39,6 +40,18 @@ def _tool_use(calls: list[tuple[str, dict[str, Any]]]) -> dict[str, Any]:
     }
 
 
+def _text(answer: str) -> dict[str, Any]:
+    return {
+        "stopReason": "end_turn",
+        "usage": {"inputTokens": 0, "outputTokens": 0},
+        "output": {"message": {"role": "assistant", "content": [{"text": answer}]}},
+    }
+
+
+def _lima(iso: str) -> str:
+    return datetime.fromisoformat(iso).strftime("%b %d, %H:%M").replace(" 0", " ") + " Lima time"
+
+
 def _result(messages: list[dict[str, Any]], tool: str) -> dict[str, Any]:
     return next(
         item["toolResult"] for item in messages[-1]["content"]
@@ -52,10 +65,12 @@ class ReplayConverse:
     async def converse(
         self, messages: list[dict[str, Any]], system: str, tools: list[dict[str, Any]]
     ) -> dict[str, Any]:
-        from .agent import FOLLOWUP_PROMPT
+        from .agent import BRIEFING_PROMPT, FOLLOWUP_PROMPT
 
         if system == FOLLOWUP_PROMPT:
             return self._follow_up(messages[0]["content"][0]["text"])
+        if system == BRIEFING_PROMPT:
+            return self._briefing(messages)
         turn = sum(1 for message in messages if message["role"] == "assistant")
         if turn == 0:
             shipment_id = SHIPMENT.search(messages[0]["content"][0]["text"]).group(1)
@@ -82,23 +97,27 @@ class ReplayConverse:
             for item in message["content"] if "toolResult" in item
             and item["toolResult"]["toolUseId"].split(":", 1)[0] == "get_shipment"
         )
-        selected = best_plan(plans)
+        preference = result["content"][0]["json"].get("operator_preferences")
+        selected = next(
+            (plan for plan in plans if preference and plan["id"] == preference["preferred_plan_id"]), best_plan(plans)
+        )
         summary = "; ".join(
             f"{plan['label']}: {plan['projected_customer_delay_hours']}h projected delay, "
             f"${plan['incremental_cost_usd']} incremental cost, ETA {plan['projected_completion_eta']}"
             for plan in plans
         )
+        because = ""
+        if preference and preference["changes_pick"]:
+            because = f"Your saved preference changes the pick: {preference['reason']} "
+        warnings = " ".join(preference["warnings"]) + " " if preference and preference["warnings"] else ""
         answer = (
             f"{shipment['id']}: {shipment['disruption']} Options: {summary}. "
-            f"Recommend {selected['label']} ({selected['id']}). "
+            f"{because}{warnings}Recommend {selected['label']} ({selected['id']}). "
             "Delivery is projected, not physically confirmed. A human must approve before execution.\n"
+            f"Spoken: {shipment['id']} needs a decision. I recommend: {selected['label']}.\n"
             f"Recommended plan: {selected['id']}"
         )
-        return {
-            "stopReason": "end_turn",
-            "usage": {"inputTokens": 0, "outputTokens": 0},
-            "output": {"message": {"role": "assistant", "content": [{"text": answer}]}},
-        }
+        return _text(answer)
 
     @staticmethod
     def _follow_up(text: str) -> dict[str, Any]:
@@ -106,7 +125,8 @@ class ReplayConverse:
         question = json.loads(text.rsplit("Follow-up question:", 1)[1])
         context = json.loads(text.split("<context>", 1)[1].split("</context>", 1)[0])
         plans = context["plans"]
-        best = best_plan(plans)
+        preference = context.get("operator_preferences")
+        best = next((p for p in plans if preference and p["id"] == preference["preferred_plan_id"]), best_plan(plans))
         cheapest = min(plans, key=lambda p: (p["incremental_cost_usd"], p["projected_customer_delay_hours"]))
         # Once executed, an open question is about what actually ran.
         executed = next((p for p in plans if context.get("execution") and p["id"] == context["execution"]["plan_id"]), None)
@@ -117,10 +137,38 @@ class ReplayConverse:
         answer = (
             f"{plan['label']} ({plan['id']}): {plan['projected_customer_delay_hours']} h projected delay, "
             f"${plan['incremental_cost_usd']} extra, projected completion {plan['projected_completion_eta']}. "
-            "Delivery is projected, not physically confirmed; a person approves before execution."
+            "Delivery is projected, not physically confirmed; a person approves before execution.\n"
+            f"Spoken: {plan['label']}: {plan['projected_customer_delay_hours']} hours of delay, "
+            f"{plan['incremental_cost_usd']} dollars extra."
         )
-        return {
-            "stopReason": "end_turn",
-            "usage": {"inputTokens": 0, "outputTokens": 0},
-            "output": {"message": {"role": "assistant", "content": [{"text": answer}]}},
-        }
+        return _text(answer)
+
+    @staticmethod
+    def _briefing(messages: list[dict[str, Any]]) -> dict[str, Any]:
+        """Read the inbox, then rank it: critical orders first, then due time, then the longest delay."""
+        if len(messages) == 1:
+            return _tool_use([("list_incidents", {})])
+        incidents = _result(messages, "list_incidents")["content"][0]["json"]["incidents"]
+        open_ = sorted(
+            (item for item in incidents if item["status"] != "verified"),
+            key=lambda item: (item["priority"] != "critical", datetime.fromisoformat(item["due_eta"]),
+                              -item["delay_hours"], item["incident_id"]),
+        )
+        resolved = len(incidents) - len(open_)
+        if not open_:
+            return _text(f"All {resolved} incidents are resolved; nothing needs attention.\n"
+                         "Spoken: Every incident is resolved.")
+        lines = []
+        for index, item in enumerate(open_, 1):
+            critical = [order["customer"] for order in item["orders"] if order["priority"] == "critical"]
+            who = f"critical order for {', '.join(critical)}" if critical else f"{item['units']} units"
+            lines.append(f"{index}. {item['incident_id']} ({item['kind_label']}, {item['route']}): {item['title'].rstrip('.')}; "
+                         f"{who}, due {_lima(item['due_eta'])}, +{item['delay_hours']} h.")
+        first = open_[0]
+        tail = f" {resolved} resolved." if resolved else ""
+        answer = (
+            f"{len(open_)} open incidents, critical orders first, then by due time.{tail}\n\n" + "\n".join(lines)
+            + f"\n\nStart with: {first['incident_id']}\n"
+            f"Spoken: You have {len(open_)} open incidents. Start with {first['incident_id']}, due {_lima(first['due_eta'])}."
+        )
+        return _text(answer)

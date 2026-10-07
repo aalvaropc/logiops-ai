@@ -14,6 +14,17 @@
     ["confirm", /^(?:yes|yeah|yep)\b/],
   ];
 
+  // "Remember …" saves a preference; it is data for the plan pick and never approves anything.
+  const REMEMBER = new RegExp(`${OPENER}(?:remember|from now on)\\b[,:]?\\s*(?:that\\s+)?`);
+  const FORGET = new RegExp(`${OPENER}(?:forget|clear|reset|delete|remove)\\s+(?:all\\s+)?(?:my|the)\\s+(?:saved\\s+)?(?:preferences?|prefs)\\b`);
+  const NO_CAP = /\b(?:no|remove|drop|forget|clear|without)\s+(?:the\s+|my\s+|a\s+|any\s+)?(?:spend(?:ing)?\s+)?(?:cap|budget|limit)\b/;
+  const CAP_WORDS = /\b(?:cap|budget|limit|under|below|at most|no more than|more than|over|exceed\w*|up to|max(?:imum)?|spend\w*)\b/;
+  const MONEY = /\$\s?(\d{1,3}(?:,\d{3})+|\d{1,6})\b|\b(\d{1,3}(?:,\d{3})+|\d{1,6})\s?(?:usd|dollars?)\b/;
+  const CHEAPEST = /\bcheap(?:est|er)?\b|\blowest cost\b|\bleast expensive\b|\bsave money\b/;
+  const BALANCED = /\b(?:balanced|default (?:ranking|pick|rule))\b/;
+  // "Any delays today?" asks for the whole queue, not for the open incident.
+  const BRIEFING = /\b(?:any (?:delays?|incidents?|problems?|issues?|exceptions?)(?: today)?|brief(?:ing)? me|(?:daily|morning|queue) briefing|what needs (?:my )?attention|what should i (?:look at|work on|handle) first|which incident (?:first|should i)|summari[sz]e (?:the |my )?(?:queue|inbox|incidents))\b/;
+
   function isQuestion(text) {
     return QUESTION.test(String(text).trim().toLowerCase());
   }
@@ -30,6 +41,32 @@
       return NEGATION.test(rest) ? null : name;
     }
     return null;
+  }
+
+  // {forget: true}, {update: {rule?, max_cost_usd?, note?}}, or null when it is not a preference.
+  function parsePreference(text) {
+    const raw = String(text).trim();
+    const lower = raw.toLowerCase();
+    if (!lower || QUESTION.test(lower)) return null;
+    if (FORGET.test(lower)) return { forget: true };
+    const opener = lower.match(REMEMBER);
+    if (!opener) return null;
+    const rest = raw.slice(opener[0].length).trim();
+    const words = rest.toLowerCase();
+    if (!rest) return null;
+    const update = {};
+    const money = words.match(MONEY);
+    if (NO_CAP.test(words)) update.max_cost_usd = null;
+    else if (money && CAP_WORDS.test(words)) update.max_cost_usd = Number((money[1] ?? money[2]).replaceAll(",", ""));
+    if (CHEAPEST.test(words)) update.rule = "cheapest_unless_critical_late";
+    else if (BALANCED.test(words)) update.rule = "balanced";
+    // Anything else is a note for the agent, kept as the operator wrote it.
+    if (!Object.keys(update).length) update.note = rest.replace(/[.!]+$/, "").slice(0, 200);
+    return { update };
+  }
+
+  function isBriefing(text) {
+    return BRIEFING.test(String(text).trim().toLowerCase());
   }
 
   // The plan the agent recommended, as a plan id from `plans`, or null.
@@ -64,7 +101,7 @@
     return named.length === 1 ? named[0] : null;
   }
 
-  const api = { isQuestion, parseCommand, recommendedPlanId, mentionedIncident };
+  const api = { isQuestion, parseCommand, parsePreference, isBriefing, recommendedPlanId, mentionedIncident };
   if (typeof module === "object" && module.exports) module.exports = api;
   else root.LogiOpsIntent = api;
 })(typeof window === "undefined" ? globalThis : window);

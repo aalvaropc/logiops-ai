@@ -7,6 +7,7 @@ const hashIncident = () => decodeURIComponent(location.hash.slice(1)).trim().toU
 const state = {
   token: "", snapshot: null, selectedPlanId: null, busy: false, conversation: [], speaking: false, app: null,
   awaitingExecute: false, incidentId: hashIncident(), inbox: [], conversations: {}, selections: {}, stockFor: null,
+  briefingPick: null, prefsShown: undefined,
 };
 const incidentPath = (suffix = "") => `/incidents/${encodeURIComponent(state.incidentId)}${suffix}`;
 // MCP Apps host (protocol 2026-01-26). As the spec requires for web hosts, the view runs
@@ -351,11 +352,12 @@ function renderPlans(snapshot) {
     const title = document.createElement("strong");
     title.textContent = plan.label;
     const badges = [];
-    if (isRecommended) badges.push("Agent pick");
-    if (plan.projected_customer_delay_hours === 0) badges.push("Zero delay");
-    for (const text of badges) {
+    if (isRecommended) badges.push(["Agent pick", "badge"]);
+    if (plan.id === snapshot.preference?.preferred_plan_id) badges.push(["Your preference", "badge preference"]);
+    if (plan.projected_customer_delay_hours === 0) badges.push(["Zero delay", "badge"]);
+    for (const [text, className] of badges) {
       const badge = document.createElement("span");
-      badge.className = "badge";
+      badge.className = className;
       badge.textContent = text;
       title.append(badge);
     }
@@ -390,6 +392,56 @@ function renderPlans(snapshot) {
     card.append(radio, description, eta, cost);
     container.append(card);
   }
+}
+
+const RULE_NAMES = { balanced: "balanced ranking", cheapest_unless_critical_late: "cheapest unless a critical order is late" };
+
+function describePreferences(prefs) {
+  const parts = [RULE_NAMES[prefs.rule] || prefs.rule];
+  parts.push(prefs.max_cost_usd === null || prefs.max_cost_usd === undefined ? "no spend cap" : `spend cap $${prefs.max_cost_usd}`);
+  if (prefs.note) parts.push(`note “${prefs.note}”`);
+  return parts.join(" · ");
+}
+
+// What the saved preferences point to, next to the agent's pick. Fixed rules, never an approval.
+function renderPreferenceLine(snapshot) {
+  const line = $("preference-line");
+  const preference = snapshot.preference;
+  line.hidden = !preference;
+  if (!preference) return;
+  const strong = document.createElement("strong");
+  strong.textContent = `Your preference → “${preference.preferred_plan_label}”. `;
+  const text = preference.changes_pick ? preference.reason : "It agrees with the default pick.";
+  line.replaceChildren(strong, document.createTextNode([text, ...preference.warnings].join(" ")));
+}
+
+function renderPreferences(snapshot) {
+  const prefs = snapshot.operator_preferences;
+  $("pref-saved").textContent = prefs ? `Saved ${formatDate(prefs.updated_at)}` : "None saved";
+  // Refill the form only when the saved values change, never while someone is typing.
+  const shown = prefs?.updated_at || null;
+  if (state.prefsShown === shown) return;
+  state.prefsShown = shown;
+  $("pref-rule").value = prefs?.rule || "balanced";
+  $("pref-cap").value = prefs?.max_cost_usd ?? "";
+  $("pref-note").value = prefs?.note || "";
+}
+
+async function savePreferences(update) {
+  const current = state.snapshot?.operator_preferences || {};
+  const merged = {
+    rule: current.rule || "balanced", max_cost_usd: current.max_cost_usd ?? null, note: current.note || "", ...update,
+  };
+  await request("/operator/preferences", "PUT", merged);
+  state.prefsShown = undefined;
+}
+
+function preferenceEffect() {
+  const preference = state.snapshot?.preference;
+  if (!preference) return `I'll apply them to ${state.incidentId} once its plans are calculated.`;
+  if (!preference.changes_pick) return `For ${state.incidentId}, they agree with the default pick, “${preference.default_plan_label}”.`;
+  return `For ${state.incidentId}, they point to “${preference.preferred_plan_label}” instead of the default pick, `
+    + `“${preference.default_plan_label}”. ${preference.reason} ${preference.warnings.join(" ")}`.trim();
 }
 
 function renderTimeline(events) {
@@ -469,10 +521,7 @@ function renderMarkdown(source) {
 function renderConversation() {
   const list = $("conversation");
   list.replaceChildren();
-  const entries = state.conversation.length ? state.conversation : [{
-    role: "assistant",
-    text: `Hi, I'm LogiOps. Ask me what's happening with ${state.incidentId}, and I'll investigate it with the MCP tools.`,
-  }];
+  const entries = state.conversation.length ? state.conversation : [{ role: "assistant", text: welcomeText() }];
   for (const entry of entries) {
     const item = document.createElement("li");
     item.className = `turn ${entry.role}`;
@@ -493,12 +542,27 @@ function renderConversation() {
   list.scrollTop = list.scrollHeight;
 }
 
-function say(role, text, meta) {
+// Proactive, and free: the first thing on screen is the state of the queue, from the inbox itself.
+function welcomeText() {
+  const open = state.inbox.filter((item) => item.status !== "verified");
+  if (!state.inbox.length) {
+    return `Hi, I'm LogiOps. Ask me what's happening with ${state.incidentId}, and I'll investigate it with the MCP tools.`;
+  }
+  const critical = open.filter((item) => item.priority === "critical").map((item) => item.incident_id);
+  const queue = open.length
+    ? `${open.length} open incident${open.length === 1 ? "" : "s"} in the inbox`
+      + (critical.length ? `; ${critical.join(" and ")} ${critical.length === 1 ? "has a critical order" : "have critical orders"}` : "")
+    : "Every incident in the inbox is resolved";
+  return `Hi, I'm LogiOps. ${queue}. Ask “any delays today?” for my briefing, or ask what's happening with ${state.incidentId}.`;
+}
+
+// Read aloud the short spoken line when there is one, as a voice assistant would.
+function say(role, text, meta, spoken) {
   state.conversation.push({ role, text, meta });
   renderConversation();
   if (role === "assistant" && $("speak-replies").checked && "speechSynthesis" in window) {
     window.speechSynthesis.cancel();
-    const utterance = new SpeechSynthesisUtterance(window.LogiOpsMarkdown.plainText(text));
+    const utterance = new SpeechSynthesisUtterance(spoken || window.LogiOpsMarkdown.plainText(text));
     utterance.lang = "en-US";
     window.speechSynthesis.speak(utterance);
   }
@@ -521,6 +585,7 @@ function renderControls() {
   $("reset").disabled = state.busy;
   $("banner-reset").disabled = state.busy;
   $("set-stock").disabled = state.busy || !snapshot || executed || !localWarehouse(snapshot);
+  for (const id of ["pref-rule", "pref-cap", "pref-note", "pref-save", "pref-clear"]) $(id).disabled = state.busy || !snapshot;
   $("stock-input").disabled = state.busy || !snapshot || !localWarehouse(snapshot);
   $("connect").disabled = state.busy;
 }
@@ -548,6 +613,7 @@ function renderInbox() {
     top.append(tag("incident-id", item.incident_id), tag("kind", item.kind_label));
     if (item.priority === "critical") top.append(tag("critical", "Critical order"));
     top.append(tag("state", item.status));
+    if (item.incident_id === state.briefingPick) top.append(tag("start-here", "Start here"));
     const due = document.createElement("small");
     due.textContent = `${item.route} · ${item.units} units · due ${formatDate(item.due_eta)}`;
     card.append(top, tag("incident-text", item.title), due);
@@ -596,6 +662,8 @@ function render(snapshot) {
     state.conversation.push({ role: "assistant", text: agentEvent.data.answer, meta: traceSummary(agentEvent.data) });
   }
   renderConversation();
+  renderPreferenceLine(snapshot);
+  renderPreferences(snapshot);
   renderPlans(snapshot);
   renderTimeline(snapshot.events);
   const execution = snapshot.executions[0];
@@ -691,6 +759,8 @@ function namedPlanKinds(text) {
 
 function planFromUtterance(text) {
   const plans = visiblePlans(state.snapshot);
+  const preferred = state.snapshot.preference && plans.find((plan) => plan.id === state.snapshot.preference.preferred_plan_id);
+  if (preferred && /\b(?:preferred|my preference)\b/.test(text)) return preferred;
   const kinds = namedPlanKinds(text);
   // A named plan that the current data does not offer is not silently replaced.
   if (kinds) return kinds.map((kind) => plans.find((plan) => plan.kind === kind)).find(Boolean) || null;
@@ -713,6 +783,37 @@ async function handleUtterance(raw) {
   }
   say("user", text);
   const lower = text.toLowerCase();
+  // Preferences and briefings first: "reset my preferences" must not reset the incident.
+  const preference = window.LogiOpsIntent.parsePreference(text);
+  if (preference) {
+    state.awaitingExecute = false;
+    try {
+      if (preference.forget) {
+        await act(() => request("/operator/preferences", "DELETE"), "");
+        say("assistant", "Done. I forgot your saved preferences; plans are picked by the default ranking again.");
+      } else {
+        await act(() => savePreferences(preference.update), "");
+        say("assistant", `Saved for every incident: ${describePreferences(state.snapshot.operator_preferences)}. ${preferenceEffect()} `
+          + "Preferences never approve anything; you still approve the plan.");
+      }
+    } catch (error) {
+      say("assistant", `I couldn't save that: ${error.message || error}`);
+    }
+    return;
+  }
+  if (window.LogiOpsIntent.isBriefing(text) && !mentioned) {
+    state.awaitingExecute = false;
+    try {
+      let run;
+      await act(async () => { run = await request("/agent/briefing", "POST", { question: text }); }, "");
+      state.briefingPick = run.start_with;
+      renderInbox();
+      say("assistant", run.answer, `briefing · ${traceSummary(run)}`, run.spoken);
+    } catch (error) {
+      say("assistant", `I couldn't do that: ${error.message || error}`);
+    }
+    return;
+  }
   let command = window.LogiOpsIntent.parseCommand(text);
   if (command === "open") {
     if (mentioned) {
@@ -783,7 +884,7 @@ async function handleUtterance(raw) {
           ? await request(incidentPath("/agent/investigate"), "POST", { question: text })
           : await request(incidentPath("/agent/ask"), "POST", { question: text, history });
       }, "");
-      say("assistant", run.answer, `${fresh ? "investigation" : "follow-up"} · ${traceSummary(run)}`);
+      say("assistant", run.answer, `${fresh ? "investigation" : "follow-up"} · ${traceSummary(run)}`, run.spoken);
       if (fresh) {
         showMcpApp(run).catch((error) => {
           console.warn("MCP App failed:", error);
@@ -839,9 +940,25 @@ $("access-token").addEventListener("keydown", (event) => {
 });
 $("reset").addEventListener("click", () => act(async () => {
   await request("/demo/reset", "POST");
-  Object.assign(state, { selectedPlanId: null, conversation: [], conversations: {}, selections: {}, stockFor: null });
+  Object.assign(state, {
+    selectedPlanId: null, conversation: [], conversations: {}, selections: {}, stockFor: null,
+    briefingPick: null, prefsShown: undefined,
+  });
   hideMcpApp();
-}, "Every synthetic incident was reset.").catch(() => {}));
+}, "Every synthetic incident was reset, and the saved preferences were cleared.").catch(() => {}));
+$("pref-form").addEventListener("submit", (event) => {
+  event.preventDefault();
+  act(async () => {
+    const raw = $("pref-cap").value.trim();
+    const cap = Number(raw);
+    if (raw && (!Number.isInteger(cap) || cap < 0)) throw new Error("Enter the spend cap as a whole number of dollars, or leave it empty.");
+    await savePreferences({ rule: $("pref-rule").value, max_cost_usd: raw ? cap : null, note: $("pref-note").value.trim() });
+  }, "Preferences saved for every incident. They steer the pick; they never approve a plan.").catch(() => {});
+});
+$("pref-clear").addEventListener("click", () => act(async () => {
+  await request("/operator/preferences", "DELETE");
+  state.prefsShown = undefined;
+}, "Preferences cleared.").catch(() => {}));
 $("banner-reset").addEventListener("click", () => act(async () => {
   await request("/demo/reset", "POST", { incident_id: state.incidentId });
   Object.assign(state, { selectedPlanId: null, conversation: [], stockFor: null });

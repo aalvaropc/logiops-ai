@@ -7,6 +7,11 @@ orders, inventory and routes, compares alternatives by cost, ETA and order
 priority, requests human approval, executes the chosen plan, and verifies the
 result.
 
+It behaves like an assistant you talk to, not a form: ask "any delays today?"
+for a briefing on the whole queue, say "remember my spend cap is $250" and that
+preference steers every later pick (it never approves anything), and each reply
+ends in one short spoken line for a voice assistant to read aloud.
+
 Built for the **Amazon Developer Hackathon**, Alexa+ track (self-hosted MCP
 server, Streamable HTTP) + AWS Builder Mini Challenge. Runtime: Amazon
 Bedrock.
@@ -26,8 +31,8 @@ the replay command in `docs/hackathon/testing-instructions.md`) runs the whole d
 ## Architecture
 
 ```text
- Browser (/demo): conversation, voice, MCP App card in a sandbox proxy (other origin)
-        |  REST (approve, execute, reset)          |  MCP over Streamable HTTP (/mcp)
+ Browser (/demo): conversation, voice, inbox, preferences, MCP App card in a sandbox proxy
+        |  REST (approve, execute, preferences)    |  MCP over Streamable HTTP (/mcp)
         v                                          v
  +--------------------------------------------------------------+
  |  FastAPI app: bearer token, rate limits, no-store            |
@@ -36,10 +41,13 @@ the replay command in `docs/hackathon/testing-instructions.md`) runs the whole d
  |  | no approval tool)     |-->| versioned plans, approvals |  |
  |  +-----------------------+   | bound to plan + version,   |  |
  |        ^                     | idempotent execution,      |  |
- |        | in-process MCP      | audit events               |  |
+ |        | in-process MCP      | audit events; operator     |  |
+ |        |                     | preferences (fixed rules)  |  |
  |  +-----------------------+   +----------------------------+  |
  |  | Agent: Bedrock        |                                   |
- |  | Converse tool loop    |  (replay mode: scripted model)    |
+ |  | Converse tool loop:   |  (replay mode: scripted model)    |
+ |  | investigate, ask,     |                                   |
+ |  | briefing              |                                   |
  +--+-----------------------+-----------------------------------+
 ```
 
@@ -68,6 +76,12 @@ approvals, executions and audit events never mix with another's. A replay mode
 runs the same MCP calls without AWS charges. A browser interface is available
 at `/demo`. See `docs/hackathon/decisions.md` for decisions and
 `docs/demo-scenario.md` for the synthetic data.
+
+Operator preferences (`GET`/`PUT`/`DELETE /operator/preferences`) persist in
+the same SQLite file across sessions and restarts; fixed rules turn them into a
+preferred plan, which `investigate_incident` reports to every MCP client. A
+briefing (`POST /agent/briefing`) ranks the open incidents with read tools
+only. Every agent reply carries a short `spoken` line.
 
 A public HTTPS deployment runs on AWS (CloudFront, EC2, Bedrock); its URL and
 access token are in the submission's testing instructions. The infrastructure
@@ -174,6 +188,55 @@ after the context, so user text cannot open or close a block. Answers change
 nothing and are not stored; failed calls are audited as `agent_run_failed`
 with `job: "ask"`. The browser routes questions (anything ending in `?` or
 starting with how/what/should/…) to the agent, never to approve or execute.
+
+### Queue briefing
+
+```sh
+curl -sS -X POST http://127.0.0.1:8000/agent/briefing \
+  -H 'Content-Type: application/json' -d '{"question": "Any delays today?"}'
+```
+
+The agent calls `list_incidents` (and, if it needs to, the other read tools),
+ranks the open incidents (a critical order at risk first, then the earliest
+due time, then the longest delay) and ends with `Start with: <incident id>`,
+returned as `start_with`. It cannot calculate plans: `investigate_incident`
+is not in its toolset, so a briefing changes nothing and stores nothing. In
+the browser, "Any delays today?" or "brief me" runs it and marks that incident
+"Start here" in the inbox. The first message on the page also summarises the
+queue, from the inbox itself, at no cost.
+
+### Operator preferences
+
+```sh
+curl -sS -X PUT http://127.0.0.1:8000/operator/preferences \
+  -H 'Content-Type: application/json' \
+  -d '{"rule": "balanced", "max_cost_usd": 250, "note": "Hospitals first"}'
+curl -sS http://127.0.0.1:8000/incidents/SHIP-433   # "preference": the plan it points to, and why
+```
+
+Two rules: `balanced` (the default ranking: critical orders, then delay, then
+cost) and `cheapest_unless_critical_late`, plus an optional spend cap per
+incident and a note of up to 200 characters. `logiops/preferences.py` applies
+them to the calculated plans by fixed rules, never by the model: with a $250
+cap, SHIP-433, SHIP-452 and SHIP-460 move to a cheaper plan, and the result
+says what that trades away and warns if a critical order ends up late.
+`investigate_incident` returns the same result as `operator_preferences`, so
+the agent, the MCP App card and any other MCP host see one answer; the agent
+recommends the preferred plan and the note reaches it as quoted data.
+A preference never approves or executes anything. In the browser, say
+"remember my spend cap is $250", "from now on pick the cheapest plan unless a
+critical order would be late", or "forget my preferences", or use the panel.
+Resetting one incident keeps the preferences; resetting everything clears
+them.
+
+### Short spoken replies
+
+Every investigation, follow-up and briefing prompt asks the model for a last
+`Spoken:` line of one or two sentences without ids or tables. The server
+removes it from the answer (so the stored assessment and the chat stay clean)
+and returns it as `spoken`; if the model forgets it, `spoken` is the first
+sentence of prose. With "Read replies aloud" on, the browser reads `spoken`,
+which is what an Alexa+ device would say, instead of the whole Markdown answer.
 
 ### Interactive plan card (MCP Apps)
 

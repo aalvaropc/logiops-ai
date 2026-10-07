@@ -211,3 +211,25 @@ def test_tools_serve_every_incident(tmp_path):
                         assert unknown.isError and "SHIP-460" in unknown.content[0].text
 
     asyncio.run(run())
+
+
+def test_investigate_incident_reports_the_saved_preference(tmp_path):
+    import json
+
+    from logiops.mcp_server import create_mcp_server
+    from logiops.preferences import PreferenceStore
+    from logiops.service import LogiOpsService
+
+    async def run():
+        service = LogiOpsService(tmp_path / "prefs-mcp.sqlite3")
+        preferences = PreferenceStore(tmp_path / "prefs-mcp.sqlite3")
+        server = create_mcp_server(service, preferences=preferences)
+        plain = (await server.call_tool("investigate_incident", {"shipment_id": "SHIP-460"}))[1]
+        assert "operator_preferences" not in plain
+        preferences.put("balanced", 250)
+        result = (await server.call_tool("investigate_incident", {"shipment_id": "SHIP-460"}))[1]
+        preference = result["operator_preferences"]
+        assert preference["preferred_plan_id"].split(":")[2] == "priority-first" and preference["changes_pick"]
+        assert json.dumps(preference)  # plain JSON for any MCP host
+
+    asyncio.run(run())

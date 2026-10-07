@@ -35,7 +35,7 @@ Say or type, in order:
   2. How much is the reroute?
   3. Approve the recommended plan.
   4. Execute it.
-Then "Reset synthetic incident", ask again, approve, set stock to 11, Apply, and "Execute it".
+Then "Reset all incidents and preferences", ask again, approve, set stock to 11, Apply, and "Execute it".
 
 Replay shows "replay mode" and 0 tokens. For the real take, start without LOGIOPS_AGENT_MODE.
 Press Ctrl-C to stop.

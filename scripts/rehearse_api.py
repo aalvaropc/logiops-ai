@@ -101,6 +101,25 @@ def walk(client: httpx.Client) -> None:
     check("SHIP-421 is untouched by another incident", [e["name"] for e in untouched["events"]] == ["scenario_reset"])
     post("/demo/reset")
 
+    briefing = post("/agent/briefing", question="Any delays today?")
+    check("the briefing ranks the queue and changes nothing",
+          briefing.status_code == 200 and briefing.json()["start_with"] in {item["incident_id"] for item in inbox}
+          and all(not client.get(f"/incidents/{item['incident_id']}").json()["plans"] for item in inbox),
+          briefing.text[:120])
+    saved = client.put("/operator/preferences", json={"rule": "balanced", "max_cost_usd": 250})
+    check("a $250 spend cap is saved", saved.status_code == 200)
+    capped = post("/incidents/SHIP-433/agent/investigate")
+    cheaper = kind(capped.json()["plans"], "priority-air") if capped.status_code == 200 else None
+    check("with the cap, the agent recommends the $240 plan that still flies the hospital order",
+          bool(cheaper) and capped.json()["answer"].rstrip().endswith(f"Recommended plan: {cheaper['id']}")
+          and capped.json()["spoken"])
+    state = client.get("/incidents/SHIP-433").json()
+    check("the preference points to it and approves nothing",
+          state["preference"]["preferred_plan_id"] == cheaper["id"] and not state["approvals"])
+    post("/demo/reset")
+    check("resetting everything forgets the preferences",
+          client.get("/operator/preferences").json()["preferences"] is None)
+
 
 def free_port() -> int:
     with socket.socket() as sock:

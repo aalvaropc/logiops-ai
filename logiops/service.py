@@ -403,10 +403,11 @@ class LogiOpsService:
                         {"warehouse_id": warehouse, "available": available, "source_version": version + 1})
         return self.get(incident_id)
 
-    AGENT_EVENTS = frozenset({"agent_run_failed", "agent_verification_completed"})
+    # autopilot_decision: a bounded server policy's auto-or-escalate verdict, with its reasons.
+    AGENT_EVENTS = frozenset({"agent_run_failed", "agent_verification_completed", "autopilot_decision"})
 
     def record_agent_event(self, incident_id: str, name: str, data: dict[str, Any]) -> dict[str, Any]:
-        """Audit agent activity that is not a completed investigation (failures, verifications)."""
+        """Audit agent activity that is not a completed investigation (failures, verifications, decisions)."""
         if name not in self.AGENT_EVENTS:
             raise WorkflowError(f"Unsupported agent event: {name}", 422)
         with self._connection(write=True) as connection:

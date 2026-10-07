@@ -1,10 +1,10 @@
 :root { font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; color: #e9f0ee; background: #0a1216; font-synthesis: none; }
 * { box-sizing: border-box; }
 body { margin: 0; min-width: 320px; background: radial-gradient(circle at 85% 0%, #15313a 0, transparent 35%), #0a1216; }
-button, input { font: inherit; }
+button, input, select { font: inherit; }
 button { cursor: pointer; }
 button:disabled { cursor: not-allowed; opacity: .42; }
-button:focus-visible, input:focus-visible, .plan:focus-within { outline: 2px solid #6ae7cb; outline-offset: 3px; }
+button:focus-visible, input:focus-visible, select:focus-visible, .plan:focus-within { outline: 2px solid #6ae7cb; outline-offset: 3px; }
 .shell { max-width: 1500px; margin: auto; padding: 0 38px; }
 .topbar { height: 82px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #264047; gap: 20px; }
 .brand { display: flex; align-items: center; gap: 11px; font-size: 21px; letter-spacing: -.04em; font-weight: 700; white-space: nowrap; }
@@ -54,6 +54,7 @@ input::placeholder { color: #6b888e; }
 .incident-card .kind { color: #b9d8d2; background: #1d3338; }
 .incident-card .critical { color: #ffd0a1; background: #4a3218; }
 .incident-card .state { color: #72dfc7; background: #234742; }
+.incident-card .start-here { padding: 3px 6px; border-radius: 3px; color: #0b2420; background: #77dfc8; font-size: 9px; font-weight: 800; text-transform: uppercase; letter-spacing: .06em; }
 .incident-card .incident-text { color: #c9d9d8; font-size: 12.5px; line-height: 1.4; }
 .incident-card small { color: #8fa4a9; font-size: 11px; }
 .plan .order-lines { margin-top: 6px; }
@@ -110,6 +111,16 @@ input::placeholder { color: #6b888e; }
 .plan small { margin-top: 5px; color: #91acaf; font-size: 11px; }
 .plan .plan-value { text-align: right; font-size: 14px; font-weight: 750; white-space: nowrap; }
 .plan .plan-value small { font-weight: 400; }
+.plan .badge.preference { color: #ffe0b3; background: #4a3a1c; }
+.preference-line { margin: 14px 0 0; padding: 11px 13px; border: 1px solid #6b5a33; border-radius: 9px; background: #231e15; color: #f0d9a6; font-size: 12.5px; line-height: 1.55; }
+.preference-line[hidden] { display: none; }
+.preference-line strong { color: #ffe0b3; }
+.pref-form { display: grid; gap: 7px; margin-top: 14px; }
+.pref-form label { color: #c7d7d7; font-size: 12px; font-weight: 650; margin-top: 6px; }
+.pref-form label span { color: #80989c; font-weight: 400; }
+.pref-form select { width: 100%; padding: 10px 12px; border: 1px solid #385258; border-radius: 8px; background: #0c1a1f; color: #f1f7f5; min-width: 0; }
+.pref-actions { display: flex; align-items: center; gap: 12px; margin-top: 10px; }
+.pref-actions .quiet { margin-top: 0; }
 .plan .badge { display: inline-block; margin-left: 7px; padding: 3px 6px; border-radius: 3px; color: #72dfc7; background: #234742; font-size: 9px; font-weight: 800; text-transform: uppercase; }
 .approval-row { display: flex; align-items: end; gap: 10px; margin-top: 20px; padding-top: 20px; border-top: 1px solid #294249; }
 .approval-row label { flex: 1; }

@@ -9,6 +9,7 @@ from mcp.server.fastmcp import FastMCP
 from mcp.server.fastmcp.exceptions import ToolError
 from mcp.server.transport_security import TransportSecuritySettings
 
+from .preferences import PreferenceStore, preference_for
 from .scenario import INCIDENT_IDS
 from .service import LogiOpsService, WorkflowError
 from .tools import inventory_hint, inventory_view, order_view, orders_hint, shipment_view
@@ -24,7 +25,9 @@ UI_HTML = (Path(__file__).resolve().parent / "static" / "resolution_options.html
 OPEN_INCIDENTS = "Incidents: " + ", ".join(INCIDENT_IDS) + "."
 
 
-def create_mcp_server(service: LogiOpsService, *, public_host: str | None = None) -> FastMCP:
+def create_mcp_server(
+    service: LogiOpsService, *, preferences: PreferenceStore | None = None, public_host: str | None = None
+) -> FastMCP:
     allowed_hosts = ["127.0.0.1:*", "localhost:*", "[::1]:*"]
     allowed_origins = ["http://127.0.0.1:*", "http://localhost:*", "http://[::1]:*"]
     if public_host:
@@ -99,12 +102,16 @@ def create_mcp_server(service: LogiOpsService, *, public_host: str | None = None
 
     @server.tool(meta={"ui": {"resourceUri": UI_URI}, "ui/resourceUri": UI_URI})
     async def investigate_incident(shipment_id: str) -> dict[str, Any]:
-        """Investigate the incident and calculate feasible plans."""
+        """Investigate the incident and calculate feasible plans, with the operator's saved preferences applied."""
         try:
             plans = service.investigate(incident(shipment_id))
         except WorkflowError as exc:
             raise ToolError(str(exc)) from exc
-        return {"source_version": plans[0]["source_version"], "plans": plans}
+        result = {"source_version": plans[0]["source_version"], "plans": plans}
+        preference = preference_for(plans, preferences.get() if preferences else None)
+        if preference:
+            result["operator_preferences"] = preference
+        return result
 
     @server.tool()
     async def get_execution_status(shipment_id: str) -> dict[str, Any]:

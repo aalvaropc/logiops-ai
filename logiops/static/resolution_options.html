@@ -20,6 +20,8 @@
   .waiting { color: #9fb6b8; font-size: 13px; }
   .orders span { display: block; margin-top: 2px; color: #a9c2c3; font-size: 11px; }
   .orders .late { color: #eab36e; }
+  .tag { display: inline-block; margin-left: 6px; padding: 2px 5px; border-radius: 3px; color: #ffe0b3; background: #4a3a1c; font-size: 9px; font-weight: 800; text-transform: uppercase; }
+  p.preference { margin: 0 0 10px; color: #f0d9a6; font-size: 12px; line-height: 1.5; }
 </style>
 </head>
 <body>
@@ -66,13 +68,17 @@
     root.replaceChildren();
     root.append(el("h1", "", incident ? `Resolution options · ${incident}` : "Resolution options"),
       el("p", "note", "Projections from synthetic carrier quotes. Selecting a plan does not approve it."));
+    // The operator's saved preferences, applied by the server's fixed rules.
+    const preference = result?.structuredContent?.operator_preferences;
+    if (preference?.changes_pick) root.append(el("p", "preference", `Your preference: ${preference.reason}`));
     const list = el("div", "plans");
     const best = plans.length ? [...plans].sort(byRank)[0].id : null;
     for (const plan of plans) {
       const card = el("div", `plan${plan.id === best ? " best" : ""}`);
       const text = el("div");
-      text.append(el("strong", "", plan.label),
-        el("small", "", summary(plan)));
+      const name = el("strong", "", plan.label);
+      if (preference && plan.id === preference.preferred_plan_id) name.append(el("span", "tag", "Your preference"));
+      text.append(name, el("small", "", summary(plan)));
       if ((plan.orders || []).length > 1) {
         const orders = el("div", "orders");
         for (const order of plan.orders) {
