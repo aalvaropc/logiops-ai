@@ -32,7 +32,7 @@ uses boto3 and does not need the CLI.
 4. Run `python3 scripts/create_access_token.py`. The 64-character random token
    is stored as an SSM `SecureString` and in `.secrets/access-token` (mode
    0600, gitignored). Do not paste it into a PR or issue.
-5. Run `python3 scripts/deploy_ec2.py`. It builds a deterministic archive of
+5. On a clean, up-to-date `main`, run `python3 scripts/deploy_ec2.py` (it refuses any other checkout unless you pass `--allow-unmerged`). It builds a deterministic archive of
    the Python package and lockfile, uploads it to private S3, and installs it
    through Systems Manager. No GitHub or SSH credentials enter the instance.
 

@@ -2,6 +2,8 @@ name: ci
 
 on:
   pull_request:
+    # "edited" re-runs the base check when someone changes a PR's base branch.
+    types: [opened, synchronize, reopened, edited]
   push:
     branches: [main]
 
@@ -9,6 +11,20 @@ permissions:
   contents: read
 
 jobs:
+  pr-targets-main:
+    # Stacked PRs merged into each other never reached main (2026-10-07). Every PR goes to main.
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - name: The pull request must target main
+        env:
+          BASE: ${{ github.base_ref }}
+        run: |
+          if [ "$BASE" != "main" ]; then
+            echo "::error::This pull request targets '$BASE', not main. Merging it would not reach main, the branch judges see. Change the base branch to main."
+            exit 1
+          fi
+
   test:
     runs-on: ubuntu-latest
     steps:

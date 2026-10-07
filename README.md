@@ -13,7 +13,7 @@ Bedrock.
 
 | Tag | Devpost | Live demo |
 |---|---|---|
-| _pending_ | _pending_ | _pending (hosting optional, see docs/hackathon/decisions.md D-AMZ-1)_ |
+| _pending_ | _pending_ | Deployed on AWS; URL and token in the testing instructions (hosting is optional, D-AMZ-1) |
 
 ## For judges
 
@@ -62,13 +62,16 @@ More detail in `docs/architecture.md`.
 The SHIP-421 workflow, MCP Streamable HTTP endpoint, Bedrock Converse tool
 loop, approval gate, and operational verification run locally. A replay mode
 runs the same MCP calls without AWS charges. A browser interface is available
-at `/demo`; public HTTPS deployment is pending. See
-`docs/hackathon/decisions.md` for decisions and
+at `/demo`. See `docs/hackathon/decisions.md` for decisions and
 `docs/demo-scenario.md` for the synthetic data.
 
-The AWS demo infrastructure and deployment procedure live in
-[`infra/amazon/README.md`](infra/amazon/README.md). It has not been provisioned
-yet; local tests do not claim a remote or live Bedrock run.
+A public HTTPS deployment runs on AWS (CloudFront, EC2, Bedrock); its URL and
+access token are in the submission's testing instructions. The infrastructure
+and deployment procedure live in [`infra/amazon/README.md`](infra/amazon/README.md).
+Local tests make no live Bedrock call.
+
+Every pull request targets `main` (CI fails otherwise), and
+`scripts/deploy_ec2.py` deploys only a clean checkout of `origin/main`.
 
 ## Run with Docker
 
