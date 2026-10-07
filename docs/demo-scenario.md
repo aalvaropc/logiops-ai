@@ -13,8 +13,13 @@ All times use `America/Lima` (UTC-05:00). The fixture fixes the original ETA
 at **2026-10-12 14:00** and the disrupted ETA at **2026-10-13 02:00**. Local
 stock has 12 units ready by 10:00 on October 12. The economy reroute has
 capacity 20, arrives at 17:00, and costs $80 extra. Express has capacity 8,
-arrives at 13:00, and costs $120 extra. The three options therefore project
-delays of 12, 3, and 0 hours respectively.
+arrives at 13:00, and costs $120 extra. With the default stock, three options
+are feasible, with projected delays of 12, 3, and 0 hours respectively. The plan
+builder also has a fourth option, **fulfil the whole order from local stock**
+($0, ready 10:00, 0 h). It appears only when the warehouse holds all 20 units:
+set the stock to 20 or more and it replaces split + express, since nothing is
+left to send by express. With 11 units, split + express needs 9 express units
+but express carries 8, so only wait and reroute remain.
 
 ## Expected plan (option C, "split + express")
 

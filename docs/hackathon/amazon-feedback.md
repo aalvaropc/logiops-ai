@@ -17,7 +17,7 @@ built; see also `amazon-friction-log.md` for discrete problems. Numbers marked
 
 ## AWS Marketplace billing for Claude on Bedrock
 
-- Claude on Bedrock is billed as an AWS Marketplace subscription sold by a third party (we received the subscription e-mail on 2026-10-02). That is easy to miss and matters for builders who rely on promotional credits, which likely do not cover it. The Bedrock console could say so before the first call.
+- Claude on Bedrock is billed as an AWS Marketplace subscription sold by a third party (we received the subscription e-mail on 2026-10-02). That is easy to miss and matters for builders who rely on promotional credits: whether they cover a Marketplace-billed model is not stated anywhere we could find. The Bedrock console could say so before the first call.
 - **Measured:** the real test runs cost US$0.04 in total, enough to trip a zero-spend budget alert.
 
 ## boto3 with `aws login`
@@ -58,4 +58,5 @@ built; see also `amazon-friction-log.md` for discrete problems. Numbers marked
 
 ## AWS promotional credits
 
-- We submitted the credits form on 2026-10-02. As of 2026-10-06 no code had arrived, so we cannot say whether the credits cover Bedrock. Stating the expected processing time and what the credits cover on the form would help builders plan.
+- We submitted the credits form on 2026-10-02, and US$150 of credits arrived on 2026-10-06, four days later, with no processing time stated anywhere. Stating the expected processing time and the covered services on the form would help builders plan.
+- **Measured:** on 2026-10-07 the Credits page still showed $0.00 used, and Cost Explorer showed no credit applied to the Bedrock usage billed so far. Both update a day or more behind, so a builder cannot see during a hackathon whether a given charge will be covered.

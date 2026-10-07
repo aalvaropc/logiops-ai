@@ -193,3 +193,13 @@ def test_a_card_that_cannot_load_says_why():
     script = (Path(__file__).resolve().parents[1] / "logiops" / "static" / "demo.js").read_text()
     assert "showMcpAppNote(" in script and "could not be loaded" in script
     assert "showMcpApp(run).catch(() => hideMcpApp())" not in script  # no more silent failure
+
+
+def test_execute_never_runs_a_plan_other_than_the_one_named():
+    # Review, 2026-10-07: "execute the reroute" ran the approved split plan, and a bare
+    # "yes" executed whenever any approval existed.
+    script = (Path(__file__).resolve().parents[1] / "logiops" / "static" / "demo.js").read_text()
+    assert "if (approved && named && named !== approved.kind) {" in script
+    assert "so nothing was executed" in script
+    assert '(command === "confirm" && awaitingExecute && visibleApproval(state.snapshot))' in script
+    assert "state.awaitingExecute = true;" in script and "state.awaitingExecute = false;" in script

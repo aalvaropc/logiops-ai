@@ -28,12 +28,13 @@ bottom.
   branch.
 - Whether `testing@devpost.com` has a GitHub username to invite, relevant
   only if this repo stays private at submission time.
-- Whether the AWS promotional credits, once approved, actually cover Bedrock
-  usage for Claude (vs. only AWS-native services).
+- Whether the AWS promotional credits (US$150, received 2026-10-06) cover
+  Bedrock usage for Claude, which AWS Marketplace bills. As of 2026-10-07 no
+  credit had been applied yet; check Cost Explorer once the charges post.
 
 ## Release checklist (before tagging `amazon-v1.0`)
 
-- [ ] All pull requests merged in order (#4, #2, #3, #5, #6, then the judge-readiness one).
+- [x] Everything on `main` (PR #9, 2026-10-07). From then on every change is its own pull request to `main` (CI job `pr-targets-main`).
 - [ ] `scripts/clean_room.sh main` passes on a clean clone (tests, Docker build, `check_mcp.py`).
 - [ ] `gitleaks git` over the full history reports no leaks (CI also runs it).
 - [ ] Test count recorded: ____ passed. Commit: ____.

@@ -1,7 +1,7 @@
 "use strict";
 
 const $ = (id) => document.getElementById(id);
-const state = { token: "", snapshot: null, selectedPlanId: null, busy: false, conversation: [], speaking: false, app: null };
+const state = { token: "", snapshot: null, selectedPlanId: null, busy: false, conversation: [], speaking: false, app: null, awaitingExecute: false };
 // MCP Apps host (protocol 2026-01-26). As the spec requires for web hosts, the view runs
 // behind a sandbox proxy served from a different origin (127.0.0.1 <-> localhost locally,
 // a second hostname in public mode). The view has no network and never sees the token;
@@ -561,12 +561,17 @@ async function executeApproved() {
   });
 }
 
+// The plan kind a sentence names ("the split plan"), or null when it names none.
+function namedPlanKind(text) {
+  const found = planKeywords.find(([, pattern]) => pattern.test(text));
+  return found ? found[0] : null;
+}
+
 function planFromUtterance(text) {
   const plans = visiblePlans(state.snapshot);
-  for (const [kind, pattern] of planKeywords) {
-    // A named plan that the current data does not offer is not silently replaced.
-    if (pattern.test(text)) return plans.find((plan) => plan.kind === kind) || null;
-  }
+  const kind = namedPlanKind(text);
+  // A named plan that the current data does not offer is not silently replaced.
+  if (kind) return plans.find((plan) => plan.kind === kind) || null;
   return recommendedPlan(state.snapshot);
 }
 
@@ -581,6 +586,9 @@ async function handleUtterance(raw) {
   say("user", text);
   const lower = text.toLowerCase();
   const command = window.LogiOpsIntent.parseCommand(text);
+  // A bare "yes" only confirms the execution offered in the previous reply.
+  const awaitingExecute = state.awaitingExecute;
+  state.awaitingExecute = false;
   try {
     if (command === "reset") {
       await act(() => request("/demo/reset", "POST"), "");
@@ -601,7 +609,17 @@ async function handleUtterance(raw) {
       }
       await act(() => approvePlan(plan), "");
       say("assistant", `Approved “${plan.label}” for version ${plan.source_version}: ${plan.projected_customer_delay_hours} hours of delay, $${plan.incremental_cost_usd} extra. Say “execute it” when you're ready.`);
-    } else if (command === "execute" || (command === "confirm" && visibleApproval(state.snapshot))) {
+      state.awaitingExecute = true;
+    } else if (command === "execute" || (command === "confirm" && awaitingExecute && visibleApproval(state.snapshot))) {
+      // "Execute the reroute" while another plan is approved must not run the approved one.
+      const approval = visibleApproval(state.snapshot);
+      const approved = approval && state.snapshot.plans.find((plan) => plan.id === approval.plan_id);
+      const named = namedPlanKind(lower);
+      if (approved && named && named !== approved.kind) {
+        const wanted = visiblePlans(state.snapshot).find((plan) => plan.kind === named);
+        say("assistant", `The approved plan is “${approved.label}”, so nothing was executed. ${wanted ? `Approve “${wanted.label}” first if you want it instead.` : "The plan you named isn't available for the current data."}`);
+        return;
+      }
       if (state.snapshot?.executions.length) {
         say("assistant", `SHIP-421 was already executed. ${executionSummary(state.snapshot, state.snapshot.executions[0])} Reset the synthetic incident to run the flow again.`);
         return;
