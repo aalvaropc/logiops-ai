@@ -133,3 +133,5 @@ footer { padding: 39px 0; color: #718e91; text-align: center; font-size: 11px; }
 .markdown table { border-collapse: collapse; display: block; max-width: 100%; overflow-x: auto; }
 .markdown th, .markdown td { padding: 5px 10px; border: 1px solid #294249; text-align: left; font-size: 13px; }
 .markdown th { background: #13292f; }
+
+.mcp-app-note { margin: 0; padding: 10px 12px; border-radius: 8px; background: #2a2217; color: #e6c98a; font-size: 13px; line-height: 1.5; }

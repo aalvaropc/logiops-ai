@@ -111,3 +111,9 @@ def test_markdown_asset_is_served_and_shipped(tmp_path):
     archive, _ = package()
     with tarfile.open(archive, "r:gz") as release:
         assert "logiops/static/markdown.js" in release.getnames()
+
+
+def test_a_card_that_cannot_load_says_why():
+    script = (Path(__file__).resolve().parents[1] / "logiops" / "static" / "demo.js").read_text()
+    assert "showMcpAppNote(" in script and "could not be loaded" in script
+    assert "showMcpApp(run).catch(() => hideMcpApp())" not in script  # no more silent failure

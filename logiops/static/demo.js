@@ -97,6 +97,8 @@ async function showMcpApp(run) {
   if (!step) return;
   if (!SANDBOX_ORIGIN) {
     console.info("MCP App not shown: no sandbox origin separate from this page is configured.");
+    showMcpAppNote("The interactive card needs a second origin for its sandbox, and none is available on this address. "
+      + "Open the demo on 127.0.0.1 or localhost, or on the deployed hostname. The plans are listed below.");
     return;
   }
   const generation = ++app.generation;
@@ -155,6 +157,17 @@ function teardownMcpApp(reason, { invalidate = true } = {}) {
 
 function hideMcpApp(reason = "hidden") {
   teardownMcpApp(reason);
+}
+
+// When the card cannot be shown, say so (and why) instead of failing silently.
+function showMcpAppNote(text) {
+  const frame = $("mcp-app-frame");
+  if (frame) frame.remove();
+  const note = document.createElement("p");
+  note.className = "mcp-app-note";
+  note.textContent = text;
+  $("mcp-app-slot").replaceChildren(note);
+  $("mcp-app").hidden = false;
 }
 
 // Selection from the view is resolved against the host's own snapshot; labels, prices or
@@ -548,7 +561,12 @@ async function handleUtterance(raw) {
           : await request("/incidents/SHIP-421/agent/ask", "POST", { question: text, history });
       }, "");
       say("assistant", run.answer, `${fresh ? "investigation" : "follow-up"} · ${traceSummary(run)}`);
-      if (fresh) showMcpApp(run).catch(() => hideMcpApp());
+      if (fresh) {
+        showMcpApp(run).catch((error) => {
+          console.warn("MCP App failed:", error);
+          showMcpAppNote(`The interactive card could not be loaded (${error?.message || error}). The plans are listed below.`);
+        });
+      }
     }
   } catch (error) {
     say("assistant", `I couldn't do that: ${error.message || error}`);
