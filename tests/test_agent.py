@@ -268,6 +268,8 @@ def test_replies_carry_a_short_line_to_read_aloud(tmp_path, monkeypatch):
     assert split_spoken("## 🚨 SHIP-433 — Outage\n\n**The carrier** stopped. More.\n\nRecommended plan: X") == (
         "## 🚨 SHIP-433 — Outage\n\n**The carrier** stopped. More.\n\nRecommended plan: X", "The carrier stopped.")
     assert split_spoken('Answer.\n**Spoken:** "Short."') == ("Answer.", "Short.")
+    # Live answer shape (2026-10-07): a rule, then the spoken line; the rule goes with it.
+    assert split_spoken("Answer.\n\n---\nSpoken: Short.") == ("Answer.", "Short.")
     monkeypatch.setenv("LOGIOPS_AGENT_MODE", "replay")
 
     async def run():
