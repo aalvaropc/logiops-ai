@@ -111,6 +111,7 @@ def create_app(
         "demo.html": (static_dir / "demo.html").read_bytes(),
         "demo.css": (static_dir / "demo.css").read_bytes(),
         "demo.js": (static_dir / "demo.js").read_bytes(),
+        "markdown.js": (static_dir / "markdown.js").read_bytes(),
     }
     sandbox_page = (static_dir / "mcp_app_sandbox.html").read_text(encoding="utf-8")
 
@@ -160,6 +161,10 @@ def create_app(
     @app.get("/assets/demo.css", include_in_schema=False)
     async def demo_style() -> Response:
         return Response(demo_assets["demo.css"], media_type="text/css")
+
+    @app.get("/assets/markdown.js", include_in_schema=False)
+    async def markdown_script() -> Response:
+        return Response(demo_assets["markdown.js"], media_type="text/javascript")
 
     @app.get("/assets/demo.js", include_in_schema=False)
     async def demo_script() -> Response:

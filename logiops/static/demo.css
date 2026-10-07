@@ -120,3 +120,16 @@ footer { padding: 39px 0; color: #718e91; text-align: center; font-size: 11px; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; scroll-behavior: auto !important; }
 }
+
+.markdown > :first-child { margin-top: 0; }
+.markdown > :last-child { margin-bottom: 0; }
+.markdown p, .markdown ul, .markdown ol, .markdown table, .markdown blockquote { margin: 8px 0; }
+.markdown h2, .markdown h3, .markdown h4 { margin: 14px 0 6px; font-size: 15px; line-height: 1.3; }
+.markdown h2 { font-size: 17px; }
+.markdown ul, .markdown ol { padding-left: 20px; }
+.markdown code { padding: 1px 5px; border-radius: 4px; background: #16313a; font-size: .92em; overflow-wrap: anywhere; }
+.markdown hr { border: 0; border-top: 1px solid #294249; margin: 12px 0; }
+.markdown blockquote { padding: 6px 12px; border-left: 3px solid #4f7f76; color: #b9d0cf; }
+.markdown table { border-collapse: collapse; display: block; max-width: 100%; overflow-x: auto; }
+.markdown th, .markdown td { padding: 5px 10px; border: 1px solid #294249; text-align: left; font-size: 13px; }
+.markdown th { background: #13292f; }

@@ -61,3 +61,53 @@ def test_demo_has_basic_accessibility_hooks():
     assert 'container.setAttribute("role", "radiogroup")' in script
     html = (root / "demo.html").read_text()
     assert 'lang="en"' in html and 'aria-live="polite"' in html and 'frame.title = "Resolution options' in script
+
+
+def _node(script: str) -> str:
+    import shutil
+    import subprocess
+
+    node = shutil.which("node")
+    if node is None:
+        import pytest
+
+        pytest.skip("node is not installed")
+    root = Path(__file__).resolve().parents[1] / "logiops" / "static"
+    return subprocess.run([node, "-e", f"const m = require({str(root / 'markdown.js')!r}); {script}"],
+                          capture_output=True, text=True, check=True).stdout.strip()
+
+
+def test_markdown_renders_the_models_replies_structurally():
+    import json
+
+    types = json.loads(_node(
+        "console.log(JSON.stringify(m.parseBlocks('## T\\n\\n**x** `y`\\n\\n| A | B |\\n|---|---|\\n| 1 | 2 |\\n\\n- a\\n- b\\n\\n> q\\n---\\nend').map(b => b.type)))"))
+    assert types == ["h", "p", "table", "ul", "quote", "hr", "p"]
+    table = json.loads(_node(
+        "console.log(JSON.stringify(m.parseBlocks('| A | B |\\n|---|---|\\n| 1 | 2 |')[0]))"))
+    assert [cell[0]["v"] for cell in table["head"]] == ["A", "B"] and table["rows"][0][1][0]["v"] == "2"
+
+
+def test_markdown_never_produces_html_and_speech_drops_the_markup():
+    # The parser returns plain text parts only; demo.js builds nodes with textContent.
+    parts = _node("console.log(JSON.stringify(m.parseInline('**<img src=x onerror=alert(1)>**')))")
+    assert '"t":"strong"' in parts and '"v":"<img src=x onerror=alert(1)>"' in parts
+    assert _node("console.log(m.plainText('## 📦 Status\\n\\n**Plan approved:** `split-express:v1`\\n\\n| S | U |\\n|---|---|\\n| Local | 12 |'))") \
+        == "📦 Status. Plan approved: split-express:v1. Local, 12"
+    script = (Path(__file__).resolve().parents[1] / "logiops" / "static" / "demo.js").read_text()
+    assert "innerHTML" not in script and "insertAdjacentHTML" not in script
+    assert "LogiOpsMarkdown.plainText(text)" in script  # read-aloud speaks the words, not the symbols
+
+
+def test_markdown_asset_is_served_and_shipped(tmp_path):
+    async def run():
+        app = create_app(tmp_path / "md.sqlite3")
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
+            page = (await client.get("/demo")).text
+            script = await client.get("/assets/markdown.js")
+        assert '/assets/markdown.js' in page and script.status_code == 200 and "parseBlocks" in script.text
+
+    asyncio.run(run())
+    archive, _ = package()
+    with tarfile.open(archive, "r:gz") as release:
+        assert "logiops/static/markdown.js" in release.getnames()

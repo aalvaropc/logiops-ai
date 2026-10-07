@@ -321,6 +321,42 @@ function renderTimeline(events) {
   $("event-count").textContent = `${events.length} event${events.length === 1 ? "" : "s"}`;
 }
 
+// Build the model's Markdown as DOM nodes; text always goes through textContent.
+function inlineNodes(parts) {
+  return parts.map((part) => {
+    if (part.t === "text") return document.createTextNode(part.v);
+    const node = document.createElement(part.t === "strong" ? "strong" : part.t === "em" ? "em" : "code");
+    node.textContent = part.v;
+    return node;
+  });
+}
+
+function renderMarkdown(source) {
+  const box = document.createElement("div");
+  box.className = "markdown";
+  for (const block of window.LogiOpsMarkdown.parseBlocks(source)) {
+    let node;
+    if (block.type === "hr") node = document.createElement("hr");
+    else if (block.type === "h") { node = document.createElement(`h${block.level}`); node.append(...inlineNodes(block.inline)); }
+    else if (block.type === "quote") { node = document.createElement("blockquote"); node.append(...inlineNodes(block.inline)); }
+    else if (block.type === "ul" || block.type === "ol") {
+      node = document.createElement(block.type);
+      for (const item of block.items) { const li = document.createElement("li"); li.append(...inlineNodes(item)); node.append(li); }
+    } else if (block.type === "table") {
+      node = document.createElement("table");
+      const head = node.createTHead().insertRow();
+      for (const cell of block.head) { const th = document.createElement("th"); th.scope = "col"; th.append(...inlineNodes(cell)); head.append(th); }
+      const body = node.createTBody();
+      for (const row of block.rows) {
+        const tr = body.insertRow();
+        for (const cell of row) tr.insertCell().append(...inlineNodes(cell));
+      }
+    } else { node = document.createElement("p"); node.append(...inlineNodes(block.inline)); }
+    box.append(node);
+  }
+  return box;
+}
+
 function renderConversation() {
   const list = $("conversation");
   list.replaceChildren();
@@ -334,8 +370,9 @@ function renderConversation() {
     const who = document.createElement("span");
     who.className = "turn-role";
     who.textContent = entry.role === "user" ? "You" : "LogiOps";
-    const text = document.createElement("p");
-    text.textContent = entry.text;
+    // Replies are Markdown; what the person typed stays literal text.
+    const text = entry.role === "assistant" ? renderMarkdown(entry.text) : document.createElement("p");
+    if (entry.role !== "assistant") text.textContent = entry.text;
     item.append(who, text);
     if (entry.meta) {
       const meta = document.createElement("small");
@@ -352,7 +389,7 @@ function say(role, text, meta) {
   renderConversation();
   if (role === "assistant" && $("speak-replies").checked && "speechSynthesis" in window) {
     window.speechSynthesis.cancel();
-    const utterance = new SpeechSynthesisUtterance(text);
+    const utterance = new SpeechSynthesisUtterance(window.LogiOpsMarkdown.plainText(text));
     utterance.lang = "en-US";
     window.speechSynthesis.speak(utterance);
   }
