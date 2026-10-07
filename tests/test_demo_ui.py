@@ -88,6 +88,8 @@ def test_demo_routes_utterances_through_the_intent_module(tmp_path):
     assert "LogiOpsIntent.parseCommand(text)" in script and "LogiOpsIntent.recommendedPlanId(" in script
     assert "test(lower)) {" not in script  # no more keyword matching anywhere in the sentence
     assert "was already executed" in script  # a second "execute it" says so instead of "executed" again
+    assert "That plan isn't available for the current data" in script  # "approve the split plan" after stock 11
+    assert "Number.parseInt" not in script and "Number.isInteger(available)" in script  # "2.5" is refused, not sent as 2
 
     async def run():
         app = create_app(tmp_path / "intent.sqlite3")

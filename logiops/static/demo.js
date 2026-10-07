@@ -27,6 +27,7 @@ const eventLabels = {
 };
 const planKeywords = [
   ["split-express", /\b(split|express)\b/],
+  ["local-stock", /\b(local|warehouse)\b/],
   ["reroute", /\b(reroute|re-route|economy)\b/],
   ["wait", /\bwait\b/],
 ];
@@ -563,7 +564,8 @@ async function executeApproved() {
 function planFromUtterance(text) {
   const plans = visiblePlans(state.snapshot);
   for (const [kind, pattern] of planKeywords) {
-    if (pattern.test(text)) return plans.find((plan) => plan.kind === kind);
+    // A named plan that the current data does not offer is not silently replaced.
+    if (pattern.test(text)) return plans.find((plan) => plan.kind === kind) || null;
   }
   return recommendedPlan(state.snapshot);
 }
@@ -592,6 +594,11 @@ async function handleUtterance(raw) {
         return;
       }
       const plan = planFromUtterance(lower);
+      if (!plan) {
+        const options = visiblePlans(state.snapshot).map((item) => `“${item.label}”`).join(", ");
+        say("assistant", `That plan isn't available for the current data. The options are ${options}.`);
+        return;
+      }
       await act(() => approvePlan(plan), "");
       say("assistant", `Approved “${plan.label}” for version ${plan.source_version}: ${plan.projected_customer_delay_hours} hours of delay, $${plan.incremental_cost_usd} extra. Say “execute it” when you're ready.`);
     } else if (command === "execute" || (command === "confirm" && visibleApproval(state.snapshot))) {
@@ -683,8 +690,10 @@ $("reset").addEventListener("click", () => act(async () => {
 }, "Synthetic incident reset.").catch(() => {}));
 $("banner-reset").addEventListener("click", () => $("reset").click());
 $("set-stock").addEventListener("click", () => act(async () => {
-  const available = Number.parseInt($("stock-input").value, 10);
-  if (!Number.isInteger(available) || available < 0) throw new Error("Enter a whole number of units.");
+  const raw = $("stock-input").value.trim();
+  const available = Number(raw);
+  // Number("2.5") is not an integer; parseInt would have quietly sent 2.
+  if (!raw || !Number.isInteger(available) || available < 0) throw new Error("Enter a whole number of units.");
   await request("/demo/inventory", "POST", { available });
   state.selectedPlanId = null;
 }, "Stock changed. Earlier plans and approvals no longer apply; ask the agent again.").catch(() => {}));
