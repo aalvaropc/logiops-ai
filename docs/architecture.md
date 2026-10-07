@@ -16,15 +16,14 @@ deterministic local replay. `logiops/security.py` enforces a bearer token when
 configured, per-viewer limits for MCP and for agent runs, and `no-store`
 responses. The browser
 demo at `/demo` calls the same API and shows plans, approval, execution, and
-audit history. Public HTTPS deployment is not yet connected.
+audit history.
 
 `infra/amazon/` prepares a single-instance AWS demo. CloudFront gives the
 public HTTPS URL; EC2 serves the API and MCP endpoint with an IAM instance
 role for Bedrock. A separate EBS volume stores SQLite so the incident and
 audit trail survive instance restarts. Deployment uses a private S3 archive
-and Systems Manager, without SSH or static AWS keys on the instance. This
-infrastructure remains unprovisioned until AWS access is restored and its
-Terraform plan is reviewed.
+and Systems Manager, without SSH or static AWS keys on the instance. It was
+provisioned on 2026-10-06; `scripts/deploy_ec2.py` ships only `origin/main`.
 
 The scenario, service, tools, and tests are provider-independent; the MCP
 and Bedrock modules are the Amazon-specific layer. The model sees only read and investigation tools; human approval uses
@@ -66,4 +65,4 @@ execution through REST or MCP.
   CloudFront to EC2 currently uses HTTP, with bearer authentication for the
   incident and MCP routes.
 
-These resources are defined in `infra/amazon/` but have not been provisioned.
+These resources are defined in `infra/amazon/` and were provisioned on 2026-10-06.

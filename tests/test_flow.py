@@ -144,6 +144,28 @@ def test_other_approved_options_preserve_all_units(
     asyncio.run(run())
 
 
+def test_enough_local_stock_offers_the_whole_order_from_the_warehouse(tmp_path):
+    async def run():
+        async with client_for(tmp_path / "logiops.sqlite3") as client:
+            assert (await client.post("/demo/inventory", json={"available": 25})).status_code == 200
+            plans = await plans_from(client)
+            assert set(plans) == {"wait", "reroute", "local-stock"}
+            local = plans["local-stock"]
+            assert (local["incremental_cost_usd"], local["projected_customer_delay_hours"]) == (0, 0)
+            request = {"plan_id": local["id"], "source_version": local["source_version"]}
+            approval = await client.post(
+                "/incidents/SHIP-421/approvals", json={**request, "approved_by": "demo-operator"}
+            )
+            assert approval.status_code == 200
+            assert (await client.post("/incidents/SHIP-421/execute", json=request)).status_code == 200
+            state = (await client.get("/incidents/SHIP-421")).json()["state"]
+            assert state["shipment"]["units_on_delayed_route"] == 0
+            assert [(item["source"], item["units"]) for item in state["fulfillments"]] == [("arequipa-stock", 20)]
+            assert state["inventory"]["arequipa"]["available"] == 5
+
+    asyncio.run(run())
+
+
 def test_agent_trace_rejects_stale_snapshot(tmp_path):
     service = LogiOpsService(tmp_path / "stale-agent.sqlite3")
     service.investigate("SHIP-421")
@@ -156,3 +178,15 @@ def test_agent_trace_rejects_stale_snapshot(tmp_path):
         event["name"] == "agent_investigation_completed"
         for event in service.get("SHIP-421")["events"]
     )
+
+
+def test_agent_events_are_audited_with_the_current_version(tmp_path):
+    service = LogiOpsService(tmp_path / "agent-events.sqlite3")
+    service.set_local_inventory("SHIP-421", 11)
+    recorded = service.record_agent_event("SHIP-421", "agent_run_failed", {"error": "timeout", "source_version": 99})
+    assert recorded == {"source_version": 2}
+    event = service.get("SHIP-421")["events"][-1]
+    assert event["name"] == "agent_run_failed"
+    assert event["data"] == {"error": "timeout", "incident_id": "SHIP-421", "source_version": 2}
+    with pytest.raises(WorkflowError, match="Unsupported agent event"):
+        service.record_agent_event("SHIP-421", "plan_executed", {})

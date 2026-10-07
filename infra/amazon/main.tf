@@ -276,3 +276,44 @@ resource "aws_cloudfront_distribution" "app" {
   viewer_certificate { cloudfront_default_certificate = true }
   depends_on = [aws_eip_association.app]
 }
+
+# MCP Apps requires web hosts to render views through a sandbox proxy on a different
+# origin. A second distribution gives the same origin a second hostname; the app only
+# serves /mcp-app/sandbox.html under that hostname and answers 404 to everything else.
+resource "aws_cloudfront_distribution" "sandbox" {
+  enabled         = true
+  is_ipv6_enabled = false
+  comment         = "LogiOps AI MCP Apps sandbox origin"
+  price_class     = "PriceClass_100"
+
+  origin {
+    domain_name = aws_eip.app.public_dns
+    origin_id   = "logiops-ec2"
+
+    custom_origin_config {
+      http_port              = 8000
+      https_port             = 443
+      origin_protocol_policy = "http-only"
+      origin_ssl_protocols   = ["TLSv1.2"]
+      # 60 s is the default quota; the agent enforces a 50 s deadline to fit inside it.
+      origin_read_timeout = 60
+    }
+  }
+
+  default_cache_behavior {
+    target_origin_id         = "logiops-ec2"
+    viewer_protocol_policy   = "redirect-to-https"
+    allowed_methods          = ["GET", "HEAD", "OPTIONS", "PUT", "POST", "PATCH", "DELETE"]
+    cached_methods           = ["GET", "HEAD"]
+    cache_policy_id          = aws_cloudfront_cache_policy.authorized_no_store.id
+    origin_request_policy_id = data.aws_cloudfront_origin_request_policy.all_viewer_and_cloudfront.id
+    compress                 = false
+  }
+
+  restrictions {
+    geo_restriction { restriction_type = "none" }
+  }
+
+  viewer_certificate { cloudfront_default_certificate = true }
+  depends_on = [aws_eip_association.app]
+}

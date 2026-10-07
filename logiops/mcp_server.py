@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any
 
 from mcp.server.fastmcp import FastMCP
@@ -9,6 +10,13 @@ from mcp.server.fastmcp.exceptions import ToolError
 from mcp.server.transport_security import TransportSecuritySettings
 
 from .service import LogiOpsService, WorkflowError
+
+
+# MCP Apps (SEP-1865, 2026-01-26): investigate_incident declares an interactive
+# view; hosts that support the extension render it, others just use the JSON.
+UI_URI = "ui://logiops/resolution-options.html"
+UI_MIME_TYPE = "text/html;profile=mcp-app"
+UI_HTML = (Path(__file__).resolve().parent / "static" / "resolution_options.html").read_text(encoding="utf-8")
 
 
 def _same(value: str, expected: str) -> bool:
@@ -65,7 +73,7 @@ def create_mcp_server(service: LogiOpsService, *, public_host: str | None = None
         except WorkflowError as exc:
             raise ToolError(str(exc)) from exc
 
-    @server.tool()
+    @server.tool(meta={"ui": {"resourceUri": UI_URI}, "ui/resourceUri": UI_URI})
     async def investigate_incident(shipment_id: str) -> dict[str, Any]:
         """Investigate the incident and calculate feasible plans."""
         try:
@@ -94,12 +102,22 @@ def create_mcp_server(service: LogiOpsService, *, public_host: str | None = None
             ],
         }
 
-    @server.tool()
+    # The only state-changing tool. MCP Apps lets views call server tools unless
+    # visibility says otherwise, so keep it model-only: no view can execute.
+    @server.tool(meta={"ui": {"visibility": ["model"]}})
     async def execute_approved_plan(shipment_id: str, plan_id: str, source_version: int) -> dict[str, Any]:
         """Execute only a plan already approved by a human through the local API."""
         try:
             return service.execute(shipment_id, plan_id, source_version)
         except WorkflowError as exc:
             raise ToolError(str(exc)) from exc
+
+    @server.resource(
+        UI_URI, name="resolution_options", title="Resolution options",
+        description="Interactive comparison of the calculated plans. It can select a plan, never approve one.",
+        mime_type=UI_MIME_TYPE, meta={"ui": {"prefersBorder": True}},
+    )
+    def resolution_options() -> str:
+        return UI_HTML
 
     return server

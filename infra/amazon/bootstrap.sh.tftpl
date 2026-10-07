@@ -56,13 +56,15 @@ UNIT
 cat > /usr/local/sbin/logiops-deploy <<'DEPLOY'
 #!/usr/bin/env bash
 set -euo pipefail
-test "$#" -eq 3 || { echo 'Usage: logiops-deploy <s3-uri> <sha256> <public-host>' >&2; exit 2; }
+test "$#" -eq 4 || { echo 'Usage: logiops-deploy <s3-uri> <sha256> <public-host> <sandbox-host>' >&2; exit 2; }
 artifact_uri="$1"
 digest="$2"
 public_host="$3"
+sandbox_host="$4"
 [[ "$artifact_uri" =~ ^s3://[a-z0-9.-]+/releases/[a-f0-9]{64}\.tar\.gz$ ]] || exit 2
 [[ "$digest" =~ ^[a-f0-9]{64}$ ]] || exit 2
 [[ "$public_host" =~ ^[a-z0-9.-]+$ ]] || exit 2
+[[ "$sandbox_host" =~ ^[a-z0-9.-]+$ && "$sandbox_host" != "$public_host" ]] || exit 2
 mountpoint -q /var/lib/logiops || { echo 'Data volume is not mounted' >&2; exit 1; }
 
 release="/opt/logiops/releases/$digest"
@@ -94,6 +96,7 @@ umask 027
   # The origin security group only admits CloudFront, so its viewer header can be trusted.
   printf 'LOGIOPS_TRUST_CLOUDFRONT=1\n'
   printf 'LOGIOPS_PUBLIC_HOST=%s\n' "$public_host"
+  printf 'LOGIOPS_SANDBOX_HOST=%s\n' "$sandbox_host"
   printf 'LOGIOPS_ACCESS_TOKEN=%s\n' "$token"
 } > /etc/logiops.env
 chown root:logiops /etc/logiops.env

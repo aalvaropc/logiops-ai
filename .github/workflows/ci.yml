@@ -1,0 +1,74 @@
+name: ci
+
+on:
+  pull_request:
+    # "edited" re-runs the base check when someone changes a PR's base branch.
+    types: [opened, synchronize, reopened, edited]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  pr-targets-main:
+    # Stacked PRs merged into each other never reached main (2026-10-07). Every PR goes to main.
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - name: The pull request must target main
+        env:
+          BASE: ${{ github.base_ref }}
+        run: |
+          if [ "$BASE" != "main" ]; then
+            echo "::error::This pull request targets '$BASE', not main. Merging it would not reach main, the branch judges see. Change the base branch to main."
+            exit 1
+          fi
+
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.12"
+          enable-cache: true
+      - run: uv sync --frozen --extra dev
+      - run: uv run pytest -q
+
+  gitleaks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Scan the full history for secrets
+        run: docker run --rm -v "$PWD:/repo" -e GIT_CONFIG_COUNT=1 -e GIT_CONFIG_KEY_0=safe.directory -e GIT_CONFIG_VALUE_0=/repo ghcr.io/gitleaks/gitleaks:v8.30.1 git --redact --no-banner -v /repo
+
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.12"
+      - run: docker build -t logiops-ai .
+      - run: docker run -d --name logiops -e LOGIOPS_AGENT_LIMIT_PER_MINUTE=60 -p 127.0.0.1:8000:8000 logiops-ai
+      - name: Health
+        run: curl --fail --silent --retry 20 --retry-all-errors --retry-delay 1 http://127.0.0.1:8000/healthz
+      - name: Replay investigation through MCP
+        run: |
+          curl --fail --silent -X POST http://127.0.0.1:8000/incidents/SHIP-421/agent/investigate \
+            -H 'Content-Type: application/json' -d '{}' | python3 -c 'import json,sys; b=json.load(sys.stdin); assert b["mode"]=="replay" and len(b["plans"])==3, b'
+      - name: MCP client against the container
+        run: |
+          uv sync --frozen
+          uv run python scripts/check_mcp.py http://127.0.0.1:8000/mcp
+      - name: Headless walkthrough against the container
+        run: uv run python scripts/rehearse_api.py --url http://127.0.0.1:8000
+      - name: MCP Apps sandbox origin
+        run: |
+          curl --fail --silent http://127.0.0.1:8000/demo | grep -q 'content="http://localhost:8000"'
+          curl --fail --silent -H 'Host: localhost:8000' http://127.0.0.1:8000/mcp-app/sandbox.html | grep -q sandbox-proxy-ready
+      - if: failure()
+        run: docker logs logiops

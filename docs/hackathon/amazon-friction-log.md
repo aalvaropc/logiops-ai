@@ -82,3 +82,16 @@ workaround, suggestion. Real friction only, logged as it happens (rules 3.17).
   be done from a headless agent session.
 - **Severity:** low, but it blocks automation until a person signs in again.
 - **Workaround:** run `aws login` interactively before deployment work.
+
+## 2026-10-06 — boto3 cannot use an `aws login` session without the CRT extra
+
+- **Technology:** boto3 / botocore with the AWS CLI `aws login` credentials.
+- **Task:** call Bedrock Converse from Python with the same session the CLI uses.
+- **Expected:** boto3 finds the CLI login session like any other credentials.
+- **Actual:** `MissingDependencyException: Using the login credential provider
+  requires an additional dependency ... pip install "botocore[crt]"`. The CLI
+  worked in the same shell, so the failure looks like a credentials problem.
+- **Severity:** medium; local live runs fail until the extra is installed.
+- **Workaround:** depend on `boto3[crt]`.
+- **Suggestion:** ship the login credential provider without an optional
+  extra, or mention it in the `aws login` documentation.

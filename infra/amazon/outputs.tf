@@ -1,3 +1,8 @@
+output "sandbox_domain" {
+  description = "Second hostname for the MCP Apps sandbox proxy (LOGIOPS_SANDBOX_HOST)"
+  value       = aws_cloudfront_distribution.sandbox.domain_name
+}
+
 output "cloudfront_domain" {
   value = aws_cloudfront_distribution.app.domain_name
 }

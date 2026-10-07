@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>MCP App sandbox</title>
+<style>
+  html, body { margin: 0; height: 100%; background: transparent; overflow: hidden; }
+  iframe { display: block; width: 100%; height: 100%; border: 0; }
+</style>
+</head>
+<body>
+<script>
+"use strict";
+// MCP Apps sandbox proxy (spec 2026-01-26). The host page loads this document from a
+// different origin; it loads the view's raw HTML into an inner iframe under a CSP built
+// from the resource metadata, and relays JSON-RPC between host and view. Messages whose
+// method starts with "ui/notifications/sandbox-" are for this proxy and never relayed.
+(() => {
+  const SANDBOX_PREFIX = "ui/notifications/sandbox-";
+  // Tokens a host may grant the view. Never allow-same-origin or top-level navigation:
+  // together with this proxy's origin they would let the view escape the sandbox.
+  const GRANTABLE = new Set(["allow-scripts", "allow-forms", "allow-popups", "allow-modals"]);
+  const hostOrigin = new URLSearchParams(location.search).get("host") || "";
+  const ancestor = location.ancestorOrigins && location.ancestorOrigins.length ? location.ancestorOrigins[0] : null;
+  if (!/^https?:\/\/[^/?#]+$/.test(hostOrigin) || hostOrigin === location.origin || window.parent === window
+      || (ancestor !== null && ancestor !== hostOrigin)) {
+    return;  // not embedded by the host this page was opened for
+  }
+  let view = null;
+  const toHost = (message) => window.parent.postMessage(message, hostOrigin);
+  const isProxyMethod = (message) => typeof message.method === "string" && message.method.startsWith(SANDBOX_PREFIX);
+
+  function origins(values) {
+    return Array.isArray(values) ? values.filter((value) => /^https:\/\/[a-z0-9.-]+(:\d+)?$/i.test(String(value))) : [];
+  }
+
+  function policy(csp) {
+    const connect = origins(csp && csp.connectDomains);
+    const resources = origins(csp && csp.resourceDomains);
+    const frames = origins(csp && csp.frameDomains);
+    const bases = origins(csp && csp.baseUriDomains);
+    const list = (values, fallback) => (values.length ? values.join(" ") : fallback);
+    return [
+      "default-src 'none'",
+      ["script-src 'unsafe-inline'", ...resources].join(" "),
+      ["style-src 'unsafe-inline'", ...resources].join(" "),
+      ["img-src data:", ...resources].join(" "),
+      `font-src ${list(resources, "'none'")}`,
+      `media-src ${list(resources, "'none'")}`,
+      `connect-src ${list(connect, "'none'")}`,
+      `frame-src ${list(frames, "'none'")}`,
+      `base-uri ${list(bases, "'self'")}`,
+      "object-src 'none'",
+      "form-action 'none'",
+    ].join("; ");
+  }
+
+  function load(params) {
+    if (view) view.remove();
+    const html = params && typeof params.html === "string" ? params.html : "";
+    const requested = params && typeof params.sandbox === "string" ? params.sandbox.split(/\s+/) : ["allow-scripts"];
+    const frame = document.createElement("iframe");
+    frame.setAttribute("sandbox", requested.filter((token) => GRANTABLE.has(token)).join(" "));
+    frame.setAttribute("referrerpolicy", "no-referrer");
+    frame.title = "MCP App view";
+    let loads = 0;
+    frame.addEventListener("load", () => {
+      loads += 1;
+      if (loads > 1 && view === frame) {
+        // A second load means the view navigated its own frame: it is no longer the
+        // document the host was given, so drop it instead of relaying for it.
+        frame.remove();
+        view = null;
+        toHost({ jsonrpc: "2.0", method: "logiops/sandbox-view-removed", params: { reason: "navigated" } });
+      }
+    });
+    // The policy goes first, before any of the view's markup, so it applies even if the
+    // view has no <head> or an unusual one; the parser keeps the meta in the head.
+    const body = html.replace(/^\s*<!doctype[^>]*>/i, "");
+    const meta = `<meta http-equiv="Content-Security-Policy" content="${policy(params && params.csp).replace(/"/g, "&quot;")}">`;
+    frame.srcdoc = `<!doctype html>${meta}${body}`;
+    view = frame;
+    document.body.append(frame);
+  }
+
+  window.addEventListener("message", (event) => {
+    const message = event.data;
+    if (!message || typeof message !== "object" || message.jsonrpc !== "2.0") return;
+    if (event.source === window.parent && event.origin === hostOrigin) {
+      if (message.method === "ui/notifications/sandbox-resource-ready") load(message.params);
+      else if (!isProxyMethod(message) && view) view.contentWindow.postMessage(message, "*");
+    } else if (view && event.source === view.contentWindow && !isProxyMethod(message)) {
+      toHost(message);
+    }
+  });
+
+  toHost({ jsonrpc: "2.0", method: "ui/notifications/sandbox-proxy-ready", params: {} });
+})();
+</script>
+</body>
+</html>

@@ -2,8 +2,11 @@
 
 This is a **single-operator synthetic demo** in `us-east-1`. Terraform creates
 an EC2 `t3.small`, a separate encrypted EBS data volume for SQLite, an IAM
-instance profile, a private S3 release bucket, and a CloudFront distribution.
-CloudFront provides the stable HTTPS URL. It forwards to the EC2 origin over
+instance profile, a private S3 release bucket, and two CloudFront
+distributions on the same origin. The first provides the stable HTTPS URL; the
+second is only the MCP Apps sandbox origin (`sandbox_domain` output, passed to
+the app as `LOGIOPS_SANDBOX_HOST`), where the app serves
+`/mcp-app/sandbox.html` and nothing else. It forwards to the EC2 origin over
 HTTP; the instance security group accepts port 8000 only from AWS's
 CloudFront origin-facing prefix list. The API requires a bearer token.
 
@@ -29,7 +32,7 @@ uses boto3 and does not need the CLI.
 4. Run `python3 scripts/create_access_token.py`. The 64-character random token
    is stored as an SSM `SecureString` and in `.secrets/access-token` (mode
    0600, gitignored). Do not paste it into a PR or issue.
-5. Run `python3 scripts/deploy_ec2.py`. It builds a deterministic archive of
+5. On a clean, up-to-date `main`, run `python3 scripts/deploy_ec2.py` (it refuses any other checkout unless you pass `--allow-unmerged`). It builds a deterministic archive of
    the Python package and lockfile, uploads it to private S3, and installs it
    through Systems Manager. No GitHub or SSH credentials enter the instance.
 

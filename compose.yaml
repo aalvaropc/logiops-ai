@@ -1,0 +1,19 @@
+# `docker compose up --build`, then open http://127.0.0.1:8000/demo
+# Replay mode runs the full MCP workflow with a scripted model and zero AWS cost.
+# For live Bedrock, set LOGIOPS_AGENT_MODE=bedrock and pass short-lived credentials at runtime, e.g.
+#   eval "$(aws configure export-credentials --format env)" && LOGIOPS_AGENT_MODE=bedrock docker compose up
+# and uncomment the AWS_* lines below. Never bake credentials into the image.
+services:
+  logiops:
+    build: .
+    # Published on loopback only: without LOGIOPS_ACCESS_TOKEN the API is open.
+    ports: ["127.0.0.1:8000:8000"]
+    environment:
+      LOGIOPS_AGENT_MODE: ${LOGIOPS_AGENT_MODE:-replay}
+      AWS_REGION: ${AWS_REGION:-us-east-1}
+      # AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
+      # AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
+      # AWS_SESSION_TOKEN: ${AWS_SESSION_TOKEN}
+    volumes: ["logiops-data:/data"]
+volumes:
+  logiops-data: {}

@@ -13,7 +13,8 @@ from fastapi.responses import JSONResponse
 from .agent import INTERNAL_HEADER
 
 
-PUBLIC_PATHS = ("/healthz", "/docs", "/openapi.json", "/redoc", "/demo")
+SANDBOX_PATH = "/mcp-app/sandbox.html"
+PUBLIC_PATHS = ("/healthz", "/docs", "/openapi.json", "/redoc", "/demo", SANDBOX_PATH)
 
 
 class _SlidingWindow:
@@ -64,8 +65,9 @@ def install_security(
     *,
     internal_key: str,
     limit_per_minute: int = 60,
-    agent_limit_per_minute: int = 5,
+    agent_limit_per_minute: int = 10,
     trust_cloudfront: bool = False,
+    sandbox_host: str | None = None,
 ) -> None:
     mcp_limiter = _SlidingWindow(limit_per_minute, 60)
     agent_limiter = _SlidingWindow(agent_limit_per_minute, 60)
@@ -73,8 +75,14 @@ def install_security(
     @app.middleware("http")
     async def guard(request: Request, call_next: Any) -> Any:
         path = request.url.path
+        # The MCP Apps sandbox origin serves its proxy page and nothing else.
+        if sandbox_host and request.headers.get("host", "").split(":")[0].lower() == sandbox_host and path != SANDBOX_PATH:
+            return JSONResponse(status_code=404, content={"detail": "Not found"})
         if path in PUBLIC_PATHS or path.startswith("/assets/"):
-            return await call_next(request)
+            response = await call_next(request)
+            # Revalidate every time, so a redeploy never pairs a new page with an old script.
+            response.headers.setdefault("Cache-Control", "no-cache")
+            return response
         if access_token:
             supplied = request.headers.get("authorization", "")
             if not _constant_time_equal(supplied, f"Bearer {access_token}"):
@@ -89,7 +97,7 @@ def install_security(
         # cut off by, the viewer's MCP budget halfway through an investigation.
         if path.startswith("/mcp") and not internal and not mcp_limiter.allow(key):
             return JSONResponse(status_code=429, content={"detail": "MCP rate limit exceeded"})
-        if path.endswith("/agent/investigate") and not agent_limiter.allow(key):
+        if "/agent/" in path and not agent_limiter.allow(key):
             return JSONResponse(
                 status_code=429,
                 content={"detail": "Agent rate limit exceeded; each run calls a paid model"},

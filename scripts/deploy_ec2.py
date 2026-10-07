@@ -45,6 +45,21 @@ def package() -> tuple[Path, str]:
     return final, digest
 
 
+def git(*args: str) -> str:
+    return subprocess.run(["git", "-C", str(ROOT), *args], check=True, capture_output=True, text=True).stdout.strip()
+
+
+def unmerged_reason(head: str, main: str, dirty: bool) -> str | None:
+    """Why this checkout must not be deployed, or None. Only main is deployed:
+    the demo once ran a branch that never reached main (2026-10-07)."""
+    if dirty:
+        return "The working tree has uncommitted changes; the release would not match any commit."
+    if head != main:
+        return (f"HEAD {head[:7]} is not origin/main {main[:7]}. Merge to main, `git switch main && git pull`, "
+                "and deploy again (or pass --allow-unmerged for a deliberate preview).")
+    return None
+
+
 def command(*args: str) -> dict[str, Any]:
     result = subprocess.run(args, check=True, capture_output=True, text=True)
     return json.loads(result.stdout)
@@ -76,18 +91,33 @@ def wait_for_ssm(region: str, instance_id: str) -> None:
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--package-only", action="store_true")
+    parser.add_argument("--allow-unmerged", action="store_true", help="deploy a checkout that is not origin/main")
     args = parser.parse_args()
     archive, digest = package()
     print(f"Release: {archive} (sha256 {digest})")
     if args.package_only:
         return
+    git("fetch", "--quiet", "origin", "main")
+    reason = unmerged_reason(
+        git("rev-parse", "HEAD"), git("rev-parse", "origin/main"),
+        bool(git("status", "--porcelain", "--untracked-files=no")),
+    )
+    if reason and not args.allow_unmerged:
+        raise SystemExit(reason)
+    if reason:
+        print(f"Warning: {reason}")
 
     outputs = terraform_outputs()
     region = outputs["aws_region"]
     bucket = outputs["release_bucket"]
     instance_id = outputs["instance_id"]
     host = outputs["cloudfront_domain"]
-    if not re.fullmatch(r"[a-z0-9.-]+", bucket + host) or not re.fullmatch(r"i-[a-f0-9]+", instance_id):
+    sandbox_host = outputs["sandbox_domain"]
+    if (
+        not re.fullmatch(r"[a-z0-9.-]+", bucket + host + sandbox_host)
+        or sandbox_host == host
+        or not re.fullmatch(r"i-[a-f0-9]+", instance_id)
+    ):
         raise RuntimeError("Unexpected Terraform output")
     uri = f"s3://{bucket}/releases/{digest}.tar.gz"
     subprocess.run(["aws", "--region", region, "s3", "cp", str(archive), uri, "--only-show-errors"], check=True)
@@ -96,7 +126,7 @@ def main() -> None:
     remote_command = (
         "for attempt in $(seq 1 120); do "
         "test -x /usr/local/sbin/logiops-deploy && break; sleep 5; done; "
-        f"/usr/local/sbin/logiops-deploy {uri} {digest} {host}"
+        f"/usr/local/sbin/logiops-deploy {uri} {digest} {host} {sandbox_host}"
     )
     sent = command(
         "aws", "--region", region, "ssm", "send-command",
