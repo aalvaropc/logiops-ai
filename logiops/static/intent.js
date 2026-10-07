@@ -10,6 +10,7 @@
     ["reset", new RegExp(`${OPENER}(?:reset|start over)\\b`)],
     ["approve", new RegExp(`${OPENER}approve\\b`)],
     ["execute", new RegExp(`${OPENER}(?:execute|go ahead|do it|run it)\\b`)],
+    ["open", new RegExp(`${OPENER}(?:open|show|switch to|go to)\\b`)],
     ["confirm", /^(?:yes|yeah|yep)\b/],
   ];
 
@@ -17,7 +18,7 @@
     return QUESTION.test(String(text).trim().toLowerCase());
   }
 
-  // "reset" | "approve" | "execute" | "confirm" (a bare yes) | null.
+  // "reset" | "approve" | "execute" | "open" | "confirm" (a bare yes) | null.
   function parseCommand(text) {
     const lower = String(text).trim().toLowerCase();
     if (!lower || QUESTION.test(lower)) return null;
@@ -57,7 +58,13 @@
     return best;
   }
 
-  const api = { isQuestion, parseCommand, recommendedPlanId };
+  // The one incident a sentence names ("what about ship-452?"), or null for none or several.
+  function mentionedIncident(text, ids) {
+    const named = ids.filter((id) => new RegExp(`(^|[^a-z0-9-])${id.toLowerCase()}($|[^a-z0-9-])`).test(String(text).toLowerCase()));
+    return named.length === 1 ? named[0] : null;
+  }
+
+  const api = { isQuestion, parseCommand, recommendedPlanId, mentionedIncident };
   if (typeof module === "object" && module.exports) module.exports = api;
   else root.LogiOpsIntent = api;
 })(typeof window === "undefined" ? globalThis : window);

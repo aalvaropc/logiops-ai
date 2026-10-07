@@ -4,6 +4,7 @@ import asyncio
 from copy import deepcopy
 
 import httpx
+import pytest
 
 from logiops.api import create_app
 
@@ -177,5 +178,30 @@ def test_truncated_final_answer_is_kept_but_flagged(tmp_path):
                 response = await http.post("/incidents/SHIP-421/agent/investigate", json={})
                 assert response.status_code == 200, response.text
                 assert response.json()["truncated"] is True
+
+    asyncio.run(run())
+
+
+@pytest.mark.parametrize(("incident_id", "orders", "inventory", "best"), [
+    ("SHIP-433", 2, False, "priority-air-ground"),  # two orders, no warehouse
+    ("SHIP-452", 1, True, "split-expedite"),
+    ("SHIP-460", 2, True, "express-transfer"),
+])
+def test_replay_investigates_every_incident_through_mcp(tmp_path, monkeypatch, incident_id, orders, inventory, best):
+    monkeypatch.setenv("LOGIOPS_AGENT_MODE", "replay")
+
+    async def run():
+        app = create_app(tmp_path / "incidents.sqlite3")
+        async with app.router.lifespan_context(app):
+            async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url=BASE_URL) as http:
+                body = (await http.post(f"/incidents/{incident_id}/agent/investigate", json={})).json()
+                tools = [step["tool"] for step in body["tool_trace"]]
+                assert tools.count("get_order") == orders and ("get_inventory" in tools) is inventory
+                assert not any(step["is_error"] for step in body["tool_trace"])
+                pick = next(plan for plan in body["plans"] if plan["kind"] == best)
+                assert body["answer"].rstrip().endswith(f"Recommended plan: {pick['id']}")
+                # Each incident keeps its own audit trail.
+                other = (await http.get("/incidents/SHIP-421")).json()
+                assert [event["name"] for event in other["events"]] == ["scenario_reset"]
 
     asyncio.run(run())

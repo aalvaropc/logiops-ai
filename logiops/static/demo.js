@@ -1,7 +1,14 @@
 "use strict";
 
 const $ = (id) => document.getElementById(id);
-const state = { token: "", snapshot: null, selectedPlanId: null, busy: false, conversation: [], speaking: false, app: null, awaitingExecute: false };
+const DEFAULT_INCIDENT = "SHIP-421";
+// Deep links: /demo#SHIP-433 opens that incident.
+const hashIncident = () => decodeURIComponent(location.hash.slice(1)).trim().toUpperCase() || DEFAULT_INCIDENT;
+const state = {
+  token: "", snapshot: null, selectedPlanId: null, busy: false, conversation: [], speaking: false, app: null,
+  awaitingExecute: false, incidentId: hashIncident(), inbox: [], conversations: {}, selections: {}, stockFor: null,
+};
+const incidentPath = (suffix = "") => `/incidents/${encodeURIComponent(state.incidentId)}${suffix}`;
 // MCP Apps host (protocol 2026-01-26). As the spec requires for web hosts, the view runs
 // behind a sandbox proxy served from a different origin (127.0.0.1 <-> localhost locally,
 // a second hostname in public mode). The view has no network and never sees the token;
@@ -24,12 +31,22 @@ const eventLabels = {
   notifications_simulated: "Notifications simulated",
   execution_verified: "All units accounted for",
   inventory_changed: "Local inventory changed",
+  schema_migrated: "Data rebuilt for a new version",
 };
+// The plan kinds a phrase can name, most specific first; the first one on screen wins.
 const planKeywords = [
-  ["split-express", /\b(split|express)\b/],
-  ["local-stock", /\b(local|warehouse)\b/],
-  ["reroute", /\b(reroute|re-route|economy)\b/],
-  ["wait", /\bwait\b/],
+  [["express-transfer"], /\btransfer\b/],
+  [["priority-air-ground"], /\b(air|fly|flight)\b.*\bground\b|\bground\b.*\b(air|fly|flight)\b/],
+  [["priority-air"], /\b(air|fly|flight)\b/],
+  [["split-expedite"], /\b(split|stock)\b.*\bexpedit|\bexpedit\w*\b.*\b(split|stock)\b/],
+  [["expedite", "split-expedite"], /\bexpedit\w*\b|\bbroker\b/],
+  [["first-come"], /\b(first[- ]come|as placed|school first)\b/],
+  [["priority-first"], /\b(hospital first|priority first)\b/],
+  [["split-express", "split-expedite", "split-wait"], /\bsplit\b/],
+  [["split-express"], /\bexpress\b/],
+  [["local-stock"], /\b(local|warehouse)\b/],
+  [["reroute"], /\b(reroute|re-route|economy|rebook)\b/],
+  [["wait"], /\bwait\b/],
 ];
 
 function message(text, success = false) {
@@ -130,10 +147,12 @@ async function showMcpApp(run) {
   const resource = await loadAppResource();
   // A reset, stock change or newer investigation may have happened while loading.
   if (!resource || generation !== app.generation || !state.snapshot
+      || String(step.input?.shipment_id || "").trim().toUpperCase() !== state.incidentId
       || step.output.source_version !== visibleVersion(state.snapshot)) return;
   await teardownMcpApp("replaced", { invalidate: false });
   if (generation !== app.generation) return;
   state.app = {
+    incidentId: state.incidentId,
     version: step.output.source_version,
     input: step.input,
     result: { content: [{ type: "text", text: JSON.stringify(step.output) }], structuredContent: step.output },
@@ -264,8 +283,18 @@ function latestAgentEvent(snapshot) {
     event.name === "agent_investigation_completed" && event.data.source_version === visibleVersion(snapshot));
 }
 
+// Critical orders first, then the worst delay, late units and cost (the server's default pick).
+function rankKey(plan) {
+  const critical = (plan.orders || []).filter((order) => order.priority === "critical").map((order) => order.delay_hours);
+  return [Math.max(0, ...critical), plan.projected_customer_delay_hours, plan.late_units || 0, plan.incremental_cost_usd];
+}
+function byRank(a, b) {
+  const left = rankKey(a), right = rankKey(b);
+  return left.reduce((found, value, index) => found || value - right[index], 0);
+}
+
 // The plan the agent recommended: an exact plan ID in its answer, then a label,
-// then the lowest projected delay and cost as a deterministic fallback.
+// then the default ranking as a deterministic fallback.
 function recommendedPlan(snapshot) {
   const plans = visiblePlans(snapshot);
   if (!plans.length) return null;
@@ -273,9 +302,14 @@ function recommendedPlan(snapshot) {
   const id = window.LogiOpsIntent.recommendedPlanId(answer, plans);
   return plans.find((plan) => plan.id === id)
     || plans.find((plan) => answer.toLowerCase().includes(`recommend ${plan.label.toLowerCase()}`))
-    || [...plans].sort((a, b) =>
-      a.projected_customer_delay_hours - b.projected_customer_delay_hours
-      || a.incremental_cost_usd - b.incremental_cost_usd)[0];
+    || [...plans].sort(byRank)[0];
+}
+
+// Units per source across orders: "30 via delayed shipment", not one entry per order.
+function allocationSummary(plan) {
+  const units = new Map();
+  for (const item of plan.allocations) units.set(item.source, (units.get(item.source) || 0) + item.units);
+  return [...units].map(([source, count]) => `${count} via ${source.replaceAll("-", " ")}`).join(" · ");
 }
 
 function renderPlans(snapshot) {
@@ -326,8 +360,21 @@ function renderPlans(snapshot) {
       title.append(badge);
     }
     const allocation = document.createElement("small");
-    allocation.textContent = plan.allocations.map((item) => `${item.units} via ${item.source.replaceAll("-", " ")}`).join(" · ");
+    allocation.textContent = allocationSummary(plan);
     description.append(title, allocation);
+    if ((plan.orders || []).length > 1) {
+      // With two orders, say who is late and by how much.
+      const lines = document.createElement("div");
+      lines.className = "order-lines";
+      for (const order of plan.orders) {
+        const line = document.createElement("span");
+        line.className = order.delay_hours ? "late" : "";
+        line.textContent = `${order.order_id} · ${order.customer}${order.priority === "critical" ? " (critical)" : ""}: `
+          + (order.delay_hours ? `+${order.delay_hours} h` : "on time");
+        lines.append(line);
+      }
+      description.append(lines);
+    }
     const eta = document.createElement("div");
     eta.className = "plan-value";
     eta.textContent = formatDate(plan.projected_completion_eta);
@@ -424,7 +471,7 @@ function renderConversation() {
   list.replaceChildren();
   const entries = state.conversation.length ? state.conversation : [{
     role: "assistant",
-    text: "Hi, I'm LogiOps. Ask me what's happening with SHIP-421, and I'll investigate it with the MCP tools.",
+    text: `Hi, I'm LogiOps. Ask me what's happening with ${state.incidentId}, and I'll investigate it with the MCP tools.`,
   }];
   for (const entry of entries) {
     const item = document.createElement("li");
@@ -473,19 +520,72 @@ function renderControls() {
   $("execute").disabled = state.busy || !approved || executed;
   $("reset").disabled = state.busy;
   $("banner-reset").disabled = state.busy;
-  $("set-stock").disabled = state.busy || !snapshot || executed;
+  $("set-stock").disabled = state.busy || !snapshot || executed || !localWarehouse(snapshot);
+  $("stock-input").disabled = state.busy || !snapshot || !localWarehouse(snapshot);
   $("connect").disabled = state.busy;
+}
+
+function localWarehouse(snapshot) {
+  return Object.keys(snapshot.state.inventory || {})[0] || null;
+}
+
+function renderInbox() {
+  const list = $("inbox");
+  list.replaceChildren();
+  const tag = (className, text) => {
+    const node = document.createElement("span");
+    node.className = className;
+    node.textContent = text;
+    return node;
+  };
+  for (const item of state.inbox) {
+    const entry = document.createElement("li");
+    const card = document.createElement("button");
+    card.type = "button";
+    card.className = "incident-card";
+    card.setAttribute("aria-pressed", String(item.incident_id === state.incidentId));
+    const top = tag("incident-top", "");
+    top.append(tag("incident-id", item.incident_id), tag("kind", item.kind_label));
+    if (item.priority === "critical") top.append(tag("critical", "Critical order"));
+    top.append(tag("state", item.status));
+    const due = document.createElement("small");
+    due.textContent = `${item.route} · ${item.units} units · due ${formatDate(item.due_eta)}`;
+    card.append(top, tag("incident-text", item.title), due);
+    card.addEventListener("click", () => selectIncident(item.incident_id).catch(() => {}));
+    entry.append(card);
+    list.append(entry);
+  }
 }
 
 function render(snapshot) {
   state.snapshot = snapshot;
-  // The view shows the plans of one data version; hide it once that version is gone.
-  if (state.app && state.app.version !== visibleVersion(snapshot)) hideMcpApp();
+  // The view shows the plans of one incident and data version; hide it once they are gone.
+  if (state.app && (state.app.incidentId !== snapshot.state.incident_id || state.app.version !== visibleVersion(snapshot))) hideMcpApp();
   $("connection").textContent = "Connected";
   $("connection").className = "connection ready";
-  $("incident-status").textContent = snapshot.state.status;
-  $("stock-value").textContent = `${snapshot.state.inventory.arequipa.available} units`;
-  const shipment = snapshot.state.shipment;
+  renderInbox();
+  const incident = snapshot.state;
+  const shipment = incident.shipment;
+  const units = incident.orders.reduce((sum, order) => sum + order.quantity, 0);
+  document.title = `LogiOps AI · ${incident.incident_id}`;
+  $("incident-id").textContent = incident.incident_id;
+  $("incident-title").textContent = incident.title;
+  $("incident-route").textContent = `${shipment.origin} → ${shipment.destination} · ${units} units of ${shipment.sku} · `
+    + (incident.orders.length === 1 ? "1 order" : `${incident.orders.length} orders`);
+  $("incident-status").textContent = incident.status;
+  $("promise-label").textContent = incident.orders.length === 1 ? "Customer promise" : "Shipment's original ETA";
+  const warehouse = localWarehouse(snapshot);
+  $("stock-value").textContent = warehouse ? `${incident.inventory[warehouse].available} units` : "None";
+  $("stock-label").textContent = warehouse ? `${warehouse[0].toUpperCase()}${warehouse.slice(1)} warehouse` : "No local warehouse";
+  $("stock-scope").textContent = warehouse ? `(${warehouse[0].toUpperCase()}${warehouse.slice(1)} warehouse; invalidates approvals)` : "(this incident has no local warehouse)";
+  if (state.stockFor !== incident.incident_id) {
+    // A useful default per incident: one unit less than on hand.
+    state.stockFor = incident.incident_id;
+    $("stock-input").max = String(units);
+    $("stock-input").value = warehouse ? String(Math.max(0, incident.inventory[warehouse].available - 1)) : "";
+  }
+  $("chip-status").dataset.say = `What's happening with shipment ${incident.incident_id}, and which plan should we choose?`;
+  $("chip-status").textContent = `What's happening with ${incident.incident_id}?`;
   $("original-eta").textContent = formatDate(shipment.original_eta);
   $("delayed-eta").textContent = formatDate(shipment.delayed_eta);
   const delay = Math.round((new Date(shipment.delayed_eta) - new Date(shipment.original_eta)) / 3600000);
@@ -505,7 +605,7 @@ function render(snapshot) {
   $("state-banner").hidden = !execution;
   if (execution) {
     const plan = snapshot.plans.find((item) => item.id === execution.plan_id);
-    $("state-banner-text").textContent = `SHIP-421 was already executed with “${plan?.label || execution.plan_id}” and verified. Questions now refer to that result; reset the synthetic incident to run the whole flow again.`;
+    $("state-banner-text").textContent = `${incident.incident_id} was already executed with “${plan?.label || execution.plan_id}” and verified. Questions now refer to that result; reset this incident to run the whole flow again.`;
   }
   if (execution) {
     $("execution-result").textContent = executionSummary(snapshot, execution);
@@ -519,11 +619,33 @@ function traceSummary(run) {
 }
 
 function executionSummary(snapshot, execution) {
-  const accounted = snapshot.state.shipment.units_on_delayed_route + execution.fulfillments.reduce((sum, item) => sum + item.units, 0);
+  const accounted = execution.accounted_units
+    ?? snapshot.state.shipment.units_on_delayed_route + execution.fulfillments.reduce((sum, item) => sum + item.units, 0);
   return `Verified: ${accounted} units accounted for · $${execution.incremental_cost_usd} extra · ${execution.notifications.length} simulated notifications. Customer delay: ${execution.projected_customer_delay_hours}h (projected).`;
 }
 
-async function refresh() { render(await request("/incidents/SHIP-421")); }
+async function refresh() {
+  state.inbox = (await request("/incidents")).incidents;
+  if (!state.inbox.some((item) => item.incident_id === state.incidentId)) {
+    state.incidentId = state.inbox[0]?.incident_id || DEFAULT_INCIDENT;
+    history.replaceState(null, "", `#${encodeURIComponent(state.incidentId)}`);
+  }
+  render(await request(incidentPath()));
+}
+
+// Each incident keeps its own conversation and selection while you look at another.
+async function selectIncident(id) {
+  if (state.busy || id === state.incidentId) return;
+  state.conversations[state.incidentId] = state.conversation;
+  state.selections[state.incidentId] = state.selectedPlanId;
+  state.incidentId = id;
+  state.conversation = state.conversations[id] || [];
+  state.selectedPlanId = state.selections[id] || null;
+  state.awaitingExecute = false;
+  history.replaceState(null, "", `#${encodeURIComponent(id)}`);
+  hideMcpApp("incident changed");
+  await act(refresh, "");
+}
 
 async function act(work, success) {
   setBusy(true);
@@ -548,7 +670,7 @@ async function act(work, success) {
 async function approvePlan(plan) {
   const approvedBy = $("approver").value.trim();
   if (!plan || !approvedBy) throw new Error("Select a plan and enter an approver name.");
-  await request("/incidents/SHIP-421/approvals", "POST", {
+  await request(incidentPath("/approvals"), "POST", {
     plan_id: plan.id, source_version: plan.source_version, approved_by: approvedBy,
   });
 }
@@ -556,22 +678,22 @@ async function approvePlan(plan) {
 async function executeApproved() {
   const approval = visibleApproval(state.snapshot);
   if (!approval) throw new Error("No plan is approved for the current incident version.");
-  await request("/incidents/SHIP-421/execute", "POST", {
+  await request(incidentPath("/execute"), "POST", {
     plan_id: approval.plan_id, source_version: approval.source_version,
   });
 }
 
-// The plan kind a sentence names ("the split plan"), or null when it names none.
-function namedPlanKind(text) {
+// The plan kinds a sentence names ("the split plan"), or null when it names none.
+function namedPlanKinds(text) {
   const found = planKeywords.find(([, pattern]) => pattern.test(text));
   return found ? found[0] : null;
 }
 
 function planFromUtterance(text) {
   const plans = visiblePlans(state.snapshot);
-  const kind = namedPlanKind(text);
+  const kinds = namedPlanKinds(text);
   // A named plan that the current data does not offer is not silently replaced.
-  if (kind) return plans.find((plan) => plan.kind === kind) || null;
+  if (kinds) return kinds.map((kind) => plans.find((plan) => plan.kind === kind)).find(Boolean) || null;
   return recommendedPlan(state.snapshot);
 }
 
@@ -583,19 +705,34 @@ function planFromUtterance(text) {
 async function handleUtterance(raw) {
   const text = raw.trim();
   if (!text || state.busy) return;
+  // "What about SHIP-452?" moves to that incident first; the question then goes there.
+  const mentioned = window.LogiOpsIntent.mentionedIncident(text, state.inbox.map((item) => item.incident_id));
+  if (mentioned && mentioned !== state.incidentId) {
+    await selectIncident(mentioned).catch(() => {});
+    if (state.incidentId !== mentioned) return;
+  }
   say("user", text);
   const lower = text.toLowerCase();
-  const command = window.LogiOpsIntent.parseCommand(text);
+  let command = window.LogiOpsIntent.parseCommand(text);
+  if (command === "open") {
+    if (mentioned) {
+      const item = state.inbox.find((entry) => entry.incident_id === mentioned);
+      say("assistant", `Opened ${mentioned}: ${item?.title || "incident"}. Ask me what's happening, or say “investigate”.`);
+      return;
+    }
+    command = null;  // "show me the options" is a question for the agent
+  }
   // A bare "yes" only confirms the execution offered in the previous reply.
   const awaitingExecute = state.awaitingExecute;
   state.awaitingExecute = false;
   try {
     if (command === "reset") {
-      await act(() => request("/demo/reset", "POST"), "");
+      const id = state.incidentId;
+      await act(() => request("/demo/reset", "POST", { incident_id: id }), "");
       state.selectedPlanId = null;
       state.conversation = [];
       hideMcpApp();
-      say("assistant", "Done. SHIP-421 is back to its original delayed state.");
+      say("assistant", `Done. ${id} is back to its original state.`);
     } else if (command === "approve") {
       if (!visiblePlans(state.snapshot).length) {
         say("assistant", "There are no plans for the current data yet. Ask me to investigate first.");
@@ -614,14 +751,14 @@ async function handleUtterance(raw) {
       // "Execute the reroute" while another plan is approved must not run the approved one.
       const approval = visibleApproval(state.snapshot);
       const approved = approval && state.snapshot.plans.find((plan) => plan.id === approval.plan_id);
-      const named = namedPlanKind(lower);
-      if (approved && named && named !== approved.kind) {
-        const wanted = visiblePlans(state.snapshot).find((plan) => plan.kind === named);
+      const named = namedPlanKinds(lower);
+      if (approved && named && !named.includes(approved.kind)) {
+        const wanted = named.map((kind) => visiblePlans(state.snapshot).find((plan) => plan.kind === kind)).find(Boolean);
         say("assistant", `The approved plan is “${approved.label}”, so nothing was executed. ${wanted ? `Approve “${wanted.label}” first if you want it instead.` : "The plan you named isn't available for the current data."}`);
         return;
       }
       if (state.snapshot?.executions.length) {
-        say("assistant", `SHIP-421 was already executed. ${executionSummary(state.snapshot, state.snapshot.executions[0])} Reset the synthetic incident to run the flow again.`);
+        say("assistant", `${state.incidentId} was already executed. ${executionSummary(state.snapshot, state.snapshot.executions[0])} Reset this incident to run the flow again.`);
         return;
       }
       await act(executeApproved, "");
@@ -635,7 +772,7 @@ async function handleUtterance(raw) {
       const stale = !current || current.data.source_version !== visibleVersion(state.snapshot);
       const executed = Boolean(state.snapshot?.executions.length);
       if (executed && stale) {
-        say("assistant", "This incident was already executed without an investigation to refer to. Reset the synthetic incident to start over.");
+        say("assistant", "This incident was already executed without an investigation to refer to. Reset this incident to start over.");
         return;
       }
       const fresh = !executed && (stale || /\b(investigate|re-?check|refresh|start again|what(?:'s| is) happening)\b/.test(lower));
@@ -643,8 +780,8 @@ async function handleUtterance(raw) {
       let run;
       await act(async () => {
         run = fresh
-          ? await request("/incidents/SHIP-421/agent/investigate", "POST", { question: text })
-          : await request("/incidents/SHIP-421/agent/ask", "POST", { question: text, history });
+          ? await request(incidentPath("/agent/investigate"), "POST", { question: text })
+          : await request(incidentPath("/agent/ask"), "POST", { question: text, history });
       }, "");
       say("assistant", run.answer, `${fresh ? "investigation" : "follow-up"} · ${traceSummary(run)}`);
       if (fresh) {
@@ -702,17 +839,24 @@ $("access-token").addEventListener("keydown", (event) => {
 });
 $("reset").addEventListener("click", () => act(async () => {
   await request("/demo/reset", "POST");
-  state.selectedPlanId = null;
-  state.conversation = [];
+  Object.assign(state, { selectedPlanId: null, conversation: [], conversations: {}, selections: {}, stockFor: null });
   hideMcpApp();
-}, "Synthetic incident reset.").catch(() => {}));
-$("banner-reset").addEventListener("click", () => $("reset").click());
+}, "Every synthetic incident was reset.").catch(() => {}));
+$("banner-reset").addEventListener("click", () => act(async () => {
+  await request("/demo/reset", "POST", { incident_id: state.incidentId });
+  Object.assign(state, { selectedPlanId: null, conversation: [], stockFor: null });
+  hideMcpApp();
+}, "This incident was reset.").catch(() => {}));
+window.addEventListener("hashchange", () => {
+  const id = hashIncident();
+  if (id !== state.incidentId) selectIncident(id).catch(() => {});
+});
 $("set-stock").addEventListener("click", () => act(async () => {
   const raw = $("stock-input").value.trim();
   const available = Number(raw);
   // Number("2.5") is not an integer; parseInt would have quietly sent 2.
   if (!raw || !Number.isInteger(available) || available < 0) throw new Error("Enter a whole number of units.");
-  await request("/demo/inventory", "POST", { available });
+  await request("/demo/inventory", "POST", { incident_id: state.incidentId, available });
   state.selectedPlanId = null;
 }, "Stock changed. Earlier plans and approvals no longer apply; ask the agent again.").catch(() => {}));
 $("ask-form").addEventListener("submit", (event) => {

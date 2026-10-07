@@ -19,6 +19,7 @@ from .bedrock import BedrockConverse, BedrockError
 from .service import LogiOpsService, WorkflowError
 from .mcp_server import create_mcp_server
 from .replay import ReplayConverse
+from .scenario import INCIDENT_ID
 from .security import SANDBOX_PATH, install_security
 
 HOSTNAME = re.compile(r"[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?")
@@ -39,6 +40,11 @@ class ExecutionRequest(BaseModel):
 
 class InventoryChange(BaseModel):
     available: int = Field(ge=0)
+    incident_id: str = Field(default=INCIDENT_ID, min_length=1, max_length=40)
+
+
+class ResetRequest(BaseModel):
+    incident_id: str | None = Field(default=None, min_length=1, max_length=40)
 
 
 class AgentInvestigationRequest(BaseModel):
@@ -56,8 +62,8 @@ class AgentAskRequest(BaseModel):
 
 
 PLAN_FIELDS = (
-    "id", "kind", "label", "allocations", "projected_completion_eta",
-    "projected_customer_delay_hours", "incremental_cost_usd", "source_version",
+    "id", "kind", "label", "allocations", "orders", "projected_completion_eta",
+    "projected_customer_delay_hours", "late_units", "incremental_cost_usd", "source_version",
 )
 
 
@@ -188,14 +194,19 @@ def create_app(
         return {"status": "ok"}
 
     @app.post("/demo/reset")
-    async def reset() -> dict[str, Any]:
-        """Restore the synthetic scenario; local development only."""
-        return service.reset()
+    async def reset(request: ResetRequest | None = None) -> dict[str, Any]:
+        """Restore every synthetic incident, or only the one named."""
+        return service.reset(request.incident_id if request else None)
 
     @app.post("/demo/inventory")
     async def change_inventory(change: InventoryChange) -> dict[str, Any]:
-        """Inject a stock change to demonstrate stale-plan protection."""
-        return service.set_local_inventory("SHIP-421", change.available)
+        """Inject a stock change at an incident's warehouse to demonstrate stale-plan protection."""
+        return service.set_local_inventory(change.incident_id, change.available)
+
+    @app.get("/incidents")
+    async def list_incidents() -> dict[str, Any]:
+        """The incident inbox: open first, then by due time and priority."""
+        return {"incidents": service.list_incidents()}
 
     @app.get("/incidents/{incident_id}")
     async def get_incident(incident_id: str) -> dict[str, Any]:

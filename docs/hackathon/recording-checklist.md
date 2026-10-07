@@ -18,6 +18,7 @@ The narration and timings are in the video script. This list covers the setup.
 - [ ] The reply's meta line shows **bedrock mode** and a non-zero token count. This cannot be rehearsed in replay.
 - [ ] Voice input is shown at least once ("Listening…"); if it fails, type the phrase: the flow is the same.
 - [ ] Approval → execution → "20 units accounted for" → stock change refuses the stale approval.
+- [ ] Open a second incident from the inbox (SHIP-433 or SHIP-460): two orders, one critical; the pick protects the critical order and the plan cards show each order's delay.
 - [ ] The MCP App card and one follow-up answer are visible.
 
 ## After recording
