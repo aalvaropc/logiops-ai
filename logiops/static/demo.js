@@ -372,10 +372,19 @@ function inlineNodes(parts) {
 function renderMarkdown(source) {
   const box = document.createElement("div");
   box.className = "markdown";
-  for (const block of window.LogiOpsMarkdown.parseBlocks(source)) {
+  const blocks = window.LogiOpsMarkdown.parseBlocks(source);
+  // Answers sit under the panel's h2: their headings start at h3 and never skip a level.
+  const top = Math.min(...blocks.filter((block) => block.type === "h").map((block) => block.level));
+  let previous = 2;
+  for (const block of blocks) {
     let node;
     if (block.type === "hr") node = document.createElement("hr");
-    else if (block.type === "h") { node = document.createElement(`h${block.level}`); node.append(...inlineNodes(block.inline)); }
+    else if (block.type === "h") {
+      const level = Math.min(6, previous + 1, 3 + block.level - top);
+      previous = level;
+      node = document.createElement(`h${level}`);
+      node.append(...inlineNodes(block.inline));
+    }
     else if (block.type === "quote") { node = document.createElement("blockquote"); node.append(...inlineNodes(block.inline)); }
     else if (block.type === "ul" || block.type === "ol") {
       node = document.createElement(block.type);

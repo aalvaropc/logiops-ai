@@ -133,6 +133,8 @@ def test_demo_has_basic_accessibility_hooks():
     # Wide model tables scroll in a focusable region; an empty corner cell is not a header.
     assert 'node.setAttribute("role", "region")' in script and "node.tabIndex = 0" in script
     assert 'document.createElement(empty ? "td" : "th")' in script
+    # Model headings (## then ####) are renumbered from h3 without gaps (axe heading-order).
+    assert "Math.min(6, previous + 1, 3 + block.level - top)" in script
 
 
 def _node(script: str, module: str = "markdown.js") -> str:
