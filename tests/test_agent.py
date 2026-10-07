@@ -205,3 +205,80 @@ def test_replay_investigates_every_incident_through_mcp(tmp_path, monkeypatch, i
                 assert [event["name"] for event in other["events"]] == ["scenario_reset"]
 
     asyncio.run(run())
+
+
+def test_the_briefing_ranks_the_queue_with_read_tools_only(tmp_path, monkeypatch):
+    monkeypatch.setenv("LOGIOPS_AGENT_MODE", "replay")
+
+    async def run():
+        app = create_app(tmp_path / "briefing.sqlite3")
+        async with app.router.lifespan_context(app):
+            async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url=BASE_URL) as http:
+                body = (await http.post("/agent/briefing", json={})).json()
+                assert [step["tool"] for step in body["tool_trace"]] == ["list_incidents"]
+                # Critical orders first, then the earliest due: the hospital in Trujillo is due with the
+                # one in Cusco, and its replenishment is 48 h late.
+                assert body["start_with"] == "SHIP-460"
+                assert body["answer"].index("SHIP-460") < body["answer"].index("SHIP-433") < body["answer"].index("SHIP-421")
+                assert body["spoken"].startswith("You have 4 open incidents. Start with SHIP-460")
+                assert "Spoken:" not in body["answer"]
+                # It changes nothing: no plans, no events.
+                for incident_id in ("SHIP-421", "SHIP-433", "SHIP-452", "SHIP-460"):
+                    snapshot = (await http.get(f"/incidents/{incident_id}")).json()
+                    assert snapshot["plans"] == [] and [e["name"] for e in snapshot["events"]] == ["scenario_reset"]
+
+    asyncio.run(run())
+
+
+def test_the_briefing_cannot_calculate_plans_and_may_read_any_incident(tmp_path):
+    class BriefingConverse:
+        def __init__(self):
+            self.tools = None
+
+        async def converse(self, messages, system, tools):
+            self.tools = {tool["toolSpec"]["name"] for tool in tools}
+            if len(messages) == 1:
+                return {"stopReason": "tool_use", "usage": {}, "output": {"message": {"role": "assistant", "content": [
+                    {"toolUse": {"toolUseId": "l", "name": "list_incidents", "input": {}}},
+                    {"toolUse": {"toolUseId": "s", "name": "get_shipment", "input": {"shipment_id": "ship-452"}}},
+                ]}}}
+            return {"stopReason": "end_turn", "usage": {}, "output": {"message": {"role": "assistant", "content": [
+                {"text": "SHIP-452 first.\n\n**Start with:** SHIP-452\nSpoken: Start with the customs hold."}]}}}
+
+    async def run():
+        fake = BriefingConverse()
+        app = create_app(tmp_path / "briefing-tools.sqlite3", fake)
+        async with app.router.lifespan_context(app):
+            async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url=BASE_URL) as http:
+                body = (await http.post("/agent/briefing", json={"question": "What needs my attention?"})).json()
+        assert "investigate_incident" not in fake.tools and "execute_approved_plan" not in fake.tools
+        assert "list_incidents" in fake.tools
+        assert body["start_with"] == "SHIP-452" and body["spoken"] == "Start with the customs hold."
+        assert body["answer"] == "SHIP-452 first.\n\n**Start with:** SHIP-452"
+
+    asyncio.run(run())
+
+
+def test_replies_carry_a_short_line_to_read_aloud(tmp_path, monkeypatch):
+    from logiops.agent import split_spoken
+
+    # The model's Spoken: line is split off; without one, the first sentence of prose is used.
+    assert split_spoken("## SHIP-421\n\nText.\n\nSpoken: Split it.\nRecommended plan: X:v1") == (
+        "## SHIP-421\n\nText.\n\nRecommended plan: X:v1", "Split it.")
+    assert split_spoken("## 🚨 SHIP-433 — Outage\n\n**The carrier** stopped. More.\n\nRecommended plan: X") == (
+        "## 🚨 SHIP-433 — Outage\n\n**The carrier** stopped. More.\n\nRecommended plan: X", "The carrier stopped.")
+    assert split_spoken('Answer.\n**Spoken:** "Short."') == ("Answer.", "Short.")
+    monkeypatch.setenv("LOGIOPS_AGENT_MODE", "replay")
+
+    async def run():
+        app = create_app(tmp_path / "spoken.sqlite3")
+        async with app.router.lifespan_context(app):
+            async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url=BASE_URL) as http:
+                run = (await http.post("/incidents/SHIP-421/agent/investigate", json={})).json()
+                assert run["spoken"] == "SHIP-421 needs a decision. I recommend: Fulfill local stock and send the rest express."
+                stored = (await http.get("/incidents/SHIP-421")).json()["events"][-1]["data"]["answer"]
+                assert "Spoken:" not in stored and stored.rstrip().endswith("split-express:v1")
+                ask = (await http.post("/incidents/SHIP-421/agent/ask", json={"question": "And the cost?"})).json()
+                assert ask["spoken"] and "Spoken:" not in ask["answer"]
+
+    asyncio.run(run())

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import html
+import logging
 import os
 import re
 import secrets
@@ -14,16 +15,20 @@ from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse, JSONResponse, Response
 from pydantic import BaseModel, Field
 
-from .agent import ConverseClient, ask_with_bedrock, investigate_with_bedrock
+from .agent import ConverseClient, ask_with_bedrock, brief_with_bedrock, investigate_with_bedrock
 from .bedrock import BedrockConverse, BedrockError
 from .service import LogiOpsService, WorkflowError
 from .mcp_server import create_mcp_server
+from .preferences import COST_LIMIT, NOTE_LIMIT, RULES, PreferenceStore, preference_for
 from .replay import ReplayConverse
-from .scenario import INCIDENT_ID
+from .scenario import INCIDENT_ID, INCIDENT_IDS
 from .security import SANDBOX_PATH, install_security
+
+logger = logging.getLogger(__name__)
 
 HOSTNAME = re.compile(r"[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?")
 LOOPBACK_PAIRS = {"127.0.0.1": "localhost", "localhost": "127.0.0.1"}
+START_WITH = re.compile(r"start with[*_`]*\s*[:：]\s*[*_`]*\s*(SHIP-\d+)", re.I)
 SANDBOX_META = '<meta name="logiops-sandbox-origin" content="">'
 
 
@@ -61,6 +66,16 @@ class AgentAskRequest(BaseModel):
     history: list[ConversationTurn] = Field(default_factory=list, max_length=8)
 
 
+class AgentBriefingRequest(BaseModel):
+    question: str = Field(default="Any delays today? What needs my attention first?", min_length=1, max_length=1000)
+
+
+class PreferenceUpdate(BaseModel):
+    rule: Literal[tuple(RULES)] = "balanced"  # type: ignore[valid-type]
+    max_cost_usd: int | None = Field(default=None, ge=0, le=COST_LIMIT)
+    note: str = Field(default="", max_length=NOTE_LIMIT)
+
+
 PLAN_FIELDS = (
     "id", "kind", "label", "allocations", "orders", "projected_completion_eta",
     "projected_customer_delay_hours", "late_units", "incremental_cost_usd", "source_version",
@@ -92,7 +107,8 @@ def create_app(
         raise RuntimeError("LOGIOPS_SANDBOX_HOST must differ from LOGIOPS_PUBLIC_HOST")
     path = Path(db_path or os.environ.get("LOGIOPS_DB_PATH", "data/logiops.sqlite3"))
     service = LogiOpsService(path)
-    mcp = create_mcp_server(service, public_host=public_host or None)
+    preferences = PreferenceStore(path)
+    mcp = create_mcp_server(service, preferences=preferences, public_host=public_host or None)
 
     @asynccontextmanager
     async def lifespan(_app: FastAPI):
@@ -195,8 +211,36 @@ def create_app(
 
     @app.post("/demo/reset")
     async def reset(request: ResetRequest | None = None) -> dict[str, Any]:
-        """Restore every synthetic incident, or only the one named."""
-        return service.reset(request.incident_id if request else None)
+        """Restore every synthetic incident and forget the preferences, or reset only the incident named."""
+        incident_id = request.incident_id if request else None
+        if incident_id is None:
+            preferences.clear()
+        return service.reset(incident_id)
+
+    def visible_plans(snapshot: dict[str, Any]) -> list[dict[str, Any]]:
+        # After execution the version moves on; what is shown are the executed plans.
+        executions = snapshot["executions"]
+        version = executions[0]["source_version"] if executions else snapshot["source_version"]
+        return [plan for plan in snapshot["plans"] if plan["source_version"] == version]
+
+    @app.get("/operator/preferences")
+    async def get_preferences() -> dict[str, Any]:
+        """The operator's saved preferences (they persist across sessions) and the rules on offer."""
+        return {"preferences": preferences.get(), "rules": RULES}
+
+    @app.put("/operator/preferences")
+    async def put_preferences(update: PreferenceUpdate) -> dict[str, Any]:
+        """Save preferences for every incident; they steer the pick and never approve a plan."""
+        try:
+            saved = preferences.put(update.rule, update.max_cost_usd, update.note)
+        except ValueError as exc:
+            raise WorkflowError(str(exc), 422) from exc
+        return {"preferences": saved, "rules": RULES}
+
+    @app.delete("/operator/preferences")
+    async def clear_preferences() -> dict[str, Any]:
+        preferences.clear()
+        return {"preferences": None, "rules": RULES}
 
     @app.post("/demo/inventory")
     async def change_inventory(change: InventoryChange) -> dict[str, Any]:
@@ -210,7 +254,12 @@ def create_app(
 
     @app.get("/incidents/{incident_id}")
     async def get_incident(incident_id: str) -> dict[str, Any]:
-        return service.get(incident_id)
+        snapshot = service.get(incident_id)
+        saved = preferences.get()
+        return {
+            **snapshot, "operator_preferences": saved,
+            "preference": preference_for(visible_plans(snapshot), saved),
+        }
 
     @app.post("/incidents/{incident_id}/investigate")
     async def investigate(incident_id: str) -> dict[str, Any]:
@@ -267,6 +316,9 @@ def create_app(
             ),
             "execution": executions[0] if executions else None,
         }
+        preference = preference_for(context["plans"], preferences.get())
+        if preference:
+            context["operator_preferences"] = preference
         mode = os.environ.get("LOGIOPS_AGENT_MODE", "bedrock")
         if mode not in ("bedrock", "replay"):
             raise BedrockError("LOGIOPS_AGENT_MODE must be bedrock or replay")
@@ -286,6 +338,28 @@ def create_app(
             )
             raise
         return {**run, "mode": run_mode, "source_version": version}
+
+    @app.post("/agent/briefing")
+    async def agent_briefing(request: AgentBriefingRequest) -> dict[str, Any]:
+        """Rank the open incidents and say which to open first; it reads, and changes nothing."""
+        mode = os.environ.get("LOGIOPS_AGENT_MODE", "bedrock")
+        if mode not in ("bedrock", "replay"):
+            raise BedrockError("LOGIOPS_AGENT_MODE must be bedrock or replay")
+        custom = followup_client or bedrock_client
+        client = custom or (ReplayConverse() if mode == "replay" else BedrockConverse())
+        run_mode = "custom" if custom else mode
+        try:
+            run = await brief_with_bedrock(
+                app, client, request.question, preferences.get(),
+                access_token=access_token, internal_key=internal_key,
+            )
+        except BedrockError as exc:
+            # A briefing belongs to no incident, so its failure goes to the server log.
+            logger.warning("Briefing failed (%s mode): %s", run_mode, exc)
+            raise
+        found = START_WITH.search(run["answer"])
+        start_with = found.group(1).upper() if found and found.group(1).upper() in INCIDENT_IDS else None
+        return {**run, "mode": run_mode, "start_with": start_with}
 
     @app.post("/incidents/{incident_id}/approvals")
     async def approve(incident_id: str, request: ApprovalRequest) -> dict[str, Any]:
