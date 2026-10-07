@@ -65,7 +65,7 @@ def install_security(
     *,
     internal_key: str,
     limit_per_minute: int = 60,
-    agent_limit_per_minute: int = 5,
+    agent_limit_per_minute: int = 10,
     trust_cloudfront: bool = False,
     sandbox_host: str | None = None,
 ) -> None:
@@ -79,7 +79,10 @@ def install_security(
         if sandbox_host and request.headers.get("host", "").split(":")[0].lower() == sandbox_host and path != SANDBOX_PATH:
             return JSONResponse(status_code=404, content={"detail": "Not found"})
         if path in PUBLIC_PATHS or path.startswith("/assets/"):
-            return await call_next(request)
+            response = await call_next(request)
+            # Revalidate every time, so a redeploy never pairs a new page with an old script.
+            response.headers.setdefault("Cache-Control", "no-cache")
+            return response
         if access_token:
             supplied = request.headers.get("authorization", "")
             if not _constant_time_equal(supplied, f"Bearer {access_token}"):

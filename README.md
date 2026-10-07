@@ -54,7 +54,7 @@ More detail in `docs/architecture.md`.
 | `LOGIOPS_PUBLIC_HOST` | the one public hostname (also the MCP allowed host) | none |
 | `LOGIOPS_SANDBOX_HOST` | second hostname that serves only the MCP Apps sandbox proxy | `127.0.0.1`/`localhost` pair locally |
 | `LOGIOPS_TRUST_CLOUDFRONT` | identify viewers by `CloudFront-Viewer-Address` | off |
-| `LOGIOPS_AGENT_LIMIT_PER_MINUTE` | paid agent calls per viewer per minute | `5` |
+| `LOGIOPS_AGENT_LIMIT_PER_MINUTE` | paid agent calls per viewer per minute | `10` |
 | `AWS_REGION`, `BEDROCK_MODEL_ID` | Bedrock region and model profile | `us-east-1`, `global.anthropic.claude-sonnet-4-6` |
 
 ## Status
@@ -103,9 +103,12 @@ optionally have replies read aloud. Say "approve the recommended plan" and
 then "execute it"; those requests use the same REST approval and execution
 endpoints as the buttons, so the version checks are identical. The plan
 cards, timeline, and a stock-change control show how a data change
-invalidates an earlier approval. On the public deployment, paste the operator
-token into the page to connect. It stays in browser memory until the page is
-reloaded.
+invalidates an earlier approval. A chat message acts only when the whole
+message is the command ("approve the split plan", "ok, execute it"); questions,
+negations ("please don't execute it yet") and commands buried in a longer
+sentence go to the agent and never act. On the public deployment, paste the
+operator token into the page to connect. It is kept for that browser tab only
+(`sessionStorage`), so a reload does not ask again and closing the tab forgets it.
 
 The API reference is at <http://127.0.0.1:8000/docs>. The MCP endpoint is
 <http://127.0.0.1:8000/mcp> and negotiates MCP protocol version 2025-11-25
@@ -117,7 +120,7 @@ it to a public interface without `LOGIOPS_PUBLIC=1`, a random
 `LOGIOPS_ACCESS_TOKEN` of at least 32 characters, and HTTPS. In public mode the
 token guards both REST and MCP. In a single process, MCP requests are limited
 to 60 per minute and agent calls (investigations and follow-ups, each one
-calls a paid model) share a budget of 5 per minute per viewer. Behind CloudFront, set `LOGIOPS_TRUST_CLOUDFRONT=1` so viewers are
+calls a paid model) share a budget of 10 per minute per viewer. Behind CloudFront, set `LOGIOPS_TRUST_CLOUDFRONT=1` so viewers are
 identified by the `CloudFront-Viewer-Address` header instead of the shared
 edge IP; only do this when the origin accepts traffic exclusively from
 CloudFront. The agent's own in-process MCP calls are exempt from the MCP

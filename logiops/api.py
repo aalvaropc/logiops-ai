@@ -97,7 +97,7 @@ def create_app(
     # Per-process secret that marks the agent's in-process MCP calls; never leaves the server.
     internal_key = secrets.token_hex(32)
     if agent_limit_per_minute is None:
-        agent_limit_per_minute = int(os.environ.get("LOGIOPS_AGENT_LIMIT_PER_MINUTE", "5"))
+        agent_limit_per_minute = int(os.environ.get("LOGIOPS_AGENT_LIMIT_PER_MINUTE", "10"))
     install_security(
         app, access_token,
         internal_key=internal_key,
@@ -112,6 +112,7 @@ def create_app(
         "demo.css": (static_dir / "demo.css").read_bytes(),
         "demo.js": (static_dir / "demo.js").read_bytes(),
         "markdown.js": (static_dir / "markdown.js").read_bytes(),
+        "intent.js": (static_dir / "intent.js").read_bytes(),
     }
     sandbox_page = (static_dir / "mcp_app_sandbox.html").read_text(encoding="utf-8")
 
@@ -165,6 +166,10 @@ def create_app(
     @app.get("/assets/markdown.js", include_in_schema=False)
     async def markdown_script() -> Response:
         return Response(demo_assets["markdown.js"], media_type="text/javascript")
+
+    @app.get("/assets/intent.js", include_in_schema=False)
+    async def intent_script() -> Response:
+        return Response(demo_assets["intent.js"], media_type="text/javascript")
 
     @app.get("/assets/demo.js", include_in_schema=False)
     async def demo_script() -> Response:

@@ -95,6 +95,14 @@ def build_plans(state: dict[str, Any], source_version: int) -> list[dict[str, An
         )
     local_units = min(inventory["available"], quantity)
     express_units = quantity - local_units
+    if local_units == quantity:
+        # Enough local stock for the whole order: no carrier is needed at all.
+        add(
+            "local-stock",
+            "Fulfill the whole order from local stock",
+            [{"source": "arequipa-stock", "units": quantity, "arrival_eta": inventory["ready_at"]}],
+            0,
+        )
     if local_units > 0 and express_units > 0 and express["capacity"] >= express_units:
         add(
             "split-express",

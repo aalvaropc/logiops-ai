@@ -144,6 +144,28 @@ def test_other_approved_options_preserve_all_units(
     asyncio.run(run())
 
 
+def test_enough_local_stock_offers_the_whole_order_from_the_warehouse(tmp_path):
+    async def run():
+        async with client_for(tmp_path / "logiops.sqlite3") as client:
+            assert (await client.post("/demo/inventory", json={"available": 25})).status_code == 200
+            plans = await plans_from(client)
+            assert set(plans) == {"wait", "reroute", "local-stock"}
+            local = plans["local-stock"]
+            assert (local["incremental_cost_usd"], local["projected_customer_delay_hours"]) == (0, 0)
+            request = {"plan_id": local["id"], "source_version": local["source_version"]}
+            approval = await client.post(
+                "/incidents/SHIP-421/approvals", json={**request, "approved_by": "demo-operator"}
+            )
+            assert approval.status_code == 200
+            assert (await client.post("/incidents/SHIP-421/execute", json=request)).status_code == 200
+            state = (await client.get("/incidents/SHIP-421")).json()["state"]
+            assert state["shipment"]["units_on_delayed_route"] == 0
+            assert [(item["source"], item["units"]) for item in state["fulfillments"]] == [("arequipa-stock", 20)]
+            assert state["inventory"]["arequipa"]["available"] == 5
+
+    asyncio.run(run())
+
+
 def test_agent_trace_rejects_stale_snapshot(tmp_path):
     service = LogiOpsService(tmp_path / "stale-agent.sqlite3")
     service.investigate("SHIP-421")

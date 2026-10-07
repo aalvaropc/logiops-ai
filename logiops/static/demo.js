@@ -27,6 +27,7 @@ const eventLabels = {
 };
 const planKeywords = [
   ["split-express", /\b(split|express)\b/],
+  ["local-stock", /\b(local|warehouse)\b/],
   ["reroute", /\b(reroute|re-route|economy)\b/],
   ["wait", /\bwait\b/],
 ];
@@ -45,6 +46,28 @@ function setBusy(busy) {
   renderControls();
 }
 
+// Say what to do next, not just what the server said.
+function explainError(status, detail) {
+  if (status === 401) {
+    return state.token
+      ? "That access token was not accepted. Copy it again from the testing instructions, paste it above, and press Connect."
+      : "This public demo needs the access token from the testing instructions. Paste it above and press Connect.";
+  }
+  if (status === 429 && /agent/i.test(detail)) {
+    return "That's the agent's per-minute question limit (each answer calls a paid model). Wait a minute and ask again; the plan panel and buttons still work.";
+  }
+  if (status === 429) return "Too many requests in the last minute. Wait a moment and try again.";
+  return detail;
+}
+
+const TOKEN_KEY = "logiops-access-token";
+function storedToken() {
+  try { return sessionStorage.getItem(TOKEN_KEY) || ""; } catch (_) { return ""; }
+}
+function storeToken(token) {
+  try { if (token) sessionStorage.setItem(TOKEN_KEY, token); else sessionStorage.removeItem(TOKEN_KEY); } catch (_) { /* Storage blocked: the token lasts until reload. */ }
+}
+
 async function request(path, method = "GET", body) {
   const headers = {};
   if (state.token) headers.Authorization = `Bearer ${state.token}`;
@@ -58,7 +81,9 @@ async function request(path, method = "GET", body) {
   if (!response.ok) {
     let detail = `HTTP ${response.status}`;
     try { detail = (await response.json()).detail || detail; } catch (_) { /* HTTP error without JSON. */ }
-    throw new Error(detail);
+    const error = new Error(explainError(response.status, detail));
+    error.status = response.status;
+    throw error;
   }
   return response.json();
 }
@@ -244,9 +269,10 @@ function latestAgentEvent(snapshot) {
 function recommendedPlan(snapshot) {
   const plans = visiblePlans(snapshot);
   if (!plans.length) return null;
-  const answer = (latestAgentEvent(snapshot)?.data.answer || "").toLowerCase();
-  return plans.find((plan) => answer.includes(plan.id.toLowerCase()))
-    || plans.find((plan) => answer.includes(`recommend ${plan.label.toLowerCase()}`))
+  const answer = latestAgentEvent(snapshot)?.data.answer || "";
+  const id = window.LogiOpsIntent.recommendedPlanId(answer, plans);
+  return plans.find((plan) => plan.id === id)
+    || plans.find((plan) => answer.toLowerCase().includes(`recommend ${plan.label.toLowerCase()}`))
     || [...plans].sort((a, b) =>
       a.projected_customer_delay_hours - b.projected_customer_delay_hours
       || a.incremental_cost_usd - b.incremental_cost_usd)[0];
@@ -347,19 +373,42 @@ function inlineNodes(parts) {
 function renderMarkdown(source) {
   const box = document.createElement("div");
   box.className = "markdown";
-  for (const block of window.LogiOpsMarkdown.parseBlocks(source)) {
+  const blocks = window.LogiOpsMarkdown.parseBlocks(source);
+  // Answers sit under the panel's h2: their headings start at h3 and never skip a level.
+  const top = Math.min(...blocks.filter((block) => block.type === "h").map((block) => block.level));
+  let previous = 2;
+  for (const block of blocks) {
     let node;
     if (block.type === "hr") node = document.createElement("hr");
-    else if (block.type === "h") { node = document.createElement(`h${block.level}`); node.append(...inlineNodes(block.inline)); }
+    else if (block.type === "h") {
+      const level = Math.min(6, previous + 1, 3 + block.level - top);
+      previous = level;
+      node = document.createElement(`h${level}`);
+      node.append(...inlineNodes(block.inline));
+    }
     else if (block.type === "quote") { node = document.createElement("blockquote"); node.append(...inlineNodes(block.inline)); }
     else if (block.type === "ul" || block.type === "ol") {
       node = document.createElement(block.type);
       for (const item of block.items) { const li = document.createElement("li"); li.append(...inlineNodes(item)); node.append(li); }
     } else if (block.type === "table") {
-      node = document.createElement("table");
-      const head = node.createTHead().insertRow();
-      for (const cell of block.head) { const th = document.createElement("th"); th.scope = "col"; th.append(...inlineNodes(cell)); head.append(th); }
-      const body = node.createTBody();
+      // Wide tables scroll inside a focusable region, so keyboard users can scroll them too.
+      node = document.createElement("div");
+      node.className = "table-scroll";
+      node.tabIndex = 0;
+      node.setAttribute("role", "region");
+      node.setAttribute("aria-label", "Table from the agent's answer");
+      const table = document.createElement("table");
+      node.append(table);
+      const head = table.createTHead().insertRow();
+      for (const cell of block.head) {
+        // An empty corner cell is not a column header.
+        const empty = cell.every((part) => !part.v.trim());
+        const th = document.createElement(empty ? "td" : "th");
+        if (!empty) th.scope = "col";
+        th.append(...inlineNodes(cell));
+        head.append(th);
+      }
+      const body = table.createTBody();
       for (const row of block.rows) {
         const tr = body.insertRow();
         for (const cell of row) tr.insertCell().append(...inlineNodes(cell));
@@ -423,6 +472,7 @@ function renderControls() {
   $("approve").textContent = selected ? `Approve “${selected.label}”` : "Approve selected plan";
   $("execute").disabled = state.busy || !approved || executed;
   $("reset").disabled = state.busy;
+  $("banner-reset").disabled = state.busy;
   $("set-stock").disabled = state.busy || !snapshot || executed;
   $("connect").disabled = state.busy;
 }
@@ -451,6 +501,12 @@ function render(snapshot) {
   const execution = snapshot.executions[0];
   $("execution-state").textContent = execution ? "Operationally verified" : visibleApproval(snapshot) ? "Approved · ready" : "Waiting for approval";
   $("execution-result").hidden = !execution;
+  // Whoever executed last, the next visitor sees why there is nothing left to approve.
+  $("state-banner").hidden = !execution;
+  if (execution) {
+    const plan = snapshot.plans.find((item) => item.id === execution.plan_id);
+    $("state-banner-text").textContent = `SHIP-421 was already executed with “${plan?.label || execution.plan_id}” and verified. Questions now refer to that result; reset the synthetic incident to run the whole flow again.`;
+  }
   if (execution) {
     $("execution-result").textContent = executionSummary(snapshot, execution);
   }
@@ -478,9 +534,12 @@ async function act(work, success) {
     if (success) message(success, true);
   } catch (error) {
     message(error.message || String(error));
-    if (String(error.message).includes("Bearer")) {
+    if (error.status === 401) {
+      storeToken("");
       $("connection").textContent = "Token required";
       $("connection").className = "connection error";
+      if (!state.snapshot) $("incident-status").textContent = "Locked";
+      $("access-token").focus();
     }
     throw error;
   } finally { setBusy(false); }
@@ -505,39 +564,48 @@ async function executeApproved() {
 function planFromUtterance(text) {
   const plans = visiblePlans(state.snapshot);
   for (const [kind, pattern] of planKeywords) {
-    if (pattern.test(text)) return plans.find((plan) => plan.kind === kind);
+    // A named plan that the current data does not offer is not silently replaced.
+    if (pattern.test(text)) return plans.find((plan) => plan.kind === kind) || null;
   }
   return recommendedPlan(state.snapshot);
 }
 
 // A thin intent layer, like an Alexa+ action: approval and execution go through the
 // same REST endpoints as the buttons; anything else is a question for the agent.
-// Questions are never actions: "Should we approve the split plan?" asks, it does not approve.
-const QUESTION = /\?\s*$|^(how|what|why|when|which|who|should|can|could|would|will|is|are|do|does|did|if)\b/;
-const isQuestion = (lower) => QUESTION.test(lower);
+// Commands must be the whole utterance (intent.js): "Should we approve the split plan?"
+// asks, and "Please do not execute it yet" never executes.
 
 async function handleUtterance(raw) {
   const text = raw.trim();
   if (!text || state.busy) return;
   say("user", text);
   const lower = text.toLowerCase();
-  const question = isQuestion(lower);
+  const command = window.LogiOpsIntent.parseCommand(text);
   try {
-    if (!question && /\b(reset|start over)\b/.test(lower)) {
+    if (command === "reset") {
       await act(() => request("/demo/reset", "POST"), "");
       state.selectedPlanId = null;
       state.conversation = [];
       hideMcpApp();
       say("assistant", "Done. SHIP-421 is back to its original delayed state.");
-    } else if (!question && /\bapprove\b/.test(lower)) {
+    } else if (command === "approve") {
       if (!visiblePlans(state.snapshot).length) {
         say("assistant", "There are no plans for the current data yet. Ask me to investigate first.");
         return;
       }
       const plan = planFromUtterance(lower);
+      if (!plan) {
+        const options = visiblePlans(state.snapshot).map((item) => `“${item.label}”`).join(", ");
+        say("assistant", `That plan isn't available for the current data. The options are ${options}.`);
+        return;
+      }
       await act(() => approvePlan(plan), "");
       say("assistant", `Approved “${plan.label}” for version ${plan.source_version}: ${plan.projected_customer_delay_hours} hours of delay, $${plan.incremental_cost_usd} extra. Say “execute it” when you're ready.`);
-    } else if (!question && (/\b(execute|go ahead|do it|run it)\b/.test(lower) || (/^yes\b/.test(lower) && visibleApproval(state.snapshot)))) {
+    } else if (command === "execute" || (command === "confirm" && visibleApproval(state.snapshot))) {
+      if (state.snapshot?.executions.length) {
+        say("assistant", `SHIP-421 was already executed. ${executionSummary(state.snapshot, state.snapshot.executions[0])} Reset the synthetic incident to run the flow again.`);
+        return;
+      }
       await act(executeApproved, "");
       const execution = state.snapshot.executions[0];
       say("assistant", `The plan was executed. ${executionSummary(state.snapshot, execution)} Delivery is projected, not physically confirmed.`);
@@ -608,7 +676,8 @@ function setUpVoice() {
 
 $("connect").addEventListener("click", () => {
   state.token = $("access-token").value.trim();
-  act(refresh, "Connected to the incident.").catch(() => {});
+  // Kept for this tab only, so a reload does not ask again; closing the tab forgets it.
+  act(async () => { await refresh(); storeToken(state.token); }, "Connected to the incident.").catch(() => {});
 });
 $("access-token").addEventListener("keydown", (event) => {
   if (event.key === "Enter") $("connect").click();
@@ -619,9 +688,12 @@ $("reset").addEventListener("click", () => act(async () => {
   state.conversation = [];
   hideMcpApp();
 }, "Synthetic incident reset.").catch(() => {}));
+$("banner-reset").addEventListener("click", () => $("reset").click());
 $("set-stock").addEventListener("click", () => act(async () => {
-  const available = Number.parseInt($("stock-input").value, 10);
-  if (!Number.isInteger(available) || available < 0) throw new Error("Enter a whole number of units.");
+  const raw = $("stock-input").value.trim();
+  const available = Number(raw);
+  // Number("2.5") is not an integer; parseInt would have quietly sent 2.
+  if (!raw || !Number.isInteger(available) || available < 0) throw new Error("Enter a whole number of units.");
   await request("/demo/inventory", "POST", { available });
   state.selectedPlanId = null;
 }, "Stock changed. Earlier plans and approvals no longer apply; ask the agent again.").catch(() => {}));
@@ -643,4 +715,5 @@ $("execute").addEventListener("click", () => act(executeApproved, "Execution was
 
 setUpVoice();
 renderConversation();
+state.token = storedToken();
 act(refresh, "").catch(() => {});
