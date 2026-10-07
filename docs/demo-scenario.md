@@ -92,6 +92,23 @@ The stock control adjusts the incident's own warehouse (none for SHIP-433)
 and bumps the incident's data version: earlier plans and approvals stop
 applying, and a new investigation recalculates the options.
 
+## Operator preferences
+
+Saved preferences pick among the same calculated plans by fixed rules. With a
+spend cap of $250:
+
+| Incident | Default pick | With the $250 cap |
+|---|---|---|
+| SHIP-421 | split + express, $120 | unchanged |
+| SHIP-433 | fly the hospital order, ground for the store, $390 | fly the hospital order, the store waits, $240 |
+| SHIP-452 | ship Lima stock, expedite the rest, $350 | ship Lima stock, the rest after the review, $0 |
+| SHIP-460 | serve the hospital, express transfer for the school, $300 | serve the hospital first, the school waits, $0 |
+
+With `cheapest_unless_critical_late`, SHIP-421 moves to waiting ($0) and
+SHIP-433 still flies the hospital order ($240): its $0 and $150 options leave
+the critical order late. A $200 cap on SHIP-433 points to the ground reroute
+and warns that the hospital order is 8 h late.
+
 ## Agent flow
 
 ```text
@@ -105,7 +122,9 @@ applying, and a new investigation recalculates the options.
 8. get_execution_status(SHIP-433)        -> verify allocations, notifications, audit
 ```
 
-`list_incidents` (MCP) and `GET /incidents` return the inbox. No MCP tool can
+`list_incidents` (MCP) and `GET /incidents` return the inbox; the briefing
+(`POST /agent/briefing`) reads it and ranks the open incidents without
+calculating plans. No MCP tool can
 approve a plan. A person approves one exact plan (`plan_id` +
 `source_version`) through the REST API. The Bedrock agent only gets the read
 and investigation tools. MCP clients can call `execute_approved_plan`, but

@@ -26,6 +26,18 @@ responses. The browser
 demo at `/demo` calls the same API and shows plans, approval, execution, and
 audit history.
 
+`logiops/preferences.py` keeps the operator's saved preferences (a rule, an
+optional spend cap and a short note) in an `operator_preferences` table of the
+same SQLite file. The incident migration rebuilds only the incident tables, so
+preferences survive it. Fixed rules turn them into a preferred plan among the
+calculated ones, with the trade-off and any critical-order warning;
+`investigate_incident` returns that as `operator_preferences`, and
+`GET /incidents/{id}` returns it as `preference`. The agent has three jobs on
+the same Converse loop: investigate one incident (read tools plus
+`investigate_incident`), answer a follow-up (read tools only), and brief the
+queue (`list_incidents` plus read tools, no plans). Each prompt ends with a
+`Spoken:` line, which the server splits off into a `spoken` field for voice.
+
 `infra/amazon/` prepares a single-instance AWS demo. CloudFront gives the
 public HTTPS URL; EC2 serves the API and MCP endpoint with an IAM instance
 role for Bedrock. A separate EBS volume stores SQLite so the incident and
@@ -33,8 +45,8 @@ audit trail survive instance restarts. Deployment uses a private S3 archive
 and Systems Manager, without SSH or static AWS keys on the instance. It was
 provisioned on 2026-10-06; `scripts/deploy_ec2.py` ships only `origin/main`.
 
-The scenario, service, tools, and tests are provider-independent; the MCP
-and Bedrock modules are the Amazon-specific layer. The model sees only read and investigation tools; human approval uses
+The scenario, service, tools, and tests are provider-independent; the MCP,
+Bedrock and preference modules are the Amazon-specific layer. The model sees only read and investigation tools; human approval uses
 REST, and the backend checks the exact plan ID and source version before
 execution through REST or MCP.
 
