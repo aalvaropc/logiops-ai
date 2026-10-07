@@ -93,7 +93,42 @@ any intentional removal or replacement. Rotating the SSM token requires
   data volume is detached only after the instance stops, and SQLite survives.
 - `terraform destroy` is blocked by design: the EBS volume has
   `prevent_destroy`, and the versioned release bucket is not force-destroyed.
+  See "Teardown" below.
 - The CloudFront default domain is the public URL. The connection from
   CloudFront to EC2 uses HTTP, restricted to CloudFront's origin-facing IP
   ranges. A later custom domain and origin certificate can add TLS on that
   hop.
+
+## Teardown
+
+Run this after judging ends. It deletes the demo and its data, so nothing keeps
+billing. Use a local branch: the change to `main.tf` is never merged.
+
+```sh
+cd infra/amazon
+REGION=$(terraform output -raw aws_region)
+BUCKET=$(terraform output -raw release_bucket)
+TOKEN_PARAM=$(terraform output -raw access_token_parameter_name)
+
+# 1. Optional: keep a snapshot of the SQLite volume (it is billed until you delete it).
+VOLUME=$(terraform state show -no-color aws_ebs_volume.data | awk '$1 == "id" {gsub(/"/, "", $3); print $3}')
+aws ec2 create-snapshot --region "$REGION" --volume-id "$VOLUME" --description "logiops-ai demo data"
+
+# 2. Allow the volume to be destroyed: delete the line `lifecycle { prevent_destroy = true }`
+#    from aws_ebs_volume.data in main.tf.
+
+# 3. Empty the versioned release bucket. Every object version and delete marker must go;
+#    repeat while the listing is not empty, since each call deletes up to 1,000.
+aws s3api list-object-versions --bucket "$BUCKET" --output json \
+  --query '{Objects: [Versions, DeleteMarkers][][].{Key: Key, VersionId: VersionId}}' > /tmp/versions.json
+aws s3api delete-objects --bucket "$BUCKET" --delete file:///tmp/versions.json
+
+# 4. Destroy everything Terraform created, then the token it did not create.
+terraform destroy
+aws ssm delete-parameter --region "$REGION" --name "$TOKEN_PARAM"
+```
+
+CloudFront takes several minutes to disable and delete the two distributions.
+Afterwards, check the Billing console for anything left, such as the snapshot
+from step 1.
+

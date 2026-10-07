@@ -2,8 +2,10 @@
 
 ## Current local implementation
 
-`logiops/scenario.py` owns the fixed synthetic data and derives the three
-cost/ETA options. `logiops/tools.py` exposes read-only shipment, order,
+`logiops/scenario.py` owns the fixed synthetic data and derives the cost/ETA
+options from it: wait, reroute, split + express, and (with enough local stock)
+the whole order from the warehouse. Depending on stock and carrier capacity,
+one to three of them are feasible at a time. `logiops/tools.py` exposes read-only shipment, order,
 inventory, and carrier lookups. `logiops/service.py` runs investigation,
 approval, execution, and operational verification in SQLite transactions;
 it records source versions and audit events. `logiops/api.py` exposes this

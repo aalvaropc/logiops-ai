@@ -49,6 +49,17 @@ def git(*args: str) -> str:
     return subprocess.run(["git", "-C", str(ROOT), *args], check=True, capture_output=True, text=True).stdout.strip()
 
 
+# Everything package() reads. An untracked file here would ship without being in any commit.
+RELEASE_PATHS = ("pyproject.toml", "uv.lock", "logiops")
+
+
+def release_dirty() -> bool:
+    return bool(
+        git("status", "--porcelain", "--untracked-files=no")
+        or git("status", "--porcelain", "--untracked-files=all", "--", *RELEASE_PATHS)
+    )
+
+
 def unmerged_reason(head: str, main: str, dirty: bool) -> str | None:
     """Why this checkout must not be deployed, or None. Only main is deployed:
     the demo once ran a branch that never reached main (2026-10-07)."""
@@ -100,7 +111,7 @@ def main() -> None:
     git("fetch", "--quiet", "origin", "main")
     reason = unmerged_reason(
         git("rev-parse", "HEAD"), git("rev-parse", "origin/main"),
-        bool(git("status", "--porcelain", "--untracked-files=no")),
+        release_dirty(),
     )
     if reason and not args.allow_unmerged:
         raise SystemExit(reason)

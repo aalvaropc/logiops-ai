@@ -176,5 +176,9 @@ def test_tool_errors_carry_hints_so_the_model_can_correct_itself(tmp_path):
                         assert wrong.isError and "ORD-421" in wrong.content[0].text
                         stock = await session.call_tool("get_inventory", {"warehouse_id": "Arequipa", "sku": "laptop-01"})
                         assert stock.isError is False and stock.structuredContent["available"] == 12
+                        # Every tool that takes a shipment id accepts the same spellings (review, 2026-10-07).
+                        for name in ("find_alternative_carriers", "investigate_incident", "get_execution_status"):
+                            result = await session.call_tool(name, {"shipment_id": " ship-421 "})
+                            assert result.isError is False, (name, result.content)
 
     asyncio.run(run())

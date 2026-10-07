@@ -40,11 +40,15 @@ def create_mcp_server(service: LogiOpsService, *, public_host: str | None = None
         ),
     )
 
+    def incident(shipment_id: str) -> str:
+        # Models write "ship-421" or " SHIP-421"; every tool resolves the same incident.
+        return str(shipment_id).strip().upper()
+
     @server.tool()
     async def get_shipment(shipment_id: str) -> dict[str, Any]:
         """Read the current shipment, its delayed ETA, and the linked order id."""
         try:
-            state = service.get(shipment_id.strip().upper())["state"]
+            state = service.get(incident(shipment_id))["state"]
         except WorkflowError as exc:
             raise ToolError(f"{exc}. The incident under investigation is SHIP-421.") from exc
         return {**state["shipment"], "order_id": state["order"]["id"]}
@@ -69,7 +73,7 @@ def create_mcp_server(service: LogiOpsService, *, public_host: str | None = None
     async def find_alternative_carriers(shipment_id: str) -> dict[str, Any]:
         """Read carrier capacity, ETA, and incremental cost quotes."""
         try:
-            return service.get(shipment_id)["state"]["carriers"]
+            return service.get(incident(shipment_id))["state"]["carriers"]
         except WorkflowError as exc:
             raise ToolError(str(exc)) from exc
 
@@ -77,7 +81,7 @@ def create_mcp_server(service: LogiOpsService, *, public_host: str | None = None
     async def investigate_incident(shipment_id: str) -> dict[str, Any]:
         """Investigate the incident and calculate feasible plans."""
         try:
-            plans = service.investigate(shipment_id)
+            plans = service.investigate(incident(shipment_id))
         except WorkflowError as exc:
             raise ToolError(str(exc)) from exc
         return {"source_version": plans[0]["source_version"], "plans": plans}
@@ -86,7 +90,7 @@ def create_mcp_server(service: LogiOpsService, *, public_host: str | None = None
     async def get_execution_status(shipment_id: str) -> dict[str, Any]:
         """Read the current approval, execution status, and audit event names."""
         try:
-            snapshot = service.get(shipment_id)
+            snapshot = service.get(incident(shipment_id))
         except WorkflowError as exc:
             raise ToolError(str(exc)) from exc
         # Agent traces are stored as events; returning them here would feed every
@@ -108,7 +112,7 @@ def create_mcp_server(service: LogiOpsService, *, public_host: str | None = None
     async def execute_approved_plan(shipment_id: str, plan_id: str, source_version: int) -> dict[str, Any]:
         """Execute only a plan already approved by a human through the local API."""
         try:
-            return service.execute(shipment_id, plan_id, source_version)
+            return service.execute(incident(shipment_id), plan_id, source_version)
         except WorkflowError as exc:
             raise ToolError(str(exc)) from exc
 
