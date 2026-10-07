@@ -29,7 +29,7 @@ READ_TOOLS = {
 FOLLOWUP_TOOLS = READ_TOOLS - {"investigate_incident"}
 SYSTEM_PROMPT = """You are LogiOps AI, investigating a synthetic logistics incident.
 Use the provided tools to get shipment, order, inventory, and carrier facts. Call
-investigate_incident to obtain the three calculated plans. Compare their ETA,
+investigate_incident to obtain the calculated plans. Compare their ETA,
 customer delay, cost, and allocation. Recommend exactly one plan using those exact
 facts and cite its exact plan id from investigate_incident.
 Clearly say delivery is projected, not physically confirmed. Never claim an action
