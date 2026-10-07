@@ -190,3 +190,15 @@ def test_follow_up_context_keeps_the_approval_of_the_executed_plans(tmp_path, mo
                 assert context["execution"]["plan_id"] == plan["id"]
 
     asyncio.run(run())
+
+
+def test_prompts_fix_what_the_live_test_found():
+    # Live answers labelled Lima times "CST", speculated about a hypothetical stock of 11,
+    # and listed every plan id before the recommendation (2026-10-07).
+    from logiops.agent import FOLLOWUP_PROMPT, SYSTEM_PROMPT
+
+    for prompt in (SYSTEM_PROMPT, FOLLOWUP_PROMPT):
+        assert "Lima local time (UTC-05:00, PET)" in prompt and "CST" in prompt
+    assert SYSTEM_PROMPT.rstrip().endswith("Recommended plan: <exact plan id>")
+    assert "do not estimate new costs or\nETAs" in FOLLOWUP_PROMPT and "applying the stock change" in FOLLOWUP_PROMPT
+    assert "physical delivery is still never\nconfirmed" in FOLLOWUP_PROMPT

@@ -43,7 +43,7 @@ def walk(client: httpx.Client) -> None:
         response = post(f"/incidents/{INCIDENT}/agent/investigate")
         if response.status_code != 200:
             raise SystemExit(f"FAIL  investigation returned HTTP {response.status_code}: {response.text[:150]}"
-                             + ("\n(The agent rate limit is 5 per minute; start the server with"
+                             + ("\n(The agent rate limit is 10 per minute; start the server with"
                                 " LOGIOPS_AGENT_LIMIT_PER_MINUTE=60 for repeated walkthroughs.)"
                                 if response.status_code == 429 else ""))
         return response.json()

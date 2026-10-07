@@ -58,7 +58,8 @@ class ReplayConverse:
         answer = (
             f"SHIP-421 has a delayed route. Options: {summary}. "
             f"Recommend {selected['label']} ({selected['id']}). "
-            "Delivery is projected, not physically confirmed. A human must approve before execution."
+            "Delivery is projected, not physically confirmed. A human must approve before execution.\n"
+            f"Recommended plan: {selected['id']}"
         )
         return {
             "stopReason": "end_turn",
