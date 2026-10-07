@@ -226,3 +226,42 @@ def test_sentences_open_incidents_and_name_the_new_plan_kinds():
         " m.mentionedIncident('what about ship-452?', ['SHIP-421', 'SHIP-452']),"
         " m.mentionedIncident('SHIP-4521', ['SHIP-452']), m.mentionedIncident('ship-421 or ship-452', ['SHIP-421', 'SHIP-452'])]))"))
     assert got == ["open", None, "SHIP-452", None, None]
+
+
+def test_remember_saves_a_preference_and_never_acts():
+    import json
+
+    cases = {
+        "remember my spend cap is $250": {"update": {"max_cost_usd": 250}},
+        "Remember: never spend more than 1,000 dollars": {"update": {"max_cost_usd": 1000}},
+        "from now on, pick the cheapest plan unless a critical order would be late":
+            {"update": {"rule": "cheapest_unless_critical_late"}},
+        "Alexa, remember to keep it balanced and under $300": {"update": {"max_cost_usd": 300, "rule": "balanced"}},
+        "ok remember no spend cap": {"update": {"max_cost_usd": None}},
+        # A sentence with no rule or cap is a note for the agent, as written.
+        "remember hospitals always come first.": {"update": {"note": "hospitals always come first"}},
+        "remember air freight costs $240": {"update": {"note": "air freight costs $240"}},
+        "forget my preferences": {"forget": True}, "reset my preferences": {"forget": True},
+        "should I remember $250?": None, "remember?": None, "approve the split plan": None,
+    }
+    got = json.loads(_intent(f"console.log(JSON.stringify({json.dumps(list(cases))}.map(m.parsePreference)))"))
+    assert dict(zip(cases, got)) == cases
+    briefings = ["Any delays today?", "brief me", "What needs my attention first?", "summarize the queue",
+                 "what's happening with SHIP-421?", "approve the split plan"]
+    got = json.loads(_intent(f"console.log(JSON.stringify({json.dumps(briefings)}.map(m.isBriefing)))"))
+    assert got == [True, True, True, True, False, False]
+
+
+def test_the_demo_shows_preferences_briefings_and_speaks_the_short_line():
+    root = Path(__file__).resolve().parents[1] / "logiops" / "static"
+    script, html = (root / "demo.js").read_text(), (root / "demo.html").read_text()
+    view = (root / "resolution_options.html").read_text()
+    assert 'id="pref-form"' in html and 'id="preference-line"' in html and "Any delays today?" in html
+    assert 'value="cheapest_unless_critical_late"' in html
+    # "Reset my preferences" is checked before the commands, so it never resets the incident.
+    assert script.index("LogiOpsIntent.parsePreference(text)") < script.index("LogiOpsIntent.parseCommand(text)")
+    assert 'request("/agent/briefing", "POST"' in script and 'tag("start-here", "Start here")' in script
+    assert '"Your preference", "badge preference"' in script and "never approve" in script
+    assert "new SpeechSynthesisUtterance(spoken || window.LogiOpsMarkdown.plainText(text))" in script
+    assert "run.spoken);" in script
+    assert "operator_preferences" in view and '"Your preference"' in view
