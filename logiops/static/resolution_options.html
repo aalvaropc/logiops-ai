@@ -18,6 +18,8 @@
   button { grid-column: 1 / -1; justify-self: start; padding: 6px 11px; border: 1px solid #44726d; border-radius: 7px; background: #1b3939; color: #d9eee9; font: inherit; font-size: 12px; font-weight: 700; cursor: pointer; }
   button:hover { background: #27504d; }
   .waiting { color: #9fb6b8; font-size: 13px; }
+  .orders span { display: block; margin-top: 2px; color: #a9c2c3; font-size: 11px; }
+  .orders .late { color: #eab36e; }
 </style>
 </head>
 <body>
@@ -37,6 +39,18 @@
     send({ jsonrpc: "2.0", id, method, params });
   });
   const notify = (method, params) => send({ jsonrpc: "2.0", method, params });
+  let incident = "";
+  // Same order as the host's default pick: critical orders, worst delay, late units, cost.
+  const rankKey = (plan) => [
+    Math.max(0, ...(plan.orders || []).filter((o) => o.priority === "critical").map((o) => o.delay_hours)),
+    plan.projected_customer_delay_hours, plan.late_units || 0, plan.incremental_cost_usd,
+  ];
+  const summary = (plan) => {
+    const units = new Map();
+    for (const a of plan.allocations) units.set(a.source, (units.get(a.source) || 0) + a.units);
+    return [...units].map(([source, count]) => `${count} via ${String(source).replaceAll("-", " ")}`).join(" · ");
+  };
+  const byRank = (a, b) => rankKey(a).reduce((found, value, index) => found || value - rankKey(b)[index], 0);
 
   function el(tag, className, text) {
     const node = document.createElement(tag);
@@ -50,16 +64,23 @@
     const root = document.getElementById("root");
     root.className = "";
     root.replaceChildren();
-    root.append(el("h1", "", "Resolution options"),
+    root.append(el("h1", "", incident ? `Resolution options · ${incident}` : "Resolution options"),
       el("p", "note", "Projections from synthetic carrier quotes. Selecting a plan does not approve it."));
     const list = el("div", "plans");
-    const best = plans.length ? [...plans].sort((a, b) =>
-      a.projected_customer_delay_hours - b.projected_customer_delay_hours || a.incremental_cost_usd - b.incremental_cost_usd)[0].id : null;
+    const best = plans.length ? [...plans].sort(byRank)[0].id : null;
     for (const plan of plans) {
       const card = el("div", `plan${plan.id === best ? " best" : ""}`);
       const text = el("div");
       text.append(el("strong", "", plan.label),
-        el("small", "", plan.allocations.map((a) => `${a.units} via ${String(a.source).replaceAll("-", " ")}`).join(" · ")));
+        el("small", "", summary(plan)));
+      if ((plan.orders || []).length > 1) {
+        const orders = el("div", "orders");
+        for (const order of plan.orders) {
+          orders.append(el("span", order.delay_hours ? "late" : "",
+            `${order.order_id}${order.priority === "critical" ? " (critical)" : ""}: ${order.delay_hours ? `+${order.delay_hours} h` : "on time"}`));
+        }
+        text.append(orders);
+      }
       const figures = el("div", "figures", `$${plan.incremental_cost_usd}`);
       figures.append(el("small", "", `${plan.projected_customer_delay_hours} h delay`));
       const select = el("button", "", "Select for approval");
@@ -85,7 +106,8 @@
       if (message.error) reject(message.error); else resolve(message.result);
       return;
     }
-    if (message.method === "ui/notifications/tool-result") render(message.params);
+    if (message.method === "ui/notifications/tool-input") incident = String(message.params?.arguments?.shipment_id || "").toUpperCase();
+    else if (message.method === "ui/notifications/tool-result") render(message.params);
     else if (message.method === "ui/resource-teardown" && message.id !== undefined) {
       // Nothing to save: the selection already lives in the host.
       send({ jsonrpc: "2.0", id: message.id, result: {} });

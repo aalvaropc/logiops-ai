@@ -2,10 +2,16 @@
 
 ## Current local implementation
 
-`logiops/scenario.py` owns the fixed synthetic data and derives the cost/ETA
-options from it: wait, reroute, split + express, and (with enough local stock)
-the whole order from the warehouse. Depending on stock and carrier capacity,
-one to three of them are feasible at a time. `logiops/tools.py` exposes read-only shipment, order,
+`logiops/scenario.py` owns four synthetic incidents of different kinds (see
+`docs/demo-scenario.md`) and derives each one's cost/ETA options from its data:
+every incident lists its options as data, and one fill turns them into
+allocations, per-order delays, late units and cost. Only the options the
+current stock and capacity can cover are offered. Plans, approvals, executions
+and events carry the incident id, so incidents never see or apply each other's
+plans. The SQLite layout has a `meta.schema_version` (now 2); a database from
+the earlier single-incident layout is rebuilt once at startup, in one
+transaction, and the rebuild is logged and recorded as `schema_migrated` events
+(the data is synthetic, so it is reseeded rather than converted). `logiops/tools.py` exposes read-only shipment, order,
 inventory, and carrier lookups. `logiops/service.py` runs investigation,
 approval, execution, and operational verification in SQLite transactions;
 it records source versions and audit events. `logiops/api.py` exposes this

@@ -1,9 +1,11 @@
 # LogiOps AI
 
-An agent that investigates and resolves logistics exceptions
-(e.g. a delayed shipment): it queries orders, inventory and routes, compares
-alternatives by cost and ETA, requests human approval, executes the chosen
-plan, and verifies the result.
+An agent that investigates and resolves logistics exceptions from an incident
+inbox: a delayed truck, a carrier that stopped departures, an import held at
+customs, two orders competing for the same stock. For each one it queries
+orders, inventory and routes, compares alternatives by cost, ETA and order
+priority, requests human approval, executes the chosen plan, and verifies the
+result.
 
 Built for the **Amazon Developer Hackathon**, Alexa+ track (self-hosted MCP
 server, Streamable HTTP) + AWS Builder Mini Challenge. Runtime: Amazon
@@ -30,7 +32,7 @@ the replay command in `docs/hackathon/testing-instructions.md`) runs the whole d
  +--------------------------------------------------------------+
  |  FastAPI app: bearer token, rate limits, no-store            |
  |  +-----------------------+   +----------------------------+  |
- |  | MCP server (7 tools,  |   | Workflow core + SQLite     |  |
+ |  | MCP server (8 tools,  |   | Workflow core + SQLite     |  |
  |  | no approval tool)     |-->| versioned plans, approvals |  |
  |  +-----------------------+   | bound to plan + version,   |  |
  |        ^                     | idempotent execution,      |  |
@@ -59,8 +61,10 @@ More detail in `docs/architecture.md`.
 
 ## Status
 
-The SHIP-421 workflow, MCP Streamable HTTP endpoint, Bedrock Converse tool
-loop, approval gate, and operational verification run locally. A replay mode
+Four synthetic incidents (see `docs/demo-scenario.md`), the MCP Streamable
+HTTP endpoint, the Bedrock Converse tool loop, the approval gate, and
+operational verification run locally. Each incident is isolated: its plans,
+approvals, executions and audit events never mix with another's. A replay mode
 runs the same MCP calls without AWS charges. A browser interface is available
 at `/demo`. See `docs/hackathon/decisions.md` for decisions and
 `docs/demo-scenario.md` for the synthetic data.
@@ -99,9 +103,11 @@ any other credentials in its default chain) and ensure
 `global.anthropic.claude-sonnet-4-6` is accessible in `us-east-1`. Start the
 same server without `LOGIOPS_AGENT_MODE=replay`.
 
-Open the browser demo at <http://127.0.0.1:8000/demo>. It simulates the
-Alexa+ experience as a conversation: ask "What's happening with SHIP-421?" by
-text, or by voice in browsers with speech recognition (Chrome, Edge), and
+Open the browser demo at <http://127.0.0.1:8000/demo>. The inbox at the top
+lists the four incidents, open ones first; pick one (or link to it, as in
+`/demo#SHIP-433`, or just name it: "what about SHIP-452?"). Each incident keeps
+its own conversation. The demo simulates the Alexa+ experience as a
+conversation: ask "What's happening with SHIP-421?" by text, or by voice in browsers with speech recognition (Chrome, Edge), and
 optionally have replies read aloud. Say "approve the recommended plan" and
 then "execute it"; those requests use the same REST approval and execution
 endpoints as the buttons, so the version checks are identical. The plan
@@ -133,6 +139,10 @@ needs shared rate limiting.
 ### Agent investigation
 
 ```sh
+curl -sS http://127.0.0.1:8000/incidents        # the inbox
+curl -sS -X POST http://127.0.0.1:8000/demo/reset  # every incident; or -d '{"incident_id": "SHIP-433"}'
+curl -sS -X POST http://127.0.0.1:8000/incidents/SHIP-433/agent/investigate \
+  -H 'Content-Type: application/json' -d '{}'
 curl -sS -X POST http://127.0.0.1:8000/demo/reset
 curl -sS -X POST http://127.0.0.1:8000/incidents/SHIP-421/agent/investigate \
   -H 'Content-Type: application/json' -d '{}'

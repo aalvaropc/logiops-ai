@@ -31,6 +31,10 @@ def main() -> None:
     ) as client:
         reset = client.post("/demo/reset")
         reset.raise_for_status()
+        inbox = client.get("/incidents")
+        inbox.raise_for_status()
+        if len(inbox.json()["incidents"]) != 4:
+            raise RuntimeError("The deployed inbox does not list the four synthetic incidents")
         investigated = client.post("/incidents/SHIP-421/agent/investigate", json={})
         investigated.raise_for_status()
         run = investigated.json()

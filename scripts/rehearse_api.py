@@ -85,6 +85,22 @@ def walk(client: httpx.Client) -> None:
           {plan["kind"] for plan in replanned} == {"wait", "reroute"}, str({plan["kind"] for plan in replanned}))
     post("/demo/reset")
 
+    inbox = client.get("/incidents").json()["incidents"]
+    check("the inbox lists four incidents of different kinds",
+          len(inbox) == 4 and len({item["kind"] for item in inbox}) == 4, str([item["incident_id"] for item in inbox]))
+    outage = post("/incidents/SHIP-433/agent/investigate")
+    pick = outage.json()["plans"] if outage.status_code == 200 else []
+    best = kind(pick, "priority-air-ground") if pick else None
+    check("a carrier outage with a critical order: the hospital flies, the store is rebooked",
+          bool(best) and outage.json()["answer"].rstrip().endswith(f"Recommended plan: {best['id']}"))
+    body = {"plan_id": best["id"], "source_version": best["source_version"]}
+    post("/incidents/SHIP-433/approvals", approved_by="rehearsal", **body)
+    done = post("/incidents/SHIP-433/execute", **body)
+    check("executing it accounts for both orders (30 units)", done.status_code == 200 and done.json()["accounted_units"] == 30)
+    untouched = client.get(f"/incidents/{INCIDENT}").json()
+    check("SHIP-421 is untouched by another incident", [e["name"] for e in untouched["events"]] == ["scenario_reset"])
+    post("/demo/reset")
+
 
 def free_port() -> int:
     with socket.socket() as sock:

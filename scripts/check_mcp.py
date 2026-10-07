@@ -25,11 +25,16 @@ async def check(url: str) -> None:
                     )
                 listed = await session.list_tools()
                 shipment = await session.call_tool("get_shipment", {"shipment_id": "SHIP-421"})
-                if shipment.isError:
-                    raise RuntimeError("get_shipment failed")
+                inbox = await session.call_tool("list_incidents", {})
+                if shipment.isError or inbox.isError:
+                    raise RuntimeError("get_shipment or list_incidents failed")
                 print(json.dumps({
                     "protocol_version": initialized.protocolVersion,
                     "tools": [tool.name for tool in listed.tools],
+                    "incidents": [
+                        f"{item['incident_id']} · {item['kind_label']} · {item['status']}"
+                        for item in inbox.structuredContent["incidents"]
+                    ],
                     "shipment": shipment.structuredContent,
                 }, indent=2))
 

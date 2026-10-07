@@ -199,7 +199,30 @@ def test_execute_never_runs_a_plan_other_than_the_one_named():
     # Review, 2026-10-07: "execute the reroute" ran the approved split plan, and a bare
     # "yes" executed whenever any approval existed.
     script = (Path(__file__).resolve().parents[1] / "logiops" / "static" / "demo.js").read_text()
-    assert "if (approved && named && named !== approved.kind) {" in script
+    assert "if (approved && named && !named.includes(approved.kind)) {" in script
     assert "so nothing was executed" in script
     assert '(command === "confirm" && awaitingExecute && visibleApproval(state.snapshot))' in script
     assert "state.awaitingExecute = true;" in script and "state.awaitingExecute = false;" in script
+
+
+
+def test_the_demo_is_an_inbox_of_incidents():
+    root = Path(__file__).resolve().parents[1] / "logiops" / "static"
+    script, html = (root / "demo.js").read_text(), (root / "demo.html").read_text()
+    assert '<ul id="inbox" class="inbox"' in html and 'id="incident-id"' in html
+    assert "/incidents/SHIP-421" not in script  # every request goes through incidentPath()
+    assert "inventory.arequipa" not in script and "SHIP-421" not in html.split("<main>")[1].split('id="incident-id">')[0]
+    # A card from one incident is never shown for another.
+    assert "state.app.incidentId !== snapshot.state.incident_id" in script
+    assert 'card.setAttribute("aria-pressed", String(item.incident_id === state.incidentId));' in script
+    assert "window.LogiOpsIntent.mentionedIncident(text," in script
+
+
+def test_sentences_open_incidents_and_name_the_new_plan_kinds():
+    import json
+
+    got = json.loads(_intent(
+        "console.log(JSON.stringify([m.parseCommand('open SHIP-452'), m.parseCommand('show me the options?'),"
+        " m.mentionedIncident('what about ship-452?', ['SHIP-421', 'SHIP-452']),"
+        " m.mentionedIncident('SHIP-4521', ['SHIP-452']), m.mentionedIncident('ship-421 or ship-452', ['SHIP-421', 'SHIP-452'])]))"))
+    assert got == ["open", None, "SHIP-452", None, None]
