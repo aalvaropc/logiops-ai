@@ -197,7 +197,7 @@ def test_agent_events_are_audited_with_the_current_version(tmp_path):
     assert decided == {"source_version": 2} and service.get("SHIP-421")["events"][-1]["name"] == "autopilot_decision"
 
 
-# --- Several incidents (R1, 2026-10-08) -------------------------------------------
+# --- Several incidents (R1, 2026-10-07) -------------------------------------------
 
 
 def _summary(plans):
