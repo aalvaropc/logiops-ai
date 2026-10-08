@@ -19,9 +19,11 @@ delays, late units and cost. An option that the current stock or capacity
 cannot cover is not offered.
 
 **Default pick.** Plans are ranked by the worst delay of a *critical* order,
-then the worst delay of any order, then late units, then cost. Without the
-first key, SHIP-433 would pick the $150 ground reroute, which leaves the
-hospital 8 h late; with it, the hospital is on time.
+then the worst delay of any order, then late units, then cost. Ranked only by
+delay and cost, SHIP-433 would pick the $150 ground reroute, which leaves the
+hospital 8 h late; ranked this way, the hospital is on time. The first key
+alone decides under a $250 spend cap: without it the cap would point to the
+reroute, with it to flying the hospital order ($240).
 
 ## SHIP-421 · delayed in transit
 
@@ -69,6 +71,9 @@ broker can expedite clearance (+18 h, $350).
 | Lima stock now, the rest after the review | 25 + 15 held | 72 h | 15 | $0 |
 | Lima stock now, expedite the rest | 25 + 15 expedited | 18 h | 15 | $350 |
 
+With 40 or more units in the Lima warehouse, **ship everything from Lima** ($0,
+on time) replaces the two split plans.
+
 ## SHIP-460 · two orders competing for stock
 
 A replenishment of 30 laptops to Trujillo is 48 h late. The warehouse has 30
@@ -83,8 +88,10 @@ units, due 10-14 12:00, placed first). An express transfer from Lima carries
 | Serve orders as placed (school first) | +30 h | on time | $0 |
 | Hospital first; cover the school by express transfer | on time | on time | $300 |
 
-With 20–29 units in stock only the first two remain; below 15 no plan covers
-both orders and the investigation answers 409 "No feasible plan".
+With 15–29 units in stock only the first two remain, and with 45 or more the
+warehouse covers both orders on its own. Below 15 no plan covers both orders:
+`POST /incidents/SHIP-460/investigate` answers 409 "No feasible plan", and the
+agent's investigation fails with a clear error (502) instead of inventing one.
 
 ## Stock changes
 

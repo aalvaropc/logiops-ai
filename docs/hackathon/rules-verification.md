@@ -5,7 +5,7 @@ settle it; the drafted question is ready to send to the organizers.
 
 1. **Is the submission editable after the deadline?**
    Ask (not settled by the rules text we have, checked 2026-10-06). Draft: "Can a
-   Devpost submission be edited after 23 Oct 14:00 PT, for example to fix a link or a
+   Devpost submission be edited after 23 Oct 12:00 PT (14:00 in Peru), for example to fix a link or a
    video, and does an edit after the deadline disqualify it?" Until answered, assume
    it cannot be edited: submit one day early (target 22 Oct).
 

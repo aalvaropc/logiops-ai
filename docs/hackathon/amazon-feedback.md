@@ -59,4 +59,5 @@ built; see also `amazon-friction-log.md` for discrete problems. Numbers marked
 ## AWS promotional credits
 
 - We submitted the credits form on 2026-10-02, and US$150 of credits arrived on 2026-10-06, four days later, with no processing time stated anywhere. Stating the expected processing time and the covered services on the form would help builders plan.
-- **Measured:** on 2026-10-07 the Credits page still showed $0.00 used, and Cost Explorer showed no credit applied to the Bedrock usage billed so far. Both update a day or more behind, so a builder cannot see during a hackathon whether a given charge will be covered.
+- **Measured:** on 2026-10-07 the Credits page still showed $0.00 used. Later that day Cost Explorer showed the credits applied to October's EC2, VPC, S3 and Cost Explorer usage (US$0.28), and none to the Claude Sonnet 4.6 usage billed through AWS Marketplace (US$0.63). If Marketplace-billed models are excluded, the form should say so: for a Bedrock hackathon, the model is the main runtime cost.
+- Both views update a day or more behind, so a builder cannot see during a hackathon whether a given charge will be covered.
