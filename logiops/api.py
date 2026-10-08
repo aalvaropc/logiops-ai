@@ -17,6 +17,7 @@ from pydantic import BaseModel, Field
 
 from .agent import ConverseClient, ask_with_bedrock, brief_with_bedrock, investigate_with_bedrock
 from .bedrock import BedrockConverse, BedrockError
+from .budget import EXHAUSTED_MODE, BudgetedConverse, DailyModelBudget
 from .service import LogiOpsService, WorkflowError
 from .mcp_server import create_mcp_server
 from .preferences import COST_LIMIT, NOTE_LIMIT, RULES, PreferenceStore, preference_for
@@ -108,6 +109,7 @@ def create_app(
     path = Path(db_path or os.environ.get("LOGIOPS_DB_PATH", "data/logiops.sqlite3"))
     service = LogiOpsService(path)
     preferences = PreferenceStore(path)
+    budget = DailyModelBudget.from_env(path)
     mcp = create_mcp_server(service, preferences=preferences, public_host=public_host or None)
 
     @asynccontextmanager
@@ -266,14 +268,24 @@ def create_app(
         plans = service.investigate(incident_id)
         return {"plans": plans, "source_version": plans[0]["source_version"]}
 
-    @app.post("/incidents/{incident_id}/agent/investigate")
-    async def agent_investigate(incident_id: str, request: AgentInvestigationRequest) -> dict[str, Any]:
-        source_version = service.get(incident_id)["source_version"]
+    def agent_client(custom: ConverseClient | None) -> tuple[ConverseClient, str]:
+        """The client for one agent request and the mode it reports. Live calls count against the
+        daily budget; once it is used up, requests run in replay mode and say so."""
+        if custom:
+            return custom, "custom"
         mode = os.environ.get("LOGIOPS_AGENT_MODE", "bedrock")
         if mode not in ("bedrock", "replay"):
             raise BedrockError("LOGIOPS_AGENT_MODE must be bedrock or replay")
-        client = bedrock_client or (ReplayConverse() if mode == "replay" else BedrockConverse())
-        run_mode = "custom" if bedrock_client else mode
+        if mode == "replay":
+            return ReplayConverse(), "replay"
+        if not budget.available():
+            return ReplayConverse(), EXHAUSTED_MODE
+        return BudgetedConverse(BedrockConverse(), budget), "bedrock"
+
+    @app.post("/incidents/{incident_id}/agent/investigate")
+    async def agent_investigate(incident_id: str, request: AgentInvestigationRequest) -> dict[str, Any]:
+        source_version = service.get(incident_id)["source_version"]
+        client, run_mode = agent_client(bedrock_client)
         try:
             run = await investigate_with_bedrock(
                 app, client, incident_id, request.question,
@@ -319,12 +331,7 @@ def create_app(
         preference = preference_for(context["plans"], preferences.get())
         if preference:
             context["operator_preferences"] = preference
-        mode = os.environ.get("LOGIOPS_AGENT_MODE", "bedrock")
-        if mode not in ("bedrock", "replay"):
-            raise BedrockError("LOGIOPS_AGENT_MODE must be bedrock or replay")
-        custom = followup_client or bedrock_client
-        client = custom or (ReplayConverse() if mode == "replay" else BedrockConverse())
-        run_mode = "custom" if custom else mode
+        client, run_mode = agent_client(followup_client or bedrock_client)
         try:
             run = await ask_with_bedrock(
                 app, client, incident_id, request.question, context,
@@ -342,12 +349,7 @@ def create_app(
     @app.post("/agent/briefing")
     async def agent_briefing(request: AgentBriefingRequest) -> dict[str, Any]:
         """Rank the open incidents and say which to open first; it reads, and changes nothing."""
-        mode = os.environ.get("LOGIOPS_AGENT_MODE", "bedrock")
-        if mode not in ("bedrock", "replay"):
-            raise BedrockError("LOGIOPS_AGENT_MODE must be bedrock or replay")
-        custom = followup_client or bedrock_client
-        client = custom or (ReplayConverse() if mode == "replay" else BedrockConverse())
-        run_mode = "custom" if custom else mode
+        client, run_mode = agent_client(followup_client or bedrock_client)
         try:
             run = await brief_with_bedrock(
                 app, client, request.question, preferences.get(),

@@ -683,7 +683,9 @@ function render(snapshot) {
 
 function traceSummary(run) {
   const tokens = (run.usage?.inputTokens || 0) + (run.usage?.outputTokens || 0);
-  return `${run.tool_trace.length} MCP calls · ${run.mode} mode · ${tokens} tokens${run.truncated ? " · truncated" : ""}`;
+  // "replay (daily live budget used)" already reads as a label; plain modes get the word "mode".
+  const mode = run.mode.includes(" ") ? run.mode : `${run.mode} mode`;
+  return `${run.tool_trace.length} MCP calls · ${mode} · ${tokens} tokens${run.truncated ? " · truncated" : ""}`;
 }
 
 function executionSummary(snapshot, execution) {
