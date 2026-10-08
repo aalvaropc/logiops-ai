@@ -63,6 +63,45 @@ def test_only_a_whole_command_acts():
     assert dict(zip(cases, got)) == cases
 
 
+def test_only_the_closed_grammar_acts():
+    # Review, 2026-10-08: these acted on the open prefix match; now they go to the agent as questions.
+    import json
+
+    cases = {
+        "Execute it tomorrow": None, "execute it only if the hospital is on time": None,
+        "run it by my manager first": None, "Go ahead and explain the plans": None,
+        "Approve nothing": None, "approve none of them": None, "approve option two": None,
+        "reset the stock to 20": None, "execute it now and tell the store": None,
+        # The whitelist still covers what people say.
+        "do it": "execute", "Do it.": "execute", "run it": "execute", "execute it now": "execute",
+        "approve the cheapest plan": "approve", "approve the $240 plan": "approve",
+        "Approve the 240 dollar plan.": "approve", "approve my preference": "approve",
+        "approve the fly the hospital order plan": "approve", "approve it": "approve",
+        "reset this incident": "reset", "confirm": "confirm", "yes please": "confirm",
+        "do it?": None,
+    }
+    got = json.loads(_intent(f"console.log(JSON.stringify({json.dumps(list(cases))}.map(m.parseCommand)))"))
+    assert dict(zip(cases, got)) == cases
+
+
+def test_approval_phrases_can_name_a_price_or_the_cheapest_plan():
+    import json
+
+    got = json.loads(_intent(
+        "console.log(JSON.stringify(['approve the cheapest plan', 'approve the lowest cost option', 'approve the $240 plan',"
+        " 'approve the 1,200 dollar plan', 'approve the split plan', 'approve it'].map(m.planSelector)))"))
+    assert got == [{"cheapest": True}, {"cheapest": True}, {"cost": 240}, {"cost": 1200}, {}, {}]
+
+
+def test_a_spoken_approval_is_read_back_before_it_acts():
+    script = (Path(__file__).resolve().parents[1] / "logiops" / "static" / "demo.js").read_text()
+    assert "state.pendingApproval = { planId: plan.id, sourceVersion: plan.source_version };" in script
+    assert "Say “yes” to approve it, or ask me anything else." in script
+    assert 'command === "confirm" && pending' in script
+    # Anything else said in between cancels the pending approval.
+    assert "state.pendingApproval = null;" in script
+
+
 def test_the_agent_pick_is_the_recommended_plan_not_the_first_one_listed():
     import json
 

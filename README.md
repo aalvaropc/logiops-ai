@@ -122,14 +122,17 @@ lists the four incidents, open ones first; pick one (or link to it, as in
 `/demo#SHIP-433`, or just name it: "what about SHIP-452?"). Each incident keeps
 its own conversation. The demo simulates the Alexa+ experience as a
 conversation: ask "What's happening with SHIP-421?" by text, or by voice in browsers with speech recognition (Chrome, Edge), and
-optionally have replies read aloud. Say "approve the recommended plan" and
-then "execute it"; those requests use the same REST approval and execution
-endpoints as the buttons, so the version checks are identical. The plan
-cards, timeline, and a stock-change control show how a data change
-invalidates an earlier approval. A chat message acts only when the whole
-message is the command ("approve the split plan", "ok, execute it"); questions,
-negations ("please don't execute it yet") and commands buried in a longer
-sentence go to the agent and never act. On the public deployment, paste the
+optionally have replies read aloud. Say "approve the recommended plan"; the
+assistant reads the plan back (price, delay, any critical order left late) and
+approves only after "yes". Then say "execute it". Those requests use the same
+REST approval and execution endpoints as the buttons, so the version checks are
+identical. The plan cards, timeline, and a stock-change control show how a data
+change invalidates an earlier approval. A chat message acts only when the whole
+message comes from a closed grammar: a verb and words that name a plan by kind,
+price or pick ("approve the split plan", "approve the cheapest plan", "approve
+the $240 plan", "ok, execute it"). Questions, negations ("please don't execute it
+yet"), commands buried in a longer sentence and any other word ("approve
+nothing", "execute it tomorrow") go to the agent and never act. On the public deployment, paste the
 operator token into the page to connect. It is kept for that browser tab only
 (`sessionStorage`), so a reload does not ask again and closing the tab forgets it.
 
