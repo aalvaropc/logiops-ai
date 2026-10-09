@@ -1,17 +1,26 @@
 // The demo's thin command layer, kept free of the DOM so it can be tested with node.
-// A command is the whole utterance: an optional opener, then the verb. Anything else,
-// including a question, a negation, or a command buried in a longer sentence, goes to
-// the agent as a question and never acts.
+// A command is the whole utterance, from a closed grammar: an optional opener, the verb,
+// and words that name a plan (its kind, its price, or who picked it). Anything else,
+// including a question, a negation, or a word the grammar does not know ("nothing",
+// "tomorrow", "my manager"), goes to the agent as a question and never acts.
 (function (root) {
   const QUESTION = /\?\s*$|^(how|what|why|when|which|who|should|can|could|would|will|is|are|do|does|did|if)\b/;
   const OPENER = String.raw`^(?:(?:ok(?:ay)?|alexa|please|now|alright|great|sure|then|and)[,.!]?\s+)*`;
-  const NEGATION = /\b(?:no|not|never|stop|cancel|don'?t|doesn'?t|won'?t|shouldn'?t|hold off|wait until|before|unless|instead)\b|n't\b/;
-  const COMMANDS = [
-    ["reset", new RegExp(`${OPENER}(?:reset|start over)\\b`)],
-    ["approve", new RegExp(`${OPENER}approve\\b`)],
-    ["execute", new RegExp(`${OPENER}(?:execute|go ahead|do it|run it)\\b`)],
-    ["open", new RegExp(`${OPENER}(?:open|show|switch to|go to)\\b`)],
-    ["confirm", /^(?:yes|yeah|yep)\b/],
+  // Courtesy words a command may end with: "execute it now", "approve it, please".
+  const TRAILER = /(?:[,\s]+(?:please|now))+$/;
+  const PLAN_WORDS = new Set((
+    "the a an my it this that plan option recommended recommendation agent agent's agents pick preferred preference "
+    + "cheapest cheaper lowest least cost expensive split express expedite expedited clearance broker reroute re-route "
+    + "rebook economy ground air fly flight freight hospital school store first come first-come placed as priority "
+    + "local stock warehouse wait transfer order orders both and with on approved dollar dollars usd"
+  ).split(" "));
+  const AMOUNT = /^\$?(?:\d{1,3}(?:,\d{3})+|\d{1,6})$/;
+  const GRAMMAR = [
+    ["reset", /^(?:reset|start over)(?: (?:this|the) incident| it| this)?$/],
+    ["approve", /^approve(?: (?<rest>.+))?$/],
+    ["execute", /^(?:(?:execute|run|do) it|go ahead|execute(?: (?<rest>.+))?)$/],
+    ["open", /^(?:open|show|switch to|go to) ship-\d+$/],
+    ["confirm", /^(?:yes|yeah|yep|confirm(?:ed)?)(?:[,\s]+(?:please|do it|go ahead|confirm|approve it|execute it))?$/],
   ];
 
   // "Remember …" saves a preference; it is data for the plan pick and never approves anything.
@@ -29,18 +38,31 @@
     return QUESTION.test(String(text).trim().toLowerCase());
   }
 
+  // Words after the verb must all name a plan; one unknown word makes it a question.
+  function namesOnlyPlans(rest) {
+    if (!rest) return true;
+    return rest.split(/[\s,]+/).filter(Boolean).every((word) => PLAN_WORDS.has(word) || AMOUNT.test(word));
+  }
+
   // "reset" | "approve" | "execute" | "open" | "confirm" (a bare yes) | null.
   function parseCommand(text) {
     const lower = String(text).trim().toLowerCase();
-    if (!lower || QUESTION.test(lower)) return null;
-    for (const [name, pattern] of COMMANDS) {
-      if (!pattern.test(lower)) continue;
-      // "Approve the wait plan" is a command; "approve it, but not before noon" is not.
-      const rest = lower.replace(pattern, "");
-      // "Yes" itself is fine; "yes, but don't execute" is not.
-      return NEGATION.test(rest) ? null : name;
+    if (!lower || /\?\s*$/.test(lower)) return null;
+    const bare = lower.replace(/[.!]+$/, "").replace(new RegExp(OPENER), "").replace(TRAILER, "").trim();
+    for (const [name, pattern] of GRAMMAR) {
+      const match = bare.match(pattern);
+      if (match && namesOnlyPlans(match.groups?.rest)) return name;
     }
     return null;
+  }
+
+  // How an approval names its plan beyond the kind: {cheapest: true}, {cost: 240}, or {}.
+  function planSelector(text) {
+    const lower = String(text).toLowerCase();
+    if (CHEAPEST.test(lower)) return { cheapest: true };
+    const money = lower.match(MONEY) || lower.match(/\b(\d{1,3}(?:,\d{3})+|\d{1,6})\b/);
+    if (money) return { cost: Number((money[1] ?? money[2]).replaceAll(",", "")) };
+    return {};
   }
 
   // {forget: true}, {update: {rule?, max_cost_usd?, note?}}, or null when it is not a preference.
@@ -101,7 +123,7 @@
     return named.length === 1 ? named[0] : null;
   }
 
-  const api = { isQuestion, parseCommand, parsePreference, isBriefing, recommendedPlanId, mentionedIncident };
+  const api = { isQuestion, parseCommand, planSelector, parsePreference, isBriefing, recommendedPlanId, mentionedIncident };
   if (typeof module === "object" && module.exports) module.exports = api;
   else root.LogiOpsIntent = api;
 })(typeof window === "undefined" ? globalThis : window);
