@@ -20,7 +20,7 @@ Bedrock.
 
 | Tag | Devpost | Live demo |
 |---|---|---|
-| _pending_ | _pending_ | Deployed on AWS; URL and token in the testing instructions (hosting is optional, D-AMZ-1) |
+| _pending_ | _pending_ | Deployed on AWS; URL and token in the Devpost testing instructions (hosting is optional, D-AMZ-1) |
 
 ## For judges
 
@@ -142,8 +142,8 @@ change the location. The default configuration is **local only**. Do not bind
 it to a public interface without `LOGIOPS_PUBLIC=1`, a random
 `LOGIOPS_ACCESS_TOKEN` of at least 32 characters, and HTTPS. In public mode the
 token guards both REST and MCP. In a single process, MCP requests are limited
-to 60 per minute and agent calls (investigations and follow-ups, each one
-calls a paid model) share a budget of 10 per minute per viewer. Behind CloudFront, set `LOGIOPS_TRUST_CLOUDFRONT=1` so viewers are
+to 60 per minute and agent calls (investigations, follow-ups and briefings,
+each one calls a paid model) share a budget of 10 per minute per viewer. Behind CloudFront, set `LOGIOPS_TRUST_CLOUDFRONT=1` so viewers are
 identified by the `CloudFront-Viewer-Address` header instead of the shared
 edge IP; only do this when the origin accepts traffic exclusively from
 CloudFront. The agent's own in-process MCP calls are exempt from the MCP
@@ -154,7 +154,9 @@ needs shared rate limiting.
 
 ```sh
 curl -sS http://127.0.0.1:8000/incidents        # the inbox
-curl -sS -X POST http://127.0.0.1:8000/demo/reset  # every incident; or -d '{"incident_id": "SHIP-433"}'
+curl -sS -X POST http://127.0.0.1:8000/demo/reset  # every incident, and clears the preferences
+curl -sS -X POST http://127.0.0.1:8000/demo/reset \
+  -H 'Content-Type: application/json' -d '{"incident_id": "SHIP-433"}'  # one incident
 curl -sS -X POST http://127.0.0.1:8000/incidents/SHIP-433/agent/investigate \
   -H 'Content-Type: application/json' -d '{}'
 curl -sS -X POST http://127.0.0.1:8000/demo/reset
@@ -211,11 +213,12 @@ queue, from the inbox itself, at no cost.
 curl -sS -X PUT http://127.0.0.1:8000/operator/preferences \
   -H 'Content-Type: application/json' \
   -d '{"rule": "balanced", "max_cost_usd": 250, "note": "Hospitals first"}'
+curl -sS -X POST http://127.0.0.1:8000/incidents/SHIP-433/investigate  # the plans to pick from
 curl -sS http://127.0.0.1:8000/incidents/SHIP-433   # "preference": the plan it points to, and why
 ```
 
-Two rules: `balanced` (the default ranking: critical orders, then delay, then
-cost) and `cheapest_unless_critical_late`, plus an optional spend cap per
+Two rules: `balanced` (the default ranking: critical orders, then the worst
+delay, then late units, then cost) and `cheapest_unless_critical_late`, plus an optional spend cap per
 incident and a note of up to 200 characters. `logiops/preferences.py` applies
 them to the calculated plans by fixed rules, never by the model: with a $250
 cap, SHIP-433, SHIP-452 and SHIP-460 move to a cheaper plan, and the result
@@ -231,8 +234,9 @@ them.
 
 ### Short spoken replies
 
-Every investigation, follow-up and briefing prompt asks the model for a last
-`Spoken:` line of one or two sentences without ids or tables. The server
+Every investigation, follow-up and briefing prompt asks the model for a
+`Spoken:` line of one or two sentences without ids or tables (in an
+investigation, the `Recommended plan:` line still comes last). The server
 removes it from the answer (so the stored assessment and the chat stay clean)
 and returns it as `spoken`; if the model forgets it, `spoken` is the first
 sentence of prose. With "Read replies aloud" on, the browser reads `spoken`,

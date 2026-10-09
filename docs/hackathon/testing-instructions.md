@@ -68,7 +68,8 @@ LOGIOPS_AGENT_MODE=replay uv run uvicorn logiops.api:app --host 127.0.0.1 --port
    when it was saved); "forget my preferences" or "Reset all incidents and
    preferences" clears it. With "Read replies aloud" on, only the short spoken
    line is read.
-9. **Stale data.** Reset, investigate and approve again, then apply a stock change of
+9. **Stale data.** Back on SHIP-421 (SHIP-433 has no warehouse, so its stock control
+   is off), reset the incident, investigate and approve again, then apply a stock change of
    11 units: the approval no longer applies, "execute it" is refused, and a new
    investigation offers only the plans that are still feasible.
 10. **Idempotence.** Repeat `POST /incidents/SHIP-421/execute` with the approved
@@ -85,11 +86,12 @@ env -u LOGIOPS_ACCESS_TOKEN -u LOGIOPS_AGENT_MODE -u LOGIOPS_PUBLIC -u LOGIOPS_P
 ```
 
 `scripts/clean_room.sh <ref>` clones a ref into a temporary directory and runs the
-install, the tests, the Docker build and `check_mcp.py` from scratch.
+install, the tests, the Docker build, `check_mcp.py` and the `rehearse_api.py`
+walkthrough from scratch.
 
 ## Live Bedrock (optional, costs a few cents)
 
 Run `aws login --region us-east-1` and start the server without
 `LOGIOPS_AGENT_MODE`; the meta line under each reply then says `bedrock mode` and
-shows real token counts. A hosted deployment, if any, is described in the
-submission together with its access token.
+shows real token counts. The hosted deployment on AWS is listed in the
+submission's testing instructions, together with its access token.
