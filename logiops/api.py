@@ -18,7 +18,7 @@ from pydantic import BaseModel, Field
 from .agent import ConverseClient, ask_with_bedrock, brief_with_bedrock, investigate_with_bedrock
 from .bedrock import BedrockConverse, BedrockError
 from .budget import EXHAUSTED_MODE, BudgetedConverse, DailyModelBudget
-from .service import LogiOpsService, WorkflowError
+from .service import APPROVER_MAX_LENGTH, LogiOpsService, WorkflowError
 from .mcp_server import create_mcp_server
 from .preferences import COST_LIMIT, NOTE_LIMIT, RULES, PreferenceStore, preference_for
 from .replay import ReplayConverse
@@ -34,13 +34,13 @@ SANDBOX_META = '<meta name="logiops-sandbox-origin" content="">'
 
 
 class ApprovalRequest(BaseModel):
-    plan_id: str = Field(min_length=1)
+    plan_id: str = Field(min_length=1, max_length=200)
     source_version: int = Field(ge=1)
-    approved_by: str = Field(min_length=1)
+    approved_by: str = Field(min_length=1, max_length=APPROVER_MAX_LENGTH)
 
 
 class ExecutionRequest(BaseModel):
-    plan_id: str = Field(min_length=1)
+    plan_id: str = Field(min_length=1, max_length=200)
     source_version: int = Field(ge=1)
 
 

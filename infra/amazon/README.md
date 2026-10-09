@@ -55,27 +55,46 @@ BASE_URL="https://$(terraform -chdir=infra/amazon output -raw cloudfront_domain)
 uv run python scripts/verify_remote.py "$BASE_URL"
 ```
 
-`check_mcp.py` must negotiate protocol 2025-11-25 and call `get_shipment`
-from a machine outside EC2. `verify_remote.py` resets the synthetic scenario,
-runs real Bedrock, approves and executes the split plan, and checks
-idempotence and the audit trace. Restart EC2 through AWS, then repeat
+`check_mcp.py` must negotiate protocol 2025-11-25 and call `get_shipment` and
+`list_incidents` (four incidents) from a machine outside EC2.
+`verify_remote.py` resets every incident and the saved preferences, checks
+the inbox, runs real Bedrock on SHIP-421, approves and executes the split
+plan, and checks idempotence and the audit trace. It leaves SHIP-421
+executed, so reset it afterwards. Restart EC2 through AWS, then repeat
 `GET /incidents/SHIP-421` with the token; the execution and trace must still
 be present. Record the URL, deployed archive checksum, token usage, and test
 result in the decisions log.
 
-The demo uses a single shared SHIP-421. Reset it before each presentation.
+The demo has four incidents and one shared preference profile. Before each
+presentation, use "↺ Reset all incidents and preferences" (`POST /demo/reset`).
 The EBS data volume has Terraform `prevent_destroy`; take a snapshot before
 any intentional removal or replacement. Rotating the SSM token requires
 `python3 scripts/create_access_token.py --rotate` followed by another
 `python3 scripts/deploy_ec2.py` so the instance reloads it.
 
+A release that raises the database schema migrates `/var/lib/logiops/logiops.sqlite3`
+once on start and logs it (`journalctl -u logiops | grep -i schema`). An older
+release cannot run on the migrated file. To roll back across a schema change,
+open a Session Manager shell and run:
+
+```sh
+sudo systemctl stop logiops
+sudo rm -f /var/lib/logiops/logiops.sqlite3 /var/lib/logiops/logiops.sqlite3-wal /var/lib/logiops/logiops.sqlite3-shm
+sudo ln -sfn /opt/logiops/releases/<previous digest> /opt/logiops/current
+sudo systemctl start logiops
+```
+
+The previous release reseeds its incidents; saved preferences are lost. Deploy
+again from `main` once the fix is merged.
+
 ## Access and operational notes
 
 - Systems Manager Session Manager provides shell access without SSH ingress.
 - `systemctl status logiops` and `journalctl -u logiops` show service health.
-- Public without a token: `/healthz`, `/demo`, `/assets/*`, `/docs`,
-  `/openapi.json`, and `/redoc`. Every incident, agent, and MCP route requires
-  the bearer token.
+- Public without a token: `/healthz`, `/demo`, `/assets/*`,
+  `/mcp-app/sandbox.html`, `/docs`, `/openapi.json`, and `/redoc`. Every other
+  route (incidents, agent, operator preferences, demo controls and MCP)
+  requires the bearer token.
 - The CloudFront origin read timeout is 60 seconds, the default quota, so no
   increase is needed. The agent stops after 50 seconds and returns an error
   instead of letting CloudFront cut the request.

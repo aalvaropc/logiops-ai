@@ -6,7 +6,7 @@ const DEFAULT_INCIDENT = "SHIP-421";
 const hashIncident = () => decodeURIComponent(location.hash.slice(1)).trim().toUpperCase() || DEFAULT_INCIDENT;
 const state = {
   token: "", snapshot: null, selectedPlanId: null, busy: false, conversation: [], speaking: false, app: null,
-  awaitingExecute: false, incidentId: hashIncident(), inbox: [], conversations: {}, selections: {}, stockFor: null,
+  awaitingExecute: false, pendingApproval: null, incidentId: hashIncident(), inbox: [], conversations: {}, selections: {}, stockFor: null,
   briefingPick: null, prefsShown: undefined,
 };
 const incidentPath = (suffix = "") => `/incidents/${encodeURIComponent(state.incidentId)}${suffix}`;
@@ -712,6 +712,7 @@ async function selectIncident(id) {
   state.conversation = state.conversations[id] || [];
   state.selectedPlanId = state.selections[id] || null;
   state.awaitingExecute = false;
+  state.pendingApproval = null;
   history.replaceState(null, "", `#${encodeURIComponent(id)}`);
   hideMcpApp("incident changed");
   await act(refresh, "");
@@ -763,10 +764,27 @@ function planFromUtterance(text) {
   const plans = visiblePlans(state.snapshot);
   const preferred = state.snapshot.preference && plans.find((plan) => plan.id === state.snapshot.preference.preferred_plan_id);
   if (preferred && /\b(?:preferred|my preference)\b/.test(text)) return preferred;
+  // "The cheapest plan" and "the $240 plan" name a plan by its price.
+  const selector = window.LogiOpsIntent.planSelector(text);
+  if (selector.cheapest) {
+    return [...plans].sort((a, b) => a.incremental_cost_usd - b.incremental_cost_usd || byRank(a, b))[0] || null;
+  }
+  if (selector.cost !== undefined) {
+    const priced = plans.filter((plan) => plan.incremental_cost_usd === selector.cost);
+    return priced.length === 1 ? priced[0] : null;
+  }
   const kinds = namedPlanKinds(text);
   // A named plan that the current data does not offer is not silently replaced.
   if (kinds) return kinds.map((kind) => plans.find((plan) => plan.kind === kind)).find(Boolean) || null;
   return recommendedPlan(state.snapshot);
+}
+
+// What an approval commits to, read back before it acts: price, delay, and any critical order left late.
+function approvalReadback(plan) {
+  const delay = plan.projected_customer_delay_hours ? `${plan.projected_customer_delay_hours} hours of delay` : "no delay";
+  const late = (plan.orders || []).filter((order) => order.priority === "critical" && order.delay_hours > 0);
+  const warning = late.length ? `, and it leaves the critical order for ${late.map((order) => order.customer).join(" and ")} late` : "";
+  return `Approve “${plan.label}” for $${plan.incremental_cost_usd} extra, ${delay}${warning}?`;
 }
 
 // A thin intent layer, like an Alexa+ action: approval and execution go through the
@@ -785,6 +803,9 @@ async function handleUtterance(raw) {
   }
   say("user", text);
   const lower = text.toLowerCase();
+  // A read-back approval waits for the very next utterance; anything else cancels it.
+  const pending = state.pendingApproval;
+  state.pendingApproval = null;
   // Preferences and briefings first: "reset my preferences" must not reset the incident.
   const preference = window.LogiOpsIntent.parsePreference(text);
   if (preference) {
@@ -843,12 +864,22 @@ async function handleUtterance(raw) {
       }
       const plan = planFromUtterance(lower);
       if (!plan) {
-        const options = visiblePlans(state.snapshot).map((item) => `“${item.label}”`).join(", ");
+        const options = visiblePlans(state.snapshot).map((item) => `“${item.label}” ($${item.incremental_cost_usd})`).join(", ");
         say("assistant", `That plan isn't available for the current data. The options are ${options}.`);
         return;
       }
+      // Speech can mishear a plan, so a spoken approval is read back and waits for a yes.
+      state.pendingApproval = { planId: plan.id, sourceVersion: plan.source_version };
+      say("assistant", `${approvalReadback(plan)} Say “yes” to approve it, or ask me anything else.`);
+    } else if (command === "confirm" && pending) {
+      const plan = visiblePlans(state.snapshot)
+        .find((item) => item.id === pending.planId && item.source_version === pending.sourceVersion);
+      if (!plan) {
+        say("assistant", "The data changed after I read that plan back, so nothing was approved. Ask me again.");
+        return;
+      }
       await act(() => approvePlan(plan), "");
-      say("assistant", `Approved “${plan.label}” for version ${plan.source_version}: ${plan.projected_customer_delay_hours} hours of delay, $${plan.incremental_cost_usd} extra. Say “execute it” when you're ready.`);
+      say("assistant", `Approved “${plan.label}” for version ${plan.source_version}. Say “execute it” when you're ready.`);
       state.awaitingExecute = true;
     } else if (command === "execute" || (command === "confirm" && awaitingExecute && visibleApproval(state.snapshot))) {
       // "Execute the reroute" while another plan is approved must not run the approved one.

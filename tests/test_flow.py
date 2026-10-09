@@ -3,6 +3,8 @@
 import asyncio
 import json
 import sqlite3
+import threading
+import time
 from contextlib import asynccontextmanager
 
 import httpx
@@ -351,3 +353,72 @@ def test_an_older_single_incident_database_is_rebuilt_once(tmp_path):
 def test_known_figures_are_the_numbers_an_answer_may_quote():
     assert known_figures(seed_state("SHIP-421")) == {"dollars": [80, 120], "hours": [12]}
     assert known_figures(seed_state("SHIP-460")) == {"dollars": [300], "hours": [6, 30, 48]}
+
+
+# --- Consistent reads and bounded inputs (2026-10-08) -----------------------------
+
+
+def test_a_snapshot_is_read_in_one_transaction(tmp_path, monkeypatch):
+    # A reset that commits while get() is between two reads must not mix the old state with the new rows.
+    service = LogiOpsService(tmp_path / "consistent.sqlite3")
+    plan = service.investigate("SHIP-421")[0]
+    service.approve("SHIP-421", plan["id"], plan["source_version"], "demo-operator")
+    original = LogiOpsService._snapshot
+    writer: dict[str, threading.Thread] = {}
+
+    def snapshot_then_reset(connection, incident_id):
+        result = original(connection, incident_id)
+        if not writer:
+            writer["thread"] = threading.Thread(target=service.reset, args=("SHIP-421",))
+            writer["thread"].start()
+            time.sleep(0.3)
+        return result
+
+    monkeypatch.setattr(LogiOpsService, "_snapshot", staticmethod(snapshot_then_reset))
+    snapshot = service.get("SHIP-421")
+    writer["thread"].join(timeout=10)
+    assert snapshot["state"]["status"] == "approved"
+    assert [approval["plan_id"] for approval in snapshot["approvals"]] == [plan["id"]]
+    assert {event["name"] for event in snapshot["events"]} >= {"incident_investigated", "plan_approved"}
+    # The reset still lands, right after the read.
+    assert service.get("SHIP-421")["state"]["status"] == "detected"
+
+
+def test_approver_names_are_bounded(tmp_path):
+    service = LogiOpsService(tmp_path / "approver.sqlite3")
+    plan = service.investigate("SHIP-421")[0]
+    with pytest.raises(WorkflowError, match="at most 80 characters") as error:
+        service.approve("SHIP-421", plan["id"], plan["source_version"], "x" * 81)
+    assert error.value.status_code == 422
+    approved = service.approve("SHIP-421", plan["id"], plan["source_version"], " " + "y" * 80 + " ")
+    assert approved["approved_by"] == "y" * 80
+
+
+def test_the_api_rejects_oversized_approval_fields(tmp_path):
+    async def scenario():
+        async with client_for(tmp_path / "oversized.sqlite3") as client:
+            plan = next(iter((await plans_from(client)).values()))
+            too_long_name = await client.post("/incidents/SHIP-421/approvals", json={
+                "plan_id": plan["id"], "source_version": plan["source_version"], "approved_by": "x" * 100_000,
+            })
+            too_long_plan = await client.post("/incidents/SHIP-421/approvals", json={
+                "plan_id": "p" * 201, "source_version": plan["source_version"], "approved_by": "demo-operator",
+            })
+            return too_long_name.status_code, too_long_plan.status_code
+
+    assert asyncio.run(scenario()) == (422, 422)
+
+
+def test_an_agent_run_keeps_its_checks_and_model(tmp_path):
+    service = LogiOpsService(tmp_path / "agent-checks.sqlite3")
+    service.investigate("SHIP-421")
+    evaluations = [{"attempt": 1, "passed": False, "issues": ["$95 is not a plan cost"]}, {"attempt": 2, "passed": True}]
+    service.record_agent_run("SHIP-421", 1, {
+        "answer": "ok", "tool_trace": [], "usage": {}, "mode": "replay",
+        "model": "scripted", "evaluations": evaluations, "grounded": True,
+    })
+    service.record_agent_run("SHIP-421", 1, {"answer": "plain", "tool_trace": [], "usage": {}, "mode": "replay"})
+    checked, plain = [event["data"] for event in service.get("SHIP-421")["events"]
+                      if event["name"] == "agent_investigation_completed"]
+    assert (checked["model"], checked["evaluations"], checked["grounded"]) == ("scripted", evaluations, True)
+    assert not {"model", "evaluations", "grounded"} & plain.keys()

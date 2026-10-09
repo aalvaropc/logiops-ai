@@ -30,12 +30,16 @@ cat <<TEXT
 Replay demo ready: http://127.0.0.1:$port/demo
 (Open it on 127.0.0.1 or localhost; the MCP App card needs the other name as its sandbox.)
 
-Say or type, in order:
-  1. What's happening with shipment SHIP-421, and which plan should we choose?
-  2. How much is the reroute?
-  3. Approve the recommended plan.
-  4. Execute it.
-Then "Reset all incidents and preferences", ask again, approve, set stock to 11, Apply, and "Execute it".
+Say or type, in order (the same order as the video script):
+  1. Any delays today?
+  2. What's happening with shipment SHIP-433, and which plan should we choose?
+  3. Remember my spend cap is \$250.
+  4. Which plan now?
+  5. Approve my preference.
+  6. Execute it.
+Then open SHIP-421: ask what's happening, "Approve the recommended plan", set stock to 11,
+Apply, and "Execute it" (refused: the approval no longer applies).
+Finish with "Reset all incidents and preferences".
 
 Replay shows "replay mode" and 0 tokens. For the real take, start without LOGIOPS_AGENT_MODE.
 Press Ctrl-C to stop.

@@ -35,13 +35,14 @@ calculated ones, with the trade-off and any critical-order warning;
 `GET /incidents/{id}` returns it as `preference`. The agent has three jobs on
 the same Converse loop: investigate one incident (read tools plus
 `investigate_incident`), answer a follow-up (read tools only), and brief the
-queue (`list_incidents` plus read tools, no plans). Each prompt ends with a
-`Spoken:` line, which the server splits off into a `spoken` field for voice.
+queue (`list_incidents` plus read tools, no plans). Each prompt asks for a
+`Spoken:` line (followed by `Recommended plan:` in an investigation), which
+the server splits off into a `spoken` field for voice.
 
 `infra/amazon/` prepares a single-instance AWS demo. CloudFront gives the
 public HTTPS URL; EC2 serves the API and MCP endpoint with an IAM instance
-role for Bedrock. A separate EBS volume stores SQLite so the incident and
-audit trail survive instance restarts. Deployment uses a private S3 archive
+role for Bedrock. A separate EBS volume stores SQLite so the incidents,
+preferences and audit trail survive instance restarts. Deployment uses a private S3 archive
 and Systems Manager, without SSH or static AWS keys on the instance. It was
 provisioned on 2026-10-06; `scripts/deploy_ec2.py` ships only `origin/main`.
 
@@ -82,7 +83,8 @@ execution through REST or MCP.
   installation without SSH or long-lived credentials on the instance.
 - **CloudFront:** gives judges a stable HTTPS address. The EC2 security group
   accepts origin traffic only from CloudFront's origin-facing prefix list;
-  CloudFront to EC2 currently uses HTTP, with bearer authentication for the
-  incident and MCP routes.
+  CloudFront to EC2 currently uses HTTP, with bearer authentication on every
+  route except the page, its assets, the sandbox proxy, the API docs and the
+  health check.
 
 These resources are defined in `infra/amazon/` and were provisioned on 2026-10-06.
