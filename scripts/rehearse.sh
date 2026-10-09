@@ -35,10 +35,11 @@ Say or type, in order (the same order as the video script):
   2. What's happening with shipment SHIP-433, and which plan should we choose?
   3. Remember my spend cap is \$250.
   4. Which plan now?
-  5. Approve my preference.
-  6. Execute it.
-Then open SHIP-421: ask what's happening, "Approve the recommended plan", set stock to 11,
-Apply, and "Execute it" (refused: the approval no longer applies).
+  5. Approve my preference.   (the assistant reads the plan back and waits)
+  6. Yes.
+  7. Execute it.
+Then open SHIP-421: ask what's happening, "Approve the recommended plan", "Yes", set stock
+to 11, Apply, and "Execute it" (refused: the approval no longer applies).
 Finish with "Reset all incidents and preferences".
 
 Replay shows "replay mode" and 0 tokens. For the real take, start without LOGIOPS_AGENT_MODE.
