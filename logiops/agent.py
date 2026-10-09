@@ -19,6 +19,8 @@ BASE_URL = "http://127.0.0.1:8000"
 INTERNAL_HEADER = "x-logiops-internal"
 # CloudFront closes the origin request after 60 s; finish (or fail clearly) first.
 DEFAULT_DEADLINE_SECONDS = 50.0
+# Most Converse calls one run can make; a live request reserves this many from the daily budget.
+INVESTIGATE_TURNS, FOLLOWUP_TURNS, BRIEFING_TURNS = 8, 4, 5
 READ_TOOLS = {
     "get_shipment",
     "get_order",
@@ -254,7 +256,7 @@ async def _with_deadline(coroutine: Any, deadline_seconds: float) -> dict[str, A
 
 async def investigate_with_bedrock(
     app: Any, client: ConverseClient, shipment_id: str, question: str, *,
-    access_token: str | None = None, internal_key: str | None = None, max_turns: int = 8,
+    access_token: str | None = None, internal_key: str | None = None, max_turns: int = INVESTIGATE_TURNS,
     deadline_seconds: float = DEFAULT_DEADLINE_SECONDS,
 ) -> dict[str, Any]:
     return await _with_deadline(_converse_loop(
@@ -285,7 +287,7 @@ def followup_message(shipment_id: str, question: str, context: dict[str, Any], h
 async def ask_with_bedrock(
     app: Any, client: ConverseClient, shipment_id: str, question: str,
     context: dict[str, Any], history: list[dict[str, str]], *,
-    access_token: str | None = None, internal_key: str | None = None, max_turns: int = 4,
+    access_token: str | None = None, internal_key: str | None = None, max_turns: int = FOLLOWUP_TURNS,
     deadline_seconds: float = FOLLOWUP_DEADLINE_SECONDS,
 ) -> dict[str, Any]:
     """Answer a follow-up from the stored investigation with read tools only (no new plans)."""
@@ -305,7 +307,7 @@ def briefing_message(question: str, preferences: dict[str, Any] | None) -> str:
 
 async def brief_with_bedrock(
     app: Any, client: ConverseClient, question: str, preferences: dict[str, Any] | None, *,
-    access_token: str | None = None, internal_key: str | None = None, max_turns: int = 5,
+    access_token: str | None = None, internal_key: str | None = None, max_turns: int = BRIEFING_TURNS,
     deadline_seconds: float = BRIEFING_DEADLINE_SECONDS,
 ) -> dict[str, Any]:
     """Rank the open incidents from the inbox, with read tools only; nothing is calculated or stored."""

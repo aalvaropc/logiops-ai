@@ -9,12 +9,12 @@ from __future__ import annotations
 
 import json
 import sqlite3
-from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Iterator
+from typing import Any, ContextManager
 
 from .scenario import best_plan, rank_key
+from .storage import connect
 
 RULES = {
     "balanced": "Balanced: critical orders first, then the shortest delay, then cost",
@@ -49,15 +49,8 @@ class PreferenceStore:
         with self._connection() as connection:
             connection.execute(SCHEMA)
 
-    @contextmanager
-    def _connection(self) -> Iterator[sqlite3.Connection]:
-        connection = sqlite3.connect(self.db_path, timeout=5)
-        try:
-            connection.execute("PRAGMA busy_timeout=5000")
-            with connection:  # commit, or roll back on error
-                yield connection
-        finally:
-            connection.close()
+    def _connection(self) -> ContextManager[sqlite3.Connection]:
+        return connect(self.db_path)
 
     def get(self) -> dict[str, Any] | None:
         with self._connection() as connection:

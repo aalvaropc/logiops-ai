@@ -9,14 +9,18 @@ import re
 import secrets
 from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any, AsyncIterator, Literal
 
 from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse, JSONResponse, Response
 from pydantic import BaseModel, Field
 
-from .agent import ConverseClient, ask_with_bedrock, brief_with_bedrock, investigate_with_bedrock
+from .agent import (
+    BRIEFING_TURNS, FOLLOWUP_TURNS, INVESTIGATE_TURNS, ConverseClient, ask_with_bedrock, brief_with_bedrock,
+    investigate_with_bedrock,
+)
 from .bedrock import BedrockConverse, BedrockError
+from .budget import FALLBACK, BudgetedConverse, DailyModelBudget
 from .service import APPROVER_MAX_LENGTH, LogiOpsService, WorkflowError
 from .mcp_server import create_mcp_server
 from .preferences import COST_LIMIT, NOTE_LIMIT, RULES, PreferenceStore, preference_for
@@ -108,6 +112,9 @@ def create_app(
     path = Path(db_path or os.environ.get("LOGIOPS_DB_PATH", "data/logiops.sqlite3"))
     service = LogiOpsService(path)
     preferences = PreferenceStore(path)
+    budget = DailyModelBudget.from_env(path)
+    # One live client for the app: building boto3 clients per request races on the default session.
+    bedrock = BedrockConverse()
     mcp = create_mcp_server(service, preferences=preferences, public_host=public_host or None)
 
     @asynccontextmanager
@@ -266,26 +273,48 @@ def create_app(
         plans = service.investigate(incident_id)
         return {"plans": plans, "source_version": plans[0]["source_version"]}
 
-    @app.post("/incidents/{incident_id}/agent/investigate")
-    async def agent_investigate(incident_id: str, request: AgentInvestigationRequest) -> dict[str, Any]:
-        source_version = service.get(incident_id)["source_version"]
+    @asynccontextmanager
+    async def agent_client(
+        custom: ConverseClient | None, max_calls: int,
+    ) -> AsyncIterator[tuple[ConverseClient, str, str | None]]:
+        """(client, mode, fallback) for one agent request. A live request first reserves its run's
+        maximum calls from the daily budget and releases what it did not use; when the run no longer
+        fits, it runs on the replay model with fallback "daily_budget"."""
         mode = os.environ.get("LOGIOPS_AGENT_MODE", "bedrock")
         if mode not in ("bedrock", "replay"):
             raise BedrockError("LOGIOPS_AGENT_MODE must be bedrock or replay")
-        client = bedrock_client or (ReplayConverse() if mode == "replay" else BedrockConverse())
-        run_mode = "custom" if bedrock_client else mode
-        try:
-            run = await investigate_with_bedrock(
-                app, client, incident_id, request.question,
-                access_token=access_token, internal_key=internal_key,
-            )
-        except BedrockError as exc:
-            # Failed runs belong in the audit trail too, not only in the HTTP response.
-            service.record_agent_event(
-                incident_id, "agent_run_failed", {"job": "investigate", "mode": run_mode, "error": str(exc)}
-            )
-            raise
-        run["mode"] = run_mode
+        if custom:
+            yield custom, "custom", None
+        elif mode == "replay":
+            yield ReplayConverse(), "replay", None
+        elif (day := budget.reserve(max_calls)) is None:
+            yield ReplayConverse(), "replay", FALLBACK
+        else:
+            client = BudgetedConverse(bedrock, budget, day, max_calls)
+            try:
+                yield client, "bedrock", None
+            finally:
+                client.settle()
+
+    def labelled(run: dict[str, Any], mode: str, fallback: str | None) -> dict[str, Any]:
+        return {**run, "mode": mode, **({"fallback": fallback} if fallback else {})}
+
+    @app.post("/incidents/{incident_id}/agent/investigate")
+    async def agent_investigate(incident_id: str, request: AgentInvestigationRequest) -> dict[str, Any]:
+        source_version = service.get(incident_id)["source_version"]
+        async with agent_client(bedrock_client, INVESTIGATE_TURNS) as (client, run_mode, fallback):
+            try:
+                run = await investigate_with_bedrock(
+                    app, client, incident_id, request.question,
+                    access_token=access_token, internal_key=internal_key,
+                )
+            except BedrockError as exc:
+                # Failed runs belong in the audit trail too, not only in the HTTP response.
+                service.record_agent_event(
+                    incident_id, "agent_run_failed", {"job": "investigate", "mode": run_mode, "error": str(exc)}
+                )
+                raise
+        run = labelled(run, run_mode, fallback)
         recorded = service.record_agent_run(incident_id, source_version, run)
         return {**run, **recorded}
 
@@ -319,47 +348,37 @@ def create_app(
         preference = preference_for(context["plans"], preferences.get())
         if preference:
             context["operator_preferences"] = preference
-        mode = os.environ.get("LOGIOPS_AGENT_MODE", "bedrock")
-        if mode not in ("bedrock", "replay"):
-            raise BedrockError("LOGIOPS_AGENT_MODE must be bedrock or replay")
-        custom = followup_client or bedrock_client
-        client = custom or (ReplayConverse() if mode == "replay" else BedrockConverse())
-        run_mode = "custom" if custom else mode
-        try:
-            run = await ask_with_bedrock(
-                app, client, incident_id, request.question, context,
-                [turn.model_dump() for turn in request.history],
-                access_token=access_token, internal_key=internal_key,
-            )
-        except BedrockError as exc:
-            # Answers change nothing and are not stored, but failed paid calls are audited.
-            service.record_agent_event(
-                incident_id, "agent_run_failed", {"job": "ask", "mode": run_mode, "error": str(exc)}
-            )
-            raise
-        return {**run, "mode": run_mode, "source_version": version}
+        async with agent_client(followup_client or bedrock_client, FOLLOWUP_TURNS) as (client, run_mode, fallback):
+            try:
+                run = await ask_with_bedrock(
+                    app, client, incident_id, request.question, context,
+                    [turn.model_dump() for turn in request.history],
+                    access_token=access_token, internal_key=internal_key,
+                )
+            except BedrockError as exc:
+                # Answers change nothing and are not stored, but failed paid calls are audited.
+                service.record_agent_event(
+                    incident_id, "agent_run_failed", {"job": "ask", "mode": run_mode, "error": str(exc)}
+                )
+                raise
+        return {**labelled(run, run_mode, fallback), "source_version": version}
 
     @app.post("/agent/briefing")
     async def agent_briefing(request: AgentBriefingRequest) -> dict[str, Any]:
         """Rank the open incidents and say which to open first; it reads, and changes nothing."""
-        mode = os.environ.get("LOGIOPS_AGENT_MODE", "bedrock")
-        if mode not in ("bedrock", "replay"):
-            raise BedrockError("LOGIOPS_AGENT_MODE must be bedrock or replay")
-        custom = followup_client or bedrock_client
-        client = custom or (ReplayConverse() if mode == "replay" else BedrockConverse())
-        run_mode = "custom" if custom else mode
-        try:
-            run = await brief_with_bedrock(
-                app, client, request.question, preferences.get(),
-                access_token=access_token, internal_key=internal_key,
-            )
-        except BedrockError as exc:
-            # A briefing belongs to no incident, so its failure goes to the server log.
-            logger.warning("Briefing failed (%s mode): %s", run_mode, exc)
-            raise
+        async with agent_client(followup_client or bedrock_client, BRIEFING_TURNS) as (client, run_mode, fallback):
+            try:
+                run = await brief_with_bedrock(
+                    app, client, request.question, preferences.get(),
+                    access_token=access_token, internal_key=internal_key,
+                )
+            except BedrockError as exc:
+                # A briefing belongs to no incident, so its failure goes to the server log.
+                logger.warning("Briefing failed (%s mode): %s", run_mode, exc)
+                raise
         found = START_WITH.search(run["answer"])
         start_with = found.group(1).upper() if found and found.group(1).upper() in INCIDENT_IDS else None
-        return {**run, "mode": run_mode, "start_with": start_with}
+        return {**labelled(run, run_mode, fallback), "start_with": start_with}
 
     @app.post("/incidents/{incident_id}/approvals")
     async def approve(incident_id: str, request: ApprovalRequest) -> dict[str, Any]:

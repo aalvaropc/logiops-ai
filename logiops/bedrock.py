@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import os
+import threading
 from typing import Any
 
 import boto3
@@ -47,8 +48,15 @@ class BedrockConverse:
         self.read_timeout = read_timeout
         self.max_tokens = max_tokens
         self._client = client
+        # boto3 clients are thread-safe once built; building one on the shared default session is not,
+        # and the app shares one instance across requests that call it from worker threads.
+        self._lock = threading.Lock()
 
     def _get_client(self) -> Any:
+        with self._lock:
+            return self._build_client()
+
+    def _build_client(self) -> Any:
         if self._client is None:
             self._client = boto3.client(
                 "bedrock-runtime",
