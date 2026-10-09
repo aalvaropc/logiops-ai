@@ -49,8 +49,9 @@ quote it only word for word.
 Clearly say delivery is projected, not physically confirmed. Never claim an action
 was approved or executed unless a tool reports it. Human approval is required
 before execution. Do not invent plan IDs, quantities, prices, or timestamps.
-Timestamps are Lima local time (UTC-05:00, PET); write them as "Oct 12, 14:00 Lima
-time" and never as CST or another zone. Keep the answer under 200 words: the
+Timestamps are Lima local time (UTC-05:00, PET); write the dates the tools return as
+month, day and 24-hour time with "Lima time" (in the form "Mar 3, 14:00 Lima time"),
+never as CST or another zone. Keep the answer under 200 words: the
 operator panel already lists every plan in full. End with exactly two lines:
 {spoken}
 Recommended plan: <exact plan id>""".format(spoken=SPOKEN_LINE)

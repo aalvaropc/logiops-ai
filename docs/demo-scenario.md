@@ -1,7 +1,14 @@
 # Demo scenario: four synthetic incidents
 
 All data is synthetic and every incident is marked `simulated: true`. Times
-use `America/Lima` (UTC-05:00). Each incident is self-contained (its own
+use `America/Lima` (UTC-05:00). The dates below are the seed's own: the first
+orders are due on 2026-10-12, the rest one or two days later. The app moves every
+timestamp by whole days so that first day is always tomorrow
+(`LOGIOPS_SCENARIO_ANCHOR`: `relative` by default, `fixed`, or a `YYYY-MM-DD` day
+between 2000 and 2099). Untouched incidents follow the calendar on their own, and
+any incident whose first day has passed is re-seeded when the inbox is read, so a
+long-running demo never shows overdue dates. Times of day, delays, costs and plans
+never change. Each incident is self-contained (its own
 orders, stock and carrier quotes) and isolated: working one never changes
 another's plans, approvals, executions or audit trail.
 

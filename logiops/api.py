@@ -25,7 +25,7 @@ from .service import APPROVER_MAX_LENGTH, LogiOpsService, WorkflowError
 from .mcp_server import create_mcp_server
 from .preferences import COST_LIMIT, NOTE_LIMIT, RULES, PreferenceStore, preference_for
 from .replay import ReplayConverse
-from .scenario import INCIDENT_ID, INCIDENT_IDS
+from .scenario import INCIDENT_ID, INCIDENT_IDS, scenario_clock
 from .security import SANDBOX_PATH, install_security
 
 logger = logging.getLogger(__name__)
@@ -110,7 +110,11 @@ def create_app(
     if sandbox_host and sandbox_host == public_host:
         raise RuntimeError("LOGIOPS_SANDBOX_HOST must differ from LOGIOPS_PUBLIC_HOST")
     path = Path(db_path or os.environ.get("LOGIOPS_DB_PATH", "data/logiops.sqlite3"))
-    service = LogiOpsService(path)
+    try:
+        scenario_day = scenario_clock(os.environ.get("LOGIOPS_SCENARIO_ANCHOR"))  # a bad value fails at startup
+    except ValueError as exc:
+        raise RuntimeError(str(exc)) from exc
+    service = LogiOpsService(path, scenario_day=scenario_day)
     preferences = PreferenceStore(path)
     budget = DailyModelBudget.from_env(path)
     # One live client for the app: building boto3 clients per request races on the default session.
