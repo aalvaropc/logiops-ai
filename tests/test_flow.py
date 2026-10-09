@@ -11,7 +11,9 @@ import httpx
 import pytest
 
 from logiops.api import create_app
-from logiops.scenario import INCIDENT_IDS, best_plan, build_plans, known_figures, seed_state
+from logiops.scenario import (
+    INCIDENT_IDS, SCENARIO_DATE_KEYS, SEED_DAY, best_plan, build_plans, known_figures, scenario_day, seed_state,
+)
 from logiops.service import LogiOpsService, WorkflowError
 
 
@@ -422,3 +424,77 @@ def test_an_agent_run_keeps_its_checks_and_model(tmp_path):
                       if event["name"] == "agent_investigation_completed"]
     assert (checked["model"], checked["evaluations"], checked["grounded"]) == ("scripted", evaluations, True)
     assert not {"model", "evaluations", "grounded"} & plain.keys()
+
+
+# --- Dates anchored to the reset day (2026-10-08) ----------------------------------
+
+
+def _dates(value):
+    """Every scenario timestamp in a seed, by its path."""
+    found = {}
+
+    def walk(item, path):
+        if isinstance(item, dict):
+            for key, child in item.items():
+                walk(child, f"{path}.{key}")
+        elif isinstance(item, list):
+            for index, child in enumerate(item):
+                walk(child, f"{path}[{index}]")
+        elif isinstance(item, str) and path.rsplit(".", 1)[-1] in SCENARIO_DATE_KEYS:
+            found[path] = item
+    walk(value, "")
+    return found
+
+
+def test_a_scenario_day_shifts_every_date_by_whole_days_and_keeps_the_plans(tmp_path):
+    from datetime import date, datetime, timedelta
+
+    for incident_id in INCIDENT_IDS:
+        fixed, moved = seed_state(incident_id), seed_state(incident_id, date(2026, 12, 2))
+        before, after = _dates(fixed), _dates(moved)
+        assert before.keys() == after.keys() and len(before) >= 4
+        for path, value in before.items():
+            assert datetime.fromisoformat(after[path]) - datetime.fromisoformat(value) == timedelta(days=51), path
+            assert after[path].endswith("-05:00") and after[path][10:] == value[10:]  # same Lima time of day
+        summary = {key: [(plan["kind"], plan["incremental_cost_usd"], plan["projected_customer_delay_hours"])
+                         for plan in build_plans(state, 1)] for key, state in (("fixed", fixed), ("moved", moved))}
+        assert summary["fixed"] == summary["moved"]
+        assert best_plan(build_plans(fixed, 1))["kind"] == best_plan(build_plans(moved, 1))["kind"]
+    assert seed_state("SHIP-421", SEED_DAY)["shipment"] == seed_state("SHIP-421")["shipment"]
+
+
+def test_the_service_seeds_and_resets_on_the_day_it_is_given(tmp_path):
+    from datetime import date
+
+    day = [date(2026, 11, 10)]
+    service = LogiOpsService(tmp_path / "anchored.sqlite3", scenario_day=lambda: day[0])
+    assert service.get("SHIP-421")["state"]["orders"][0]["due_eta"].startswith("2026-11-10T")
+    day[0] = date(2026, 12, 1)
+    # A running demo keeps its dates until a reset, which takes the day at that moment.
+    assert service.get("SHIP-421")["state"]["orders"][0]["due_eta"].startswith("2026-11-10T")
+    service.reset("SHIP-421")
+    assert service.get("SHIP-421")["state"]["orders"][0]["due_eta"].startswith("2026-12-01T")
+    assert service.get("SHIP-433")["state"]["orders"][0]["due_eta"].startswith("2026-11-11T")
+    service.reset()
+    assert all(item["due_eta"].startswith("2026-12-") for item in service.list_incidents())
+
+
+def test_the_scenario_day_setting():
+    from datetime import date
+
+    today = date(2026, 10, 19)
+    assert scenario_day(None, today=today) == date(2026, 10, 20)  # due tomorrow, Lima time
+    assert scenario_day("relative", today=today) == date(2026, 10, 20)
+    assert scenario_day("fixed", today=today) is None
+    assert scenario_day("2026-11-10", today=today) == date(2026, 11, 10)
+    with pytest.raises(ValueError, match="LOGIOPS_SCENARIO_ANCHOR"):
+        scenario_day("next tuesday", today=today)
+
+
+def test_the_app_puts_the_incidents_due_tomorrow_by_default(tmp_path):
+    async def scenario():
+        async with client_for(tmp_path / "tomorrow.sqlite3") as client:
+            return (await client.get("/incidents")).json()["incidents"]
+
+    expected = scenario_day(None).isoformat()
+    assert {item["due_eta"][:10] for item in asyncio.run(scenario())} >= {expected}

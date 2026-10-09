@@ -6,9 +6,9 @@ import json
 import logging
 import sqlite3
 from contextlib import contextmanager
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from pathlib import Path
-from typing import Any, Iterator
+from typing import Any, Callable, Iterator
 
 from .scenario import (
     INCIDENT_ID, INCIDENT_IDS, SHIPMENT_SOURCE, available_units, build_plans, inbox_key, incident_summary,
@@ -52,8 +52,10 @@ def _json(value: Any) -> str:
 
 
 class LogiOpsService:
-    def __init__(self, db_path: str | Path) -> None:
+    def __init__(self, db_path: str | Path, scenario_day: Callable[[], date | None] | None = None) -> None:
         self.db_path = Path(db_path)
+        # Called at each seed and reset: the day the incidents are due, or None for the seed's own dates.
+        self._scenario_day = scenario_day or (lambda: None)
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         # One transaction: a failed migration leaves the old database untouched.
         # (executescript would commit first, so each statement runs on its own.)
@@ -72,9 +74,10 @@ class LogiOpsService:
                 (str(SCHEMA_VERSION),),
             )
             seeded = {row[0] for row in connection.execute("SELECT incident_id FROM snapshot")}
+            day = self._scenario_day()
             for incident_id in INCIDENT_IDS:
                 if incident_id not in seeded:
-                    self._seed(connection, incident_id)
+                    self._seed(connection, incident_id, day)
                     if migrated_from is not None:
                         self._event(connection, incident_id, "schema_migrated",
                                     {"from_schema": migrated_from, "to_schema": SCHEMA_VERSION})
@@ -117,10 +120,10 @@ class LogiOpsService:
         )
 
     @classmethod
-    def _seed(cls, connection: sqlite3.Connection, incident_id: str) -> None:
+    def _seed(cls, connection: sqlite3.Connection, incident_id: str, day: date | None) -> None:
         connection.execute(
             "INSERT INTO snapshot (incident_id, version, state_json) VALUES (?, ?, ?)",
-            (incident_id, 1, _json(seed_state(incident_id))),
+            (incident_id, 1, _json(seed_state(incident_id, day))),
         )
         cls._event(connection, incident_id, "scenario_reset", {"source_version": 1})
 
@@ -154,8 +157,9 @@ class LogiOpsService:
             else:
                 for table in INCIDENT_TABLES:
                     connection.execute(f"DELETE FROM {table} WHERE incident_id = ?", (incident_id,))
+            day = self._scenario_day()
             for item in INCIDENT_IDS if incident_id is None else (incident_id,):
-                self._seed(connection, item)
+                self._seed(connection, item, day)
         return self.get(incident_id or INCIDENT_ID)
 
     def get(self, incident_id: str) -> dict[str, Any]:

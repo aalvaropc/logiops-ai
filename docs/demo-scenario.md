@@ -1,7 +1,10 @@
 # Demo scenario: four synthetic incidents
 
 All data is synthetic and every incident is marked `simulated: true`. Times
-use `America/Lima` (UTC-05:00). Each incident is self-contained (its own
+use `America/Lima` (UTC-05:00). The dates below are the seed's own (incidents due
+on 2026-10-12 and 13); the app moves every date by whole days so the incidents are
+due the day after each reset (`LOGIOPS_SCENARIO_ANCHOR`: `relative` by default,
+`fixed`, or a `YYYY-MM-DD` day). Times of day, delays, costs and plans never change. Each incident is self-contained (its own
 orders, stock and carrier quotes) and isolated: working one never changes
 another's plans, approvals, executions or audit trail.
 

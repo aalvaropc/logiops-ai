@@ -21,7 +21,7 @@ from .service import APPROVER_MAX_LENGTH, LogiOpsService, WorkflowError
 from .mcp_server import create_mcp_server
 from .preferences import COST_LIMIT, NOTE_LIMIT, RULES, PreferenceStore, preference_for
 from .replay import ReplayConverse
-from .scenario import INCIDENT_ID, INCIDENT_IDS
+from .scenario import INCIDENT_ID, INCIDENT_IDS, scenario_day
 from .security import SANDBOX_PATH, install_security
 
 logger = logging.getLogger(__name__)
@@ -106,7 +106,12 @@ def create_app(
     if sandbox_host and sandbox_host == public_host:
         raise RuntimeError("LOGIOPS_SANDBOX_HOST must differ from LOGIOPS_PUBLIC_HOST")
     path = Path(db_path or os.environ.get("LOGIOPS_DB_PATH", "data/logiops.sqlite3"))
-    service = LogiOpsService(path)
+    anchor = os.environ.get("LOGIOPS_SCENARIO_ANCHOR")
+    try:
+        scenario_day(anchor)  # fail at startup on a bad value, not at the first reset
+    except ValueError as exc:
+        raise RuntimeError(str(exc)) from exc
+    service = LogiOpsService(path, scenario_day=lambda: scenario_day(anchor))
     preferences = PreferenceStore(path)
     mcp = create_mcp_server(service, preferences=preferences, public_host=public_host or None)
 
