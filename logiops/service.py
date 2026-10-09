@@ -20,6 +20,7 @@ logger = logging.getLogger(__name__)
 
 # Bump when the stored state, plan or table shape changes. Additive tables don't need it.
 SCHEMA_VERSION = 2
+APPROVER_MAX_LENGTH = 80
 INCIDENT_TABLES = ("events", "executions", "approvals", "plans", "snapshot")
 SCHEMA = (
     "CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT NOT NULL)",
@@ -97,14 +98,13 @@ class LogiOpsService:
         connection.row_factory = sqlite3.Row
         connection.execute("PRAGMA busy_timeout=5000")
         try:
-            if write:
-                connection.execute("BEGIN IMMEDIATE")
+            # Reads take a transaction too, so a write that commits between two SELECTs
+            # cannot mix the old state with the new rows (a deferred BEGIN holds the read lock).
+            connection.execute("BEGIN IMMEDIATE" if write else "BEGIN")
             yield connection
-            if write:
-                connection.commit()
+            connection.commit()
         except Exception:
-            if write:
-                connection.rollback()
+            connection.rollback()
             raise
         finally:
             connection.close()
@@ -239,6 +239,8 @@ class LogiOpsService:
     def approve(self, incident_id: str, plan_id: str, source_version: int, approved_by: str) -> dict[str, Any]:
         if not approved_by.strip():
             raise WorkflowError("approved_by is required", 422)
+        if len(approved_by.strip()) > APPROVER_MAX_LENGTH:
+            raise WorkflowError(f"approved_by must be at most {APPROVER_MAX_LENGTH} characters", 422)
         with self._connection(write=True) as connection:
             state, current_version = self._snapshot(connection, incident_id)
             plan = self._plan(connection, incident_id, plan_id)
@@ -436,5 +438,7 @@ class LogiOpsService:
                 "tool_trace": run["tool_trace"],
                 "usage": run["usage"],
                 "mode": run["mode"],
+                # The grounding checks and the model, when the agent ran them, so a reload shows them.
+                **{key: run[key] for key in ("model", "evaluations", "grounded") if key in run},
             })
             return {"plans": plans, "source_version": version}
