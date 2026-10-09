@@ -59,7 +59,7 @@ More detail in `docs/architecture.md`.
 |---|---|---|
 | `LOGIOPS_AGENT_MODE` | `bedrock` or `replay` (scripted model, zero tokens) | `bedrock` |
 | `LOGIOPS_DB_PATH` | SQLite database | `data/logiops.sqlite3` |
-| `LOGIOPS_SCENARIO_ANCHOR` | when the synthetic incidents are due: `relative` (the day after each reset, Lima time), `fixed` (the seed's own dates) or a `YYYY-MM-DD` day | `relative` |
+| `LOGIOPS_SCENARIO_ANCHOR` | when the synthetic incidents are due: `relative` (the first orders due tomorrow, Lima time; stale dates move forward on their own), `fixed` (the seed's own dates) or a `YYYY-MM-DD` day | `relative` |
 | `LOGIOPS_PUBLIC` | `1` for public mode (requires the token and `LOGIOPS_PUBLIC_HOST`) | off |
 | `LOGIOPS_ACCESS_TOKEN` | bearer token, at least 32 characters in public mode | none |
 | `LOGIOPS_PUBLIC_HOST` | the one public hostname (also the MCP allowed host) | none |

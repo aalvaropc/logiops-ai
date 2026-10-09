@@ -2,9 +2,11 @@
 
 import asyncio
 import json
+import re
 import sqlite3
 import threading
 import time
+from datetime import date, datetime, timedelta
 from contextlib import asynccontextmanager
 
 import httpx
@@ -12,7 +14,7 @@ import pytest
 
 from logiops.api import create_app
 from logiops.scenario import (
-    INCIDENT_IDS, SCENARIO_DATE_KEYS, SEED_DAY, best_plan, build_plans, known_figures, scenario_day, seed_state,
+    INCIDENT_IDS, SEED_DAY, best_plan, build_plans, known_figures, scenario_clock, seed_state,
 )
 from logiops.service import LogiOpsService, WorkflowError
 
@@ -426,75 +428,89 @@ def test_an_agent_run_keeps_its_checks_and_model(tmp_path):
     assert not {"model", "evaluations", "grounded"} & plain.keys()
 
 
-# --- Dates anchored to the reset day (2026-10-08) ----------------------------------
+# --- Dates anchored to the scenario day (2026-10-08) -------------------------------
 
 
-def _dates(value):
-    """Every scenario timestamp in a seed, by its path."""
-    found = {}
-
-    def walk(item, path):
-        if isinstance(item, dict):
-            for key, child in item.items():
-                walk(child, f"{path}.{key}")
-        elif isinstance(item, list):
-            for index, child in enumerate(item):
-                walk(child, f"{path}[{index}]")
-        elif isinstance(item, str) and path.rsplit(".", 1)[-1] in SCENARIO_DATE_KEYS:
-            found[path] = item
-    walk(value, "")
-    return found
+ISO_LIKE = re.compile(r"\d{4}-\d{2}-\d{2}T")
 
 
-def test_a_scenario_day_shifts_every_date_by_whole_days_and_keeps_the_plans(tmp_path):
-    from datetime import date, datetime, timedelta
+def _timestamps(value, path=""):
+    """Every string in a seed that looks like a timestamp, by its path: found by its shape, not by
+    field name, so a timestamp added later cannot hide from the shift."""
+    if isinstance(value, dict):
+        return {key: stamp for name, item in value.items() for key, stamp in _timestamps(item, f"{path}.{name}").items()}
+    if isinstance(value, list):
+        return {key: stamp for index, item in enumerate(value) for key, stamp in _timestamps(item, f"{path}[{index}]").items()}
+    return {path: value} if isinstance(value, str) and ISO_LIKE.match(value) else {}
 
+
+def test_a_scenario_day_moves_every_timestamp_by_whole_days_and_keeps_the_plans():
     for incident_id in INCIDENT_IDS:
         fixed, moved = seed_state(incident_id), seed_state(incident_id, date(2026, 12, 2))
-        before, after = _dates(fixed), _dates(moved)
+        before, after = _timestamps(fixed), _timestamps(moved)
         assert before.keys() == after.keys() and len(before) >= 4
         for path, value in before.items():
             assert datetime.fromisoformat(after[path]) - datetime.fromisoformat(value) == timedelta(days=51), path
-            assert after[path].endswith("-05:00") and after[path][10:] == value[10:]  # same Lima time of day
-        summary = {key: [(plan["kind"], plan["incremental_cost_usd"], plan["projected_customer_delay_hours"])
-                         for plan in build_plans(state, 1)] for key, state in (("fixed", fixed), ("moved", moved))}
-        assert summary["fixed"] == summary["moved"]
-        assert best_plan(build_plans(fixed, 1))["kind"] == best_plan(build_plans(moved, 1))["kind"]
+            assert after[path][10:] == value[10:]  # same Lima time of day and offset
+        assert (fixed["scenario_day"], moved["scenario_day"]) == ("2026-10-12", "2026-12-02")
+        plans = {key: [(plan["kind"], plan["incremental_cost_usd"], plan["projected_customer_delay_hours"])
+                       for plan in build_plans(state, 1)] for key, state in (("fixed", fixed), ("moved", moved))}
+        assert plans["fixed"] == plans["moved"]
     assert seed_state("SHIP-421", SEED_DAY)["shipment"] == seed_state("SHIP-421")["shipment"]
 
 
-def test_the_service_seeds_and_resets_on_the_day_it_is_given(tmp_path):
-    from datetime import date
-
+def test_the_service_seeds_and_resets_on_its_scenario_day(tmp_path):
     day = [date(2026, 11, 10)]
     service = LogiOpsService(tmp_path / "anchored.sqlite3", scenario_day=lambda: day[0])
     assert service.get("SHIP-421")["state"]["orders"][0]["due_eta"].startswith("2026-11-10T")
-    day[0] = date(2026, 12, 1)
-    # A running demo keeps its dates until a reset, which takes the day at that moment.
-    assert service.get("SHIP-421")["state"]["orders"][0]["due_eta"].startswith("2026-11-10T")
-    service.reset("SHIP-421")
-    assert service.get("SHIP-421")["state"]["orders"][0]["due_eta"].startswith("2026-12-01T")
-    assert service.get("SHIP-433")["state"]["orders"][0]["due_eta"].startswith("2026-11-11T")
-    service.reset()
-    assert all(item["due_eta"].startswith("2026-12-") for item in service.list_incidents())
+    service.investigate("SHIP-421")
+    service.reset("SHIP-433")
+    assert service.get("SHIP-433")["state"]["orders"][0]["due_eta"].startswith("2026-11-11T")  # due a day later
 
 
-def test_the_scenario_day_setting():
-    from datetime import date
+def test_stale_dates_move_forward_without_a_reset(tmp_path):
+    day = [date(2026, 11, 10)]
+    service = LogiOpsService(tmp_path / "rolling.sqlite3", scenario_day=lambda: day[0])
+    service.investigate("SHIP-421")  # someone is working on it
+    day[0] = date(2026, 11, 11)
+    due = {item["incident_id"]: item["due_eta"][:10] for item in service.list_incidents()}
+    # Untouched incidents follow the new day; the one in progress keeps its dates while still current.
+    assert due["SHIP-452"] == "2026-11-11" and due["SHIP-421"] == "2026-11-10"
+    assert service.get("SHIP-421")["state"]["status"] == "investigated"
+    events = service.get("SHIP-452")["events"]
+    assert [event["name"] for event in events] == ["scenario_reset"] and events[0]["data"]["dates_refreshed"] is True
+    # Once its anchor day has passed, an incident in progress is re-seeded too.
+    day[0] = date(2026, 11, 12)
+    assert {item["due_eta"][:10] for item in service.list_incidents() if item["incident_id"] in ("SHIP-421", "SHIP-452")} \
+        == {"2026-11-12"}
+    assert service.get("SHIP-421")["state"]["status"] == "detected"
 
-    today = date(2026, 10, 19)
-    assert scenario_day(None, today=today) == date(2026, 10, 20)  # due tomorrow, Lima time
-    assert scenario_day("relative", today=today) == date(2026, 10, 20)
-    assert scenario_day("fixed", today=today) is None
-    assert scenario_day("2026-11-10", today=today) == date(2026, 11, 10)
-    with pytest.raises(ValueError, match="LOGIOPS_SCENARIO_ANCHOR"):
-        scenario_day("next tuesday", today=today)
+
+def test_a_database_seeded_with_fixed_dates_moves_to_the_scenario_day_at_startup(tmp_path):
+    LogiOpsService(tmp_path / "deployed.sqlite3")  # an older release: the seed's own dates
+    service = LogiOpsService(tmp_path / "deployed.sqlite3", scenario_day=lambda: date(2026, 12, 2))
+    assert service.get("SHIP-460")["state"]["scenario_day"] == "2026-12-02"
+    assert {item["due_eta"][:10] for item in service.list_incidents()} == {"2026-12-02", "2026-12-03"}
 
 
-def test_the_app_puts_the_incidents_due_tomorrow_by_default(tmp_path):
+def test_the_anchor_setting():
+    today = lambda: date(2026, 10, 19)  # noqa: E731
+    assert scenario_clock(None, today)() == date(2026, 10, 20)  # tomorrow, Lima time
+    assert scenario_clock("  ", today)() == date(2026, 10, 20)  # a blank value is the default
+    assert scenario_clock("Relative", today)() == date(2026, 10, 20)
+    assert scenario_clock("fixed", today)() is None
+    assert scenario_clock("2026-11-10", today)() == date(2026, 11, 10)
+    for wrong in ("next tuesday", "20261110", "9999-12-31", "0001-01-01", "2026-02-30"):
+        with pytest.raises(ValueError, match="LOGIOPS_SCENARIO_ANCHOR"):
+            scenario_clock(wrong, today)
+
+
+def test_the_app_anchors_the_scenario_on_tomorrow_by_default(tmp_path):
     async def scenario():
         async with client_for(tmp_path / "tomorrow.sqlite3") as client:
-            return (await client.get("/incidents")).json()["incidents"]
+            return (await client.get("/incidents/SHIP-421")).json()["state"]["scenario_day"]
 
-    expected = scenario_day(None).isoformat()
-    assert {item["due_eta"][:10] for item in asyncio.run(scenario())} >= {expected}
+    before = scenario_clock(None)()
+    anchored = asyncio.run(scenario())
+    assert anchored in {before.isoformat(), scenario_clock(None)().isoformat()}  # even across midnight
+    assert anchored != SEED_DAY.isoformat() or before == SEED_DAY

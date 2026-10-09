@@ -6,12 +6,12 @@ import json
 import logging
 import sqlite3
 from contextlib import contextmanager
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Callable, Iterator
 
 from .scenario import (
-    INCIDENT_ID, INCIDENT_IDS, SHIPMENT_SOURCE, available_units, build_plans, inbox_key, incident_summary,
+    INCIDENT_ID, INCIDENT_IDS, SEED_DAY, SHIPMENT_SOURCE, available_units, build_plans, inbox_key, incident_summary,
     local_warehouse, seed_state,
 )
 from .tools import find_alternative_carriers, get_local_inventory, get_orders, get_shipment
@@ -54,7 +54,8 @@ def _json(value: Any) -> str:
 class LogiOpsService:
     def __init__(self, db_path: str | Path, scenario_day: Callable[[], date | None] | None = None) -> None:
         self.db_path = Path(db_path)
-        # Called at each seed and reset: the day the incidents are due, or None for the seed's own dates.
+        # Called at each seed, reset and inbox read: the scenario's anchor day (see scenario_clock),
+        # or None to keep the seed's own dates.
         self._scenario_day = scenario_day or (lambda: None)
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         # One transaction: a failed migration leaves the old database untouched.
@@ -84,6 +85,7 @@ class LogiOpsService:
         if migrated_from is not None:
             logger.warning("Stored data used schema %s; rebuilt the synthetic incidents for schema %s",
                            migrated_from, SCHEMA_VERSION)
+        self._refresh_stale_dates()
 
     @staticmethod
     def _stored_schema(connection: sqlite3.Connection) -> int | None:
@@ -120,12 +122,44 @@ class LogiOpsService:
         )
 
     @classmethod
-    def _seed(cls, connection: sqlite3.Connection, incident_id: str, day: date | None) -> None:
+    def _seed(cls, connection: sqlite3.Connection, incident_id: str, day: date | None, refreshed: bool = False) -> None:
         connection.execute(
             "INSERT INTO snapshot (incident_id, version, state_json) VALUES (?, ?, ?)",
             (incident_id, 1, _json(seed_state(incident_id, day))),
         )
-        cls._event(connection, incident_id, "scenario_reset", {"source_version": 1})
+        cls._event(connection, incident_id, "scenario_reset",
+                   {"source_version": 1, **({"dates_refreshed": True} if refreshed else {})})
+
+    @staticmethod
+    def _stale(state: dict[str, Any], version: int, day: date) -> bool:
+        """Dates to move forward: an untouched incident once the anchor day moves on, and any
+        incident whose anchor day has already passed (its orders were due before today)."""
+        stored = date.fromisoformat(state.get("scenario_day") or SEED_DAY.isoformat())
+        untouched = state["status"] == "detected" and version == 1
+        return stored < day and (untouched or stored < day - timedelta(days=1))
+
+    def _refresh_stale_dates(self) -> list[str]:
+        """Re-seed the incidents whose dates went stale, so a long-running demo stays current
+        without anyone pressing reset. Returns the ids it refreshed."""
+        day = self._scenario_day()
+        if day is None:
+            return []
+        with self._connection() as connection:
+            rows = connection.execute("SELECT state_json, version FROM snapshot").fetchall()
+        if not any(self._stale(json.loads(row["state_json"]), row["version"], day) for row in rows):
+            return []
+        refreshed = []
+        with self._connection(write=True) as connection:
+            # Checked again inside the write transaction, so two readers never refresh twice.
+            for row in connection.execute("SELECT incident_id, state_json, version FROM snapshot").fetchall():
+                if self._stale(json.loads(row["state_json"]), row["version"], day):
+                    for table in INCIDENT_TABLES:
+                        connection.execute(f"DELETE FROM {table} WHERE incident_id = ?", (row["incident_id"],))
+                    self._seed(connection, row["incident_id"], day, refreshed=True)
+                    refreshed.append(row["incident_id"])
+        if refreshed:
+            logger.info("Moved the dates of %s to the scenario day %s", ", ".join(refreshed), day.isoformat())
+        return refreshed
 
     @staticmethod
     def _snapshot(connection: sqlite3.Connection, incident_id: str) -> tuple[dict[str, Any], int]:
@@ -202,7 +236,9 @@ class LogiOpsService:
         }
 
     def list_incidents(self) -> list[dict[str, Any]]:
-        """Every incident as an inbox entry: open first, then by due time and priority."""
+        """Every incident as an inbox entry: open first, then by due time and priority.
+        Reading the inbox first moves stale dates forward (see _refresh_stale_dates)."""
+        self._refresh_stale_dates()
         with self._connection() as connection:
             rows = connection.execute("SELECT state_json, version FROM snapshot").fetchall()
         return sorted((incident_summary(json.loads(row["state_json"]), row["version"]) for row in rows), key=inbox_key)

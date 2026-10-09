@@ -8,8 +8,9 @@ so a stock or capacity change always recalculates them.
 
 from __future__ import annotations
 
+import re
 from datetime import date, datetime, timedelta, timezone
-from typing import Any
+from typing import Any, Callable
 from uuid import uuid4
 
 
@@ -24,10 +25,12 @@ KIND_LABELS = {
 PRIORITY_RANK = {"critical": 0, "standard": 1}
 SHIPMENT_SOURCE = "delayed-shipment"
 LIMA = timezone(timedelta(hours=-5))  # Peru keeps UTC-05:00 all year
-# The seeded incidents are due on this day. A demo shifts every date by whole days so
-# the incidents are always due the day after a reset; tests keep the seed's own dates.
+# The scenario's anchor day: the first seeded orders are due on it (the others one or two days
+# later). A demo moves every timestamp by whole days so the anchor is always tomorrow; tests
+# keep the seed's own dates.
 SEED_DAY = date(2026, 10, 12)
-SCENARIO_DATE_KEYS = frozenset({"original_eta", "delayed_eta", "due_eta", "placed_at", "ready_at", "arrival_eta"})
+ISO_TIMESTAMP = re.compile(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}")
+ANCHOR_SETTING = re.compile(r"\d{4}-\d{2}-\d{2}")
 
 
 def _seed(incident_id: str) -> dict[str, Any]:
@@ -164,41 +167,49 @@ PLAYBOOKS: dict[str, list[dict[str, Any]]] = {
 
 
 def _shifted(value: Any, days: int) -> Any:
-    """The seed with every scenario timestamp moved by whole days (times of day and offsets kept)."""
+    """The seed with every timestamp in it moved by whole days (times of day and offsets kept).
+    Any ISO timestamp moves, so a field added later can never be left behind."""
     if isinstance(value, dict):
-        return {
-            key: (datetime.fromisoformat(item) + timedelta(days=days)).isoformat()
-            if key in SCENARIO_DATE_KEYS and isinstance(item, str) else _shifted(item, days)
-            for key, item in value.items()
-        }
+        return {key: _shifted(item, days) for key, item in value.items()}
     if isinstance(value, list):
         return [_shifted(item, days) for item in value]
+    if isinstance(value, str) and ISO_TIMESTAMP.match(value):
+        return (datetime.fromisoformat(value) + timedelta(days=days)).isoformat()
     return value
 
 
-def scenario_day(setting: str | None, today: date | None = None) -> date | None:
-    """The day the incidents are due, from LOGIOPS_SCENARIO_ANCHOR: unset or "relative" is the
-    day after today in Lima, "fixed" keeps the seed's own dates (None), YYYY-MM-DD pins a day."""
-    setting = (setting or "relative").strip().lower()
-    if setting == "fixed":
-        return None
-    if setting == "relative":
-        return (today or datetime.now(LIMA).date()) + timedelta(days=1)
+def scenario_clock(
+    setting: str | None, today: Callable[[], date] | None = None,
+) -> Callable[[], date | None]:
+    """Read LOGIOPS_SCENARIO_ANCHOR once and return the scenario's anchor day for each seed:
+    "relative" (the default, also when blank) is tomorrow in Lima, "fixed" keeps the seed's own
+    dates (None), and a YYYY-MM-DD day between 2000 and 2099 pins it."""
+    value = (setting or "").strip().lower() or "relative"
+    today = today or (lambda: datetime.now(LIMA).date())
+    if value == "fixed":
+        return lambda: None
+    if value == "relative":
+        return lambda: today() + timedelta(days=1)
     try:
-        return date.fromisoformat(setting)
-    except ValueError as exc:
-        raise ValueError("LOGIOPS_SCENARIO_ANCHOR must be relative, fixed or a YYYY-MM-DD date") from exc
+        pinned = date.fromisoformat(value) if ANCHOR_SETTING.fullmatch(value) else None
+    except ValueError:
+        pinned = None
+    if pinned is None or not 2000 <= pinned.year <= 2099:
+        raise ValueError("LOGIOPS_SCENARIO_ANCHOR must be relative, fixed, or a YYYY-MM-DD day between 2000 and 2099")
+    return lambda: pinned
 
 
 def seed_state(incident_id: str = INCIDENT_ID, day: date | None = None) -> dict[str, Any]:
     seed = _seed(incident_id)
     if day is not None and day != SEED_DAY:
         seed = _shifted(seed, (day - SEED_DAY).days)
+    anchor = day or SEED_DAY
     shipment = {"id": incident_id, **seed["shipment"]}
     orders = [{**order, "shipment_id": incident_id} for order in seed["orders"]]
     return {
         "incident_id": incident_id,
         "scenario_run_id": str(uuid4()),
+        "scenario_day": anchor.isoformat(),  # lets the service tell when the dates went stale
         "kind": seed["kind"],
         "title": seed["title"],
         "simulated": True,
