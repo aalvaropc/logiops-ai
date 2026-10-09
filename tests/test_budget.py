@@ -1,37 +1,86 @@
 """A daily cap on live model calls, shared by every visitor (review, 2026-10-08)."""
 
 import asyncio
-from datetime import datetime, timedelta, timezone
+from datetime import datetime
 
 import httpx
+import pytest
 
 import logiops.api as api_module
 from logiops.api import create_app
-from logiops.budget import DailyModelBudget
+from logiops.bedrock import BedrockError
+from logiops.budget import LIMA, BudgetedConverse, DailyModelBudget
 from logiops.replay import ReplayConverse
 
-LIMA = timezone(timedelta(hours=-5))
 
-
-def test_calls_are_counted_per_lima_day(tmp_path):
+def test_reservations_are_atomic_per_lima_day_and_released(tmp_path):
     now = [datetime(2026, 10, 20, 23, 30, tzinfo=LIMA)]
-    budget = DailyModelBudget(tmp_path / "budget.sqlite3", limit=2, clock=lambda: now[0])
-    assert budget.available() and budget.spend() == 1 and budget.spend() == 2
-    assert not budget.available() and budget.used() == 2
-    # 00:30 in Lima is still the 20th in some zones and already the 21st here: a new day, a new budget.
-    now[0] = datetime(2026, 10, 21, 0, 30, tzinfo=LIMA)
-    assert budget.available() and budget.used() == 0
-    # The count lives in the database, so a restart does not reset it.
-    again = DailyModelBudget(tmp_path / "budget.sqlite3", limit=2, clock=lambda: now[0])
-    again.spend()
-    assert again.used() == 1 and DailyModelBudget(tmp_path / "budget.sqlite3", limit=2, clock=lambda: now[0]).used() == 1
+    budget = DailyModelBudget(tmp_path / "budget.sqlite3", limit=10, clock=lambda: now[0])
+    day = budget.reserve(8)
+    assert day == "2026-10-20" and budget.used() == 8
+    assert budget.reserve(4) is None and budget.used() == 8  # 12 would not fit: nothing is held
+    budget.release(day, 5)  # the run made 3 calls
+    assert budget.used() == 3 and budget.reserve(4) == "2026-10-20"
+    # After midnight the run still releases on the day it reserved; today starts empty.
+    now[0] = datetime(2026, 10, 21, 0, 5, tzinfo=LIMA)
+    budget.release(day, 4)
+    assert budget.used() == 0 and budget.used("2026-10-20") == 3
+    # Stored in the database: a restart keeps the day's count.
+    assert DailyModelBudget(tmp_path / "budget.sqlite3", limit=10, clock=lambda: now[0]).used("2026-10-20") == 3
 
 
-def test_the_limit_comes_from_the_environment(tmp_path, monkeypatch):
+def test_the_budget_creates_its_directory_and_reads_the_limit(tmp_path, monkeypatch):
     monkeypatch.setenv("LOGIOPS_DAILY_MODEL_CALLS", "7")
-    assert DailyModelBudget.from_env(tmp_path / "env.sqlite3").limit == 7
+    assert DailyModelBudget.from_env(tmp_path / "new" / "dir" / "env.sqlite3").limit == 7
     monkeypatch.delenv("LOGIOPS_DAILY_MODEL_CALLS")
     assert DailyModelBudget.from_env(tmp_path / "env.sqlite3").limit == 150
+    monkeypatch.setenv("LOGIOPS_DAILY_MODEL_CALLS", "lots")
+    with pytest.raises(RuntimeError, match="LOGIOPS_DAILY_MODEL_CALLS"):
+        DailyModelBudget.from_env(tmp_path / "env.sqlite3")
+
+
+def test_concurrent_runs_never_exceed_the_cap_together(tmp_path):
+    # Review: ten runs checking first and spending later reached 80 calls on a limit of 3.
+    budget = DailyModelBudget(tmp_path / "race.sqlite3", limit=20)
+
+    class Answers:
+        async def converse(self, messages, system, tools):
+            await asyncio.sleep(0)
+            return {"stopReason": "end_turn"}
+
+    async def run_one():
+        day = budget.reserve(8)
+        if day is None:
+            return 0
+        client = BudgetedConverse(Answers(), budget, day, 8)
+        try:
+            for _ in range(8):
+                await client.converse([], "", [])
+        finally:
+            client.settle()
+        return client.calls
+
+    async def all_runs():
+        return await asyncio.gather(*(run_one() for _ in range(10)))
+
+    made = asyncio.run(all_runs())
+    assert sum(made) <= 20 and budget.used() == sum(made) == 16
+
+
+def test_failed_calls_are_released_so_an_outage_never_looks_like_a_used_budget(tmp_path):
+    budget = DailyModelBudget(tmp_path / "outage.sqlite3", limit=8)
+
+    class Down:
+        async def converse(self, messages, system, tools):
+            raise BedrockError("Bedrock Converse failed (AccessDeniedException)")
+
+    for _ in range(5):
+        day = budget.reserve(8)
+        client = BudgetedConverse(Down(), budget, day, 8)
+        with pytest.raises(BedrockError, match="AccessDenied"):
+            asyncio.run(client.converse([], "", []))
+        client.settle()
+    assert budget.used() == 0
 
 
 class FakeBedrock(ReplayConverse):
@@ -44,7 +93,7 @@ class FakeBedrock(ReplayConverse):
         return await super().converse(messages, system, tools)
 
 
-def _investigate(tmp_path, monkeypatch, limit):
+def _session(tmp_path, monkeypatch, limit):
     monkeypatch.setenv("LOGIOPS_AGENT_MODE", "bedrock")
     monkeypatch.setenv("LOGIOPS_DAILY_MODEL_CALLS", str(limit))
     monkeypatch.setattr(api_module, "BedrockConverse", FakeBedrock)
@@ -61,15 +110,28 @@ def _investigate(tmp_path, monkeypatch, limit):
     return asyncio.run(run())
 
 
-def test_live_calls_are_counted_against_the_daily_budget(tmp_path, monkeypatch):
-    first, briefing = _investigate(tmp_path, monkeypatch, limit=150)
-    assert first["mode"] == "bedrock" and briefing["mode"] == "bedrock" and FakeBedrock.calls >= 4
-    budget = DailyModelBudget(tmp_path / "live-150.sqlite3", limit=150)
-    assert budget.used() == FakeBedrock.calls
+def test_live_calls_are_counted_and_the_unused_reservation_released(tmp_path, monkeypatch):
+    first, briefing = _session(tmp_path, monkeypatch, limit=150)
+    assert first["mode"] == briefing["mode"] == "bedrock" and "fallback" not in first
+    assert FakeBedrock.calls >= 4
+    assert DailyModelBudget(tmp_path / "live-150.sqlite3", limit=150).used() == FakeBedrock.calls
 
 
-def test_a_used_up_budget_falls_back_to_a_labelled_replay(tmp_path, monkeypatch):
-    first, briefing = _investigate(tmp_path, monkeypatch, limit=0)
+def test_a_used_budget_falls_back_to_the_replay_and_says_so(tmp_path, monkeypatch):
+    first, briefing = _session(tmp_path, monkeypatch, limit=4)  # under an investigation's 8 and a briefing's 5
     assert FakeBedrock.calls == 0
-    assert first["mode"] == briefing["mode"] == "replay (daily live budget used)"
+    assert first["mode"] == briefing["mode"] == "replay" and first["fallback"] == briefing["fallback"] == "daily_budget"
     assert first["answer"].rstrip().splitlines()[-1].startswith("Recommended plan: SHIP-421:")
+
+
+def test_an_invalid_mode_is_rejected_even_with_a_custom_client(tmp_path, monkeypatch):
+    monkeypatch.setenv("LOGIOPS_AGENT_MODE", "typo")
+
+    async def run():
+        app = create_app(tmp_path / "typo.sqlite3", ReplayConverse())
+        async with app.router.lifespan_context(app):
+            async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as http:
+                return await http.post("/incidents/SHIP-421/agent/investigate", json={})
+
+    response = asyncio.run(run())
+    assert response.status_code == 502 and "LOGIOPS_AGENT_MODE" in response.json()["detail"]

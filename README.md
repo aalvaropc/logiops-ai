@@ -65,7 +65,7 @@ More detail in `docs/architecture.md`.
 | `LOGIOPS_SANDBOX_HOST` | second hostname that serves only the MCP Apps sandbox proxy | `127.0.0.1`/`localhost` pair locally |
 | `LOGIOPS_TRUST_CLOUDFRONT` | identify viewers by `CloudFront-Viewer-Address` | off |
 | `LOGIOPS_AGENT_LIMIT_PER_MINUTE` | paid agent calls per viewer per minute | `10` |
-| `LOGIOPS_DAILY_MODEL_CALLS` | live model calls per day (Lima time) for the whole demo; once used, agent requests run in replay mode and say so | `150` |
+| `LOGIOPS_DAILY_MODEL_CALLS` | live model calls per day (Lima time) for the whole demo; each request reserves its run's maximum and releases what it did not use, and a run that no longer fits answers from replay with `fallback: "daily_budget"` | `150` |
 | `AWS_REGION`, `BEDROCK_MODEL_ID` | Bedrock region and model profile | `us-east-1`, `global.anthropic.claude-sonnet-4-6` |
 
 ## Status
@@ -176,7 +176,10 @@ deterministic rehearsal, launch the server with `LOGIOPS_AGENT_MODE=replay`;
 the response says `mode: replay` and reports zero tokens. Normal mode is
 `bedrock`. It calls Converse through boto3 with SDK retries, and a run stops
 with a clear error after 50 seconds so it always answers before CloudFront's
-60-second origin timeout.
+60-second origin timeout. Live calls share a daily budget for the whole demo
+(`LOGIOPS_DAILY_MODEL_CALLS`): when a run no longer fits, the response says
+`mode: replay` with `fallback: "daily_budget"`, and the page says so above the
+conversation until midnight, Lima time.
 
 ### Follow-up questions
 

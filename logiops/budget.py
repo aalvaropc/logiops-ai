@@ -1,78 +1,96 @@
 """A daily cap on live model calls, shared by every visitor.
 
 The per-minute limits in security.py are per visitor; this one bounds what the
-whole demo can spend in a day. When it is used up, agent requests run in replay
-mode and say so, instead of failing or spending more.
+whole demo can spend in a day. Each live request first reserves its run's
+maximum number of model calls in one atomic update, so requests running at the
+same time can never exceed the cap together; when the run ends, the calls it
+did not make successfully are released. When a run no longer fits, the request
+runs on the replay model and says so (`fallback: "daily_budget"`), instead of
+failing or spending more.
+
+Calls are counted, not tokens: the cap is a simple, predictable bound (an
+investigation is at most 8 calls), not an exact bill. SDK retries inside one
+call are not counted separately.
 """
 
 from __future__ import annotations
 
 import os
-import sqlite3
-from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Any, Callable, Iterator
+from typing import Any, Callable
+
+from .bedrock import BedrockError
+from .storage import connect
 
 LIMA = timezone(timedelta(hours=-5))
 DEFAULT_DAILY_CALLS = 150
-EXHAUSTED_MODE = "replay (daily live budget used)"
+FALLBACK = "daily_budget"
+SCHEMA = "CREATE TABLE IF NOT EXISTS model_budget (day TEXT PRIMARY KEY, calls INTEGER NOT NULL)"
 
 
 class DailyModelBudget:
     def __init__(self, db_path: str | Path, limit: int, clock: Callable[[], datetime] | None = None) -> None:
         self.db_path = Path(db_path)
+        self.db_path.parent.mkdir(parents=True, exist_ok=True)
         self.limit = limit
         self._clock = clock or (lambda: datetime.now(LIMA))
-        with self._connection() as connection:
-            connection.execute(
-                "CREATE TABLE IF NOT EXISTS model_budget (day TEXT PRIMARY KEY, calls INTEGER NOT NULL)")
+        with connect(self.db_path) as connection:
+            connection.execute(SCHEMA)
 
     @classmethod
     def from_env(cls, db_path: str | Path) -> "DailyModelBudget":
-        return cls(db_path, int(os.environ.get("LOGIOPS_DAILY_MODEL_CALLS", DEFAULT_DAILY_CALLS)))
-
-    @contextmanager
-    def _connection(self) -> Iterator[sqlite3.Connection]:
-        connection = sqlite3.connect(self.db_path, timeout=5)
-        connection.execute("PRAGMA busy_timeout=5000")
         try:
-            with connection:  # commits, or rolls back on an error
-                yield connection
-        finally:
-            connection.close()
+            return cls(db_path, int(os.environ.get("LOGIOPS_DAILY_MODEL_CALLS", DEFAULT_DAILY_CALLS)))
+        except ValueError as exc:
+            raise RuntimeError("LOGIOPS_DAILY_MODEL_CALLS must be an integer") from exc
 
-    def _today(self) -> str:
+    def today(self) -> str:
         return self._clock().astimezone(LIMA).date().isoformat()
 
-    def used(self) -> int:
-        with self._connection() as connection:
-            row = connection.execute("SELECT calls FROM model_budget WHERE day = ?", (self._today(),)).fetchone()
+    def used(self, day: str | None = None) -> int:
+        """Calls used or reserved on a day (today by default)."""
+        with connect(self.db_path) as connection:
+            row = connection.execute("SELECT calls FROM model_budget WHERE day = ?", (day or self.today(),)).fetchone()
         return row[0] if row else 0
 
-    def available(self) -> bool:
-        return self.used() < self.limit
+    def reserve(self, calls: int) -> str | None:
+        """Hold `calls` of today's budget in one atomic update. Returns the day they were held on
+        (to release unused calls later, even after midnight), or None when they no longer fit."""
+        day = self.today()
+        with connect(self.db_path) as connection:
+            connection.execute("INSERT INTO model_budget (day, calls) VALUES (?, 0) ON CONFLICT(day) DO NOTHING", (day,))
+            held = connection.execute(
+                "UPDATE model_budget SET calls = calls + ? WHERE day = ? AND calls + ? <= ?",
+                (calls, day, calls, self.limit),
+            ).rowcount
+        return day if held else None
 
-    def spend(self, calls: int = 1) -> int:
-        """Count calls for today and return the new total."""
-        with self._connection() as connection:
-            connection.execute(
-                "INSERT INTO model_budget (day, calls) VALUES (?, ?) "
-                "ON CONFLICT(day) DO UPDATE SET calls = calls + excluded.calls",
-                (self._today(), calls),
-            )
-            row = connection.execute("SELECT calls FROM model_budget WHERE day = ?", (self._today(),)).fetchone()
-        return row[0]
+    def release(self, day: str, calls: int) -> None:
+        """Give back calls a run reserved but did not make."""
+        if calls > 0:
+            with connect(self.db_path) as connection:
+                connection.execute("UPDATE model_budget SET calls = MAX(0, calls - ?) WHERE day = ?", (calls, day))
 
 
 class BudgetedConverse:
-    """A live client that counts each call. A run that starts within the budget finishes,
-    so the overshoot is bounded by one run's turn limit."""
+    """A live client bound to one reservation: it counts the calls that returned a response
+    (a failed call is not billed as a model answer, so an outage never looks like a used
+    budget), refuses to go past the reservation, and releases the rest when settled."""
 
-    def __init__(self, client: Any, budget: DailyModelBudget) -> None:
+    def __init__(self, client: Any, budget: DailyModelBudget, day: str, reserved: int) -> None:
         self.client = client
         self.budget = budget
+        self.day = day
+        self.reserved = reserved
+        self.calls = 0
 
     async def converse(self, messages: list[dict[str, Any]], system: str, tools: list[dict[str, Any]]) -> dict[str, Any]:
-        self.budget.spend()
-        return await self.client.converse(messages, system, tools)
+        if self.calls >= self.reserved:
+            raise BedrockError("The run used all the model calls reserved for it")
+        response = await self.client.converse(messages, system, tools)
+        self.calls += 1
+        return response
+
+    def settle(self) -> None:
+        self.budget.release(self.day, self.reserved - self.calls)

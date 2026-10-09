@@ -681,11 +681,17 @@ function render(snapshot) {
   renderControls();
 }
 
+// A reply from the scripted replay because today's live budget is used says so where people look.
+function noteFallback(run) {
+  if (run.fallback === "daily_budget") {
+    message("Today's live model budget is used, so answers come from the scripted replay until midnight, Lima time.", true);
+  }
+}
+
 function traceSummary(run) {
   const tokens = (run.usage?.inputTokens || 0) + (run.usage?.outputTokens || 0);
-  // "replay (daily live budget used)" already reads as a label; plain modes get the word "mode".
-  const mode = run.mode.includes(" ") ? run.mode : `${run.mode} mode`;
-  return `${run.tool_trace.length} MCP calls · ${mode} · ${tokens} tokens${run.truncated ? " · truncated" : ""}`;
+  const fallback = run.fallback === "daily_budget" ? " · daily live budget used" : "";
+  return `${run.tool_trace.length} MCP calls · ${run.mode} mode${fallback} · ${tokens} tokens${run.truncated ? " · truncated" : ""}`;
 }
 
 function executionSummary(snapshot, execution) {
@@ -832,6 +838,7 @@ async function handleUtterance(raw) {
       state.briefingPick = run.start_with;
       renderInbox();
       say("assistant", run.answer, `briefing · ${traceSummary(run)}`, run.spoken);
+      noteFallback(run);
     } catch (error) {
       say("assistant", `I couldn't do that: ${error.message || error}`);
     }
@@ -918,6 +925,7 @@ async function handleUtterance(raw) {
           : await request(incidentPath("/agent/ask"), "POST", { question: text, history });
       }, "");
       say("assistant", run.answer, `${fresh ? "investigation" : "follow-up"} · ${traceSummary(run)}`, run.spoken);
+      noteFallback(run);
       if (fresh) {
         showMcpApp(run).catch((error) => {
           console.warn("MCP App failed:", error);

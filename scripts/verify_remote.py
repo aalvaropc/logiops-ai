@@ -38,6 +38,9 @@ def main() -> None:
         investigated = client.post("/incidents/SHIP-421/agent/investigate", json={})
         investigated.raise_for_status()
         run = investigated.json()
+        if run.get("fallback") == "daily_budget":
+            raise RuntimeError("Today's live model budget is used (LOGIOPS_DAILY_MODEL_CALLS), so the deployment "
+                               "answered from replay; try after midnight Lima time or raise the limit")
         if run["mode"] != "bedrock" or len(run["plans"]) != 3:
             raise RuntimeError("The live Bedrock agent did not produce three plans")
         if not any(step["tool"] == "investigate_incident" and not step["is_error"] for step in run["tool_trace"]):

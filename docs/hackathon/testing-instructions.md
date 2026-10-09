@@ -95,5 +95,7 @@ walkthrough from scratch.
 
 Run `aws login --region us-east-1` and start the server without
 `LOGIOPS_AGENT_MODE`; the meta line under each reply then says `bedrock mode` and
-shows real token counts. The hosted deployment on AWS is listed in the
+shows real token counts. The live demo shares a daily budget of model calls: if a busy
+day has used it, replies say "replay mode · daily live budget used" and a note above the
+conversation explains it; live answers return after midnight, Lima time. The hosted deployment on AWS is listed in the
 submission's testing instructions, together with its access token.
