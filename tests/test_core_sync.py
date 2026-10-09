@@ -1,7 +1,7 @@
-"""The shared core is identical wherever it is used: core.sha256 records its exact bytes.
+"""The workflow core is pinned: core.sha256 records its exact bytes, so a change to it is always deliberate.
 
-After changing a core file, copy it to every repository that shares the core and
-regenerate the manifest: sha256sum logiops/service.py logiops/scenario.py logiops/tools.py tests/test_flow.py > core.sha256
+After changing a core file, regenerate the manifest:
+sha256sum logiops/service.py logiops/scenario.py logiops/tools.py tests/test_flow.py > core.sha256
 """
 
 import hashlib
