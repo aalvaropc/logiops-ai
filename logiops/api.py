@@ -13,7 +13,7 @@ from decimal import Decimal
 from pathlib import Path
 from typing import Any, AsyncIterator, Literal
 
-from fastapi import FastAPI, Request
+from fastapi import BackgroundTasks, FastAPI, Request
 from fastapi.responses import HTMLResponse, JSONResponse, Response
 from pydantic import BaseModel, Field
 
@@ -30,6 +30,7 @@ from .budget import FALLBACK, BudgetedConverse, DailyModelBudget
 from .service import APPROVER_MAX_LENGTH, LogiOpsService, WorkflowError
 from .identity import actor_of, profile_of
 from .mcp_server import create_mcp_server
+from .memory import MemoryService
 from .oauth import OAuthSettings, install_oauth
 from .preferences import COST_LIMIT, NOTE_LIMIT, RULES, PreferenceStore, preference_for, with_preference_figures
 from .presentation import customer_text, shown_run
@@ -86,6 +87,13 @@ class AgentBriefingRequest(BaseModel):
     question: str = Field(default="Any delays today? What needs my attention first?", min_length=1, max_length=1000)
 
 
+class MemoryTurn(BaseModel):
+    session: str = Field(min_length=8, max_length=100, pattern=r"^[a-zA-Z0-9][a-zA-Z0-9_-]+$")
+    role: Literal["user", "assistant"]
+    text: str = Field(min_length=1, max_length=4000)
+    incident: str | None = Field(default=None, max_length=40)
+
+
 class SpeechRequest(BaseModel):
     text: str = Field(min_length=1, max_length=4000)
 
@@ -121,6 +129,7 @@ def create_app(
     agent_limit_per_minute: int | None = None,
     voice: PollyVoice | None = None,
     oauth: OAuthSettings | None = None,
+    memory: MemoryService | None = None,
 ) -> FastAPI:
     access_token = access_token or os.environ.get("LOGIOPS_ACCESS_TOKEN")
     public_host = os.environ.get("LOGIOPS_PUBLIC_HOST", "").strip().lower()
@@ -145,6 +154,7 @@ def create_app(
     bookings = BookingStore(path, service)
     alerts = AlertWatcher(path, service, preferences)
     voice = voice or PollyVoice(path)
+    memory = memory or MemoryService(path)
     budget = DailyModelBudget.from_env(path)
     bedrock = BedrockConverse()
     mcp = create_mcp_server(
@@ -300,6 +310,30 @@ def create_app(
             snapshot = service.get(change.incident_id)
         return snapshot
 
+    @app.post("/memory/turns", status_code=202)
+    async def remember_turn(turn: MemoryTurn, request: Request, background: BackgroundTasks) -> dict[str, Any]:
+        """Remember one turn of the conversation for the person asking (never for a guest); written after the reply."""
+        actor = actor_of(request)
+        incident = turn.incident if turn.incident in INCIDENT_IDS else None
+        background.add_task(memory.remember, actor, turn.session, turn.role, turn.text, incident)
+        return {"accepted": actor.kind != "guest", "backend": memory.backend}
+
+    @app.get("/memory")
+    async def recall(request: Request, session: str | None = None) -> dict[str, Any]:
+        """What the person said in their previous session, a welcome-back line, and long-term facts."""
+        return await asyncio.to_thread(memory.recall, actor_of(request), session)
+
+    @app.delete("/memory")
+    async def forget(request: Request) -> dict[str, Any]:
+        """Forget me: delete the person's remembered turns and records."""
+        return {"forgotten": await asyncio.to_thread(memory.forget, actor_of(request)), "backend": memory.backend}
+
+    async def remembered(request: Request, question: str, run_mode: str) -> list[str]:
+        """Long-term facts about the person, for a live run only (the replay model ignores them)."""
+        if run_mode == "replay":
+            return []
+        return (await asyncio.to_thread(memory.recall, actor_of(request), None, question)).get("facts", [])
+
     @app.get("/voice/config")
     async def voice_config() -> dict[str, Any]:
         """How the page should speak: Amazon Polly (with its voice) or the browser's own voice."""
@@ -390,9 +424,11 @@ def create_app(
         source_version = snapshot["source_version"]
         facts = with_preference_figures(known_figures(snapshot["state"]), preferences.get(profile_of(actor_of(http_request))))
         async with agent_client(bedrock_client, INVESTIGATE_TURNS, http_request) as (client, run_mode, fallback):
+            recalled = await remembered(http_request, request.question, run_mode)
+            facts = merged_facts(facts, figures_in(" ".join(recalled))) if recalled else facts
             try:
                 run = await investigate_with_bedrock(
-                    app, client, incident_id, request.question,
+                    app, client, incident_id, request.question + memory.block({"facts": recalled}),
                     access_token=agent_token(http_request), internal_key=internal_key, facts=facts,
                 )
             except BedrockError as exc:
@@ -440,6 +476,10 @@ def create_app(
             with_preference_figures(known_figures(snapshot["state"]), saved), figures_in(asked), {"recorded_actions": recorded},
             bookings.figures(incident_id))
         async with agent_client(followup_client or bedrock_client, FOLLOWUP_TURNS, http_request) as (client, run_mode, fallback):
+            recalled = await remembered(http_request, request.question, run_mode)
+            if recalled:
+                context = {**context, "memory": recalled}
+                facts = merged_facts(facts, figures_in(" ".join(recalled)))
             try:
                 run = await ask_with_bedrock(
                     app, client, incident_id, request.question, context,

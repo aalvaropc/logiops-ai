@@ -19,6 +19,8 @@
     ["confirm", /^(?:yes|yeah|yep|confirm(?:ed)?)(?:[,\s]+(?:please|do it|go ahead|confirm|approve it|execute it|book it|pay(?: for it)?|approve and pay))?$/],
     ["decline", /^(?:(?:no|nope)(?:[,\s]+(?:thanks|thank you))?|(?:no[,\s]+)?(?:cancel(?: it)?|never mind|don'?t (?:book|pay for) it|don'?t))$/],
     ["resume", /^(?:resume|continue (?:the|my) (?:booking|purchase)|resume (?:the|my) (?:booking|purchase))$/],
+    ["forget_me", /^(?:forget me|forget (?:our|my) (?:conversations?|history|chats?)|delete my (?:memory|history)|forget everything about me)$/],
+    ["pick_up", /^(?:pick up (?:there|where we left off)|continue where we left off|resume where we left off|where were we)$/],
     ["link", /^(?:link|connect)(?: (?:my|the))? account$|^(?:sign|log) ?in(?: to (?:my|the) account)?$/],
     ["unlink", /^(?:sign|log) ?out$|^(?:unlink|disconnect)(?: (?:my|the))? account$/],
   ];
@@ -93,6 +95,10 @@
     return CAPABILITIES.test(String(text).trim().toLowerCase());
   }
 
+  function isForgetMe(text) {
+    return parseCommand(text) === "forget_me";
+  }
+
   function isStartOver(text) {
     return START_OVER.test(String(text).trim().toLowerCase());
   }
@@ -158,7 +164,8 @@
   }
 
   const api = {
-    isQuestion, parseCommand, planSelector, parsePreference, isBriefing, isCapabilities, isStartOver, recommendedPlanId, mentionedIncident,
+    isQuestion, parseCommand, planSelector, parsePreference, isBriefing, isCapabilities, isStartOver, isForgetMe,
+    recommendedPlanId, mentionedIncident,
   };
   if (typeof module === "object" && module.exports) module.exports = api;
   else root.LogiOpsIntent = api;

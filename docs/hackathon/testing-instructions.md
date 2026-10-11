@@ -114,7 +114,12 @@ LOGIOPS_AGENT_MODE=replay uv run uvicorn logiops.api:app --host 127.0.0.1 --port
    approval. Nothing was approved. Do the same on another incident from a second tab:
    a bell in the top bar opens it. `GET /alerts` and the MCP tool `list_alerts` show
    the same alerts.
-14. **Sign in (deployed demo).** On the deployed demo without the token you are a guest.
+14. **Memory.** After a few turns, open the demo in a new browser window (a new
+   session). It greets you with "Welcome back… Last time … we were on SHIP-433 and you
+   said …". "Pick up where we left off" reopens that incident, and "forget me" deletes
+   what it remembered. On the deployed demo this runs on Amazon Bedrock AgentCore
+   Memory (per signed-in user); locally it runs on SQLite.
+15. **Sign in (deployed demo).** On the deployed demo without the token you are a guest.
    You can read, ask the agent (on the replay model) and use the read tools. "Approve"
    or "book it" asks you to sign in. Press "Link account" (or say "link my account"):
    - sign in with the demo user from the private testing instructions;
@@ -123,7 +128,7 @@ LOGIOPS_AGENT_MODE=replay uv run uvicorn logiops.api:app --host 127.0.0.1 --port
 
    Over MCP, `/.well-known/oauth-protected-resource/mcp` starts the same flow in any
    OAuth-capable client (PKCE S256).
-15. **Book and pay the carriers (API).** With a plan approved (for example SHIP-421's split +
+16. **Book and pay the carriers (API).** With a plan approved (for example SHIP-421's split +
    express), run `POST /incidents/SHIP-421/bookings/quote`. The quote reads "carriers
    and services $120.00, service fee $5.00, IGV 18% $22.50, total $147.50". Confirm it
    with `POST /quotes/{quote_id}/confirm` and `{"confirmed_total_usd": 147.50,

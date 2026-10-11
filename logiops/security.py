@@ -125,7 +125,7 @@ def install_security(
                                         headers={"WWW-Authenticate": challenge(base, need, error="insufficient_scope")})
         request.state.actor = actor
         internal = _constant_time_equal(request.headers.get(INTERNAL_HEADER, ""), internal_key)
-        if path.startswith("/mcp") and not internal and not mcp_limiter.allow(key):
+        if (path.startswith("/mcp") or path.startswith("/memory")) and not internal and not mcp_limiter.allow(key):
             return JSONResponse(status_code=429, content={"detail": "MCP rate limit exceeded"})
         if path == "/voice/speech" and not speech_limiter.allow(key):
             return JSONResponse(status_code=429, content={"detail": "Speech rate limit exceeded", "fallback": "browser"})

@@ -72,6 +72,7 @@ More detail in `docs/architecture.md`.
 | `LOGIOPS_POLLY_VOICE`, `LOGIOPS_POLLY_ENGINE` | Polly voice and engine | `Ruth`, `generative` |
 | `LOGIOPS_DAILY_SPEECH_CHARS` | characters Polly may synthesize per day (Lima time) for the whole demo; repeated lines come from the cache and cost nothing | `30000` |
 | `LOGIOPS_COGNITO_ISSUER`, `LOGIOPS_COGNITO_DOMAIN`, `LOGIOPS_COGNITO_CLIENT_ID` | turn on OAuth 2.1 sign-in: the user pool's issuer URL, its hosted domain, and the public PKCE app client (`LOGIOPS_COGNITO_EXTRA_CLIENT_IDS` allows more clients) | off |
+| `LOGIOPS_MEMORY_ID` | the Amazon Bedrock AgentCore Memory that keeps conversations across sessions; without it they are kept in SQLite | SQLite |
 | `LOGIOPS_ALERT_SCAN_SECONDS` | how often the proactive alert watcher scans; `0` turns the background scan off (a stock change is still scanned at once) | `30` |
 
 ## Status
@@ -444,6 +445,40 @@ audio (barge-in). If the agent takes longer than 2.5 seconds, a short filler
 ("One moment, I'm checking the shipment and the carriers") is spoken while it
 works. In replay mode the demo uses the browser's voice, so judges need no AWS
 account.
+
+### Memory across sessions (AgentCore Memory)
+
+LogiOps remembers what each person said and decided, so the next session picks
+up where the last one ended (`logiops/memory.py`). It has one interface and two
+backends.
+
+**Amazon Bedrock AgentCore Memory**, when `LOGIOPS_MEMORY_ID` is set:
+- every turn is a conversational event (`CreateEvent`, role USER or ASSISTANT,
+  with the incident as metadata) under the actor and the page's session;
+- recall reads the latest earlier session's events (`ListSessions`,
+  `ListEvents`) and the long-term records that the memory's strategies
+  extracted (`RetrieveMemoryRecords` in `/users/{actorId}/preferences` and
+  `/users/{actorId}/facts`).
+
+**SQLite** otherwise keeps the same turns (the last 200 per person), without
+long-term extraction.
+
+- **Privacy.** The actor is a SHA-256 of the signed-in user's token subject,
+  never the subject itself. The operator token shares one demo actor, and
+  guests are never remembered.
+- **Off the request path.** `POST /memory/turns` answers `202` and writes after
+  the response. A memory outage is logged and never breaks a reply.
+- **Welcome back.** A new browser session opens with "Welcome back, judge. Last
+  time (Oct 12, 14:05 Lima time) we were on SHIP-433 and you said “book it”…".
+  It is built only from what was said. "Pick up where we left off" reopens that
+  incident.
+- **Live runs.** The long-term facts reach the agent as a `<memory>` block in
+  an investigation, or a `memory` field in a follow-up's context, both marked
+  as data and never as a source of plan figures. Their figures join the
+  grounding check. The replay model never sees them.
+- **Forget me.** "Forget me" (`DELETE /memory`) deletes the person's events and
+  long-term records, and that exchange itself is not remembered. Saved
+  preferences stay until "forget my preferences".
 
 ### Proactive alerts
 

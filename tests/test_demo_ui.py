@@ -430,3 +430,18 @@ def test_link_account_uses_pkce_s256_and_a_checked_state():
              "link the express": None, "sign in as admin": None}
     got = json.loads(_intent(f"console.log(JSON.stringify({json.dumps(list(cases))}.map(m.parseCommand)))"))
     assert dict(zip(cases, got)) == cases
+
+
+def test_memory_commands_and_hooks():
+    import json
+
+    script = (Path(__file__).resolve().parents[1] / "logiops" / "static" / "demo.js").read_text()
+    assert 'if (!session || (state.auth.enabled && !state.session)) return;' in script
+    assert 'if (!state.forgetting && !String(meta || "").startsWith("welcome back")) remember(' in script
+    assert "state.forgetting = window.LogiOpsIntent.isForgetMe(text);" in script
+    assert 'request("/memory", "DELETE")' in script and "recallMemory();" in script
+    cases = {"forget me": "forget_me", "forget our conversations": "forget_me", "delete my memory": "forget_me",
+             "pick up where we left off": "pick_up", "where were we": "pick_up", "pick up there": "pick_up",
+             "forget my preferences": None, "forget me not": None}
+    got = json.loads(_intent(f"console.log(JSON.stringify({json.dumps(list(cases))}.map(m.parseCommand)))"))
+    assert dict(zip(cases, got)) == cases
