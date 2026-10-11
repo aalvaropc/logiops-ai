@@ -359,7 +359,7 @@ def create_app(
 
     @app.post("/agent/briefing")
     async def agent_briefing(request: AgentBriefingRequest) -> dict[str, Any]:
-        """Rank the open incidents and say which to open first; it reads, and changes nothing."""
+        """Brief the open incidents in inbox order and say which to open first; it reads, and changes nothing."""
         async with agent_client(followup_client or bedrock_client, BRIEFING_TURNS) as (client, run_mode, fallback):
             try:
                 run = await brief_with_bedrock(

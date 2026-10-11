@@ -215,9 +215,12 @@ def test_the_briefing_ranks_the_queue_with_read_tools_only(tmp_path, monkeypatch
             async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url=BASE_URL) as http:
                 body = (await http.post("/agent/briefing", json={})).json()
                 assert [step["tool"] for step in body["tool_trace"]] == ["list_incidents"]
-                assert body["start_with"] == "SHIP-460"
-                assert body["answer"].index("SHIP-460") < body["answer"].index("SHIP-433") < body["answer"].index("SHIP-421")
-                assert body["spoken"].startswith("You have 4 open incidents. Start with SHIP-460")
+                inbox = (await http.get("/incidents")).json()["incidents"]
+                assert body["start_with"] == inbox[0]["incident_id"] == "SHIP-433"
+                positions = [body["answer"].index(f"{item['incident_id']} (") for item in inbox]
+                assert positions == sorted(positions)
+                assert "12 critical units at risk" in body["answer"]
+                assert body["spoken"] == "You have 4 open incidents. Start with SHIP-433: 12 critical units at risk."
                 assert "Spoken:" not in body["answer"]
                 for incident_id in ("SHIP-421", "SHIP-433", "SHIP-452", "SHIP-460"):
                     snapshot = (await http.get(f"/incidents/{incident_id}")).json()

@@ -61,8 +61,8 @@ LOGIOPS_AGENT_MODE=replay uv run uvicorn logiops.api:app --host 127.0.0.1 --port
    and state. SHIP-452 (customs hold) and SHIP-460 (two orders competing for
    stock) work the same way; see `docs/demo-scenario.md`.
 8. **Briefing and preferences.** Ask "Any delays today?": the agent reads the inbox
-   with `list_incidents` and ranks the open incidents, and the one to start with
-   is marked "Start here". Say "remember my spend cap is $250", then open SHIP-433
+   with `list_incidents` and briefs the open incidents in its order (most critical
+   units at risk first), and the one to start with, SHIP-433, is marked "Start here". Say "remember my spend cap is $250", then open SHIP-433
    and ask what's happening: the "Your preference" line and badge point to flying
    only the hospital order ($240) instead of the $390 default, the agent
    recommends it and says what it trades away, and nothing is approved until you

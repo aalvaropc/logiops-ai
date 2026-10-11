@@ -141,15 +141,11 @@ class ReplayConverse:
 
     @staticmethod
     def _briefing(messages: list[dict[str, Any]]) -> dict[str, Any]:
-        """Read the inbox, then rank it: critical orders first, then due time, then the longest delay."""
+        """Read the inbox and keep the server's order: open first, most critical units at risk next."""
         if len(messages) == 1:
             return _tool_use([("list_incidents", {})])
         incidents = _result(messages, "list_incidents")["content"][0]["json"]["incidents"]
-        open_ = sorted(
-            (item for item in incidents if item["status"] != "verified"),
-            key=lambda item: (item["priority"] != "critical", datetime.fromisoformat(item["due_eta"]),
-                              -item["delay_hours"], item["incident_id"]),
-        )
+        open_ = [item for item in incidents if item["status"] != "verified"]
         resolved = len(incidents) - len(open_)
         if not open_:
             return _text(f"All {resolved} incidents are resolved; nothing needs attention.\n"
@@ -158,13 +154,16 @@ class ReplayConverse:
         for index, item in enumerate(open_, 1):
             critical = [order["customer"] for order in item["orders"] if order["priority"] == "critical"]
             who = f"critical order for {', '.join(critical)}" if critical else f"{item['units']} units"
+            risk = f", {item['critical_units_at_risk']} critical units at risk" if item["critical_units_at_risk"] else ""
             lines.append(f"{index}. {item['incident_id']} ({item['kind_label']}, {item['route']}): {item['title'].rstrip('.')}; "
-                         f"{who}, due {_lima(item['due_eta'])}, +{item['delay_hours']} h.")
+                         f"{who}{risk}, due {_lima(item['due_eta'])}, +{item['delay_hours']} h.")
         first = open_[0]
         tail = f" {resolved} resolved." if resolved else ""
+        why = (f"{first['critical_units_at_risk']} critical units at risk" if first["critical_units_at_risk"]
+               else f"due {_lima(first['due_eta'])}")
         answer = (
-            f"{len(open_)} open incidents, critical orders first, then by due time.{tail}\n\n" + "\n".join(lines)
+            f"{len(open_)} open incidents, the most critical units at risk first.{tail}\n\n" + "\n".join(lines)
             + f"\n\nStart with: {first['incident_id']}\n"
-            f"Spoken: You have {len(open_)} open incidents. Start with {first['incident_id']}, due {_lima(first['due_eta'])}."
+            f"Spoken: You have {len(open_)} open incidents. Start with {first['incident_id']}: {why}."
         )
         return _text(answer)
