@@ -1,0 +1,161 @@
+"""Output schemas of the MCP tools.
+
+Each tool declares the fields it always returns; optional fields (such as the operator's
+preferences) are allowed as extra properties, so a client can rely on the schema without the
+server inventing empty values.
+"""
+
+from __future__ import annotations
+
+from typing import Annotated, Literal
+
+from pydantic import BaseModel, ConfigDict, Field
+
+ShipmentId = Annotated[str, Field(
+    description="Incident (shipment) id, such as SHIP-433. Also accepted: 433, ship 433, ship-433, case 433.",
+    min_length=1, max_length=40,
+)]
+OrderId = Annotated[str, Field(
+    description="Customer order id, such as ORD-421 or ORD-433A (case-insensitive). get_shipment lists them.",
+    min_length=1, max_length=40,
+)]
+
+
+class Output(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
+
+class OrderLine(Output):
+    id: str = Field(description="Order id, such as ORD-433A.")
+    customer: str
+    priority: Literal["critical", "standard"]
+    quantity: int = Field(description="Units ordered.")
+    due_eta: str = Field(description="Promised delivery time, ISO 8601 in Lima time (UTC-05:00).")
+
+
+class IncidentSummary(Output):
+    incident_id: str
+    kind: str
+    kind_label: str
+    title: str
+    status: str = Field(description="detected, investigated, approved or verified.")
+    priority: Literal["critical", "standard"]
+    due_eta: str = Field(description="Earliest promised time among the incident's orders.")
+    route: str
+    units: int
+    delay_hours: int = Field(description="Hours the delayed shipment arrives after its original ETA.")
+    critical_units_at_risk: int = Field(description="Units of critical orders nothing on hand delivers in time.")
+    orders: list[OrderLine]
+
+
+class IncidentList(Output):
+    """Every incident, in the order to work them: open first, then the most critical units at risk."""
+
+    incidents: list[IncidentSummary]
+
+
+class Shipment(Output):
+    id: str
+    origin: str
+    destination: str
+    sku: str
+    units_on_delayed_route: int
+    original_eta: str
+    delayed_eta: str
+    disruption: str
+    order_ids: list[str]
+    warehouse_id: str | None = Field(description="The incident's local warehouse, or null when it has none.")
+
+
+class Order(Output):
+    id: str
+    shipment_id: str
+    sku: str
+    customer: str
+    priority: Literal["critical", "standard"]
+    quantity: int
+    due_eta: str
+    placed_at: str
+
+
+class Stock(Output):
+    warehouse_id: str
+    sku: str
+    available: int = Field(description="Synthetic units available.")
+    ready_at: str = Field(description="When the stock can leave the warehouse, ISO 8601 in Lima time.")
+
+
+class CarrierQuote(Output):
+    capacity: int = Field(description="Units the carrier or service can move.")
+    arrival_eta: str
+    incremental_cost_usd: int
+
+
+class PlanOrder(Output):
+    order_id: str
+    customer: str
+    priority: Literal["critical", "standard"]
+    quantity: int
+    due_eta: str
+    arrival_eta: str
+    delay_hours: int
+    late_units: int
+
+
+class Allocation(Output):
+    order_id: str
+    source: str = Field(description="delayed-shipment, a warehouse's stock, or a carrier or service.")
+    units: int
+    arrival_eta: str
+
+
+class Plan(Output):
+    id: str = Field(description="Exact plan id; approval and execution are bound to it and to source_version.")
+    kind: str
+    label: str = Field(description="Plain-language name of the plan; use it when talking to a person.")
+    source_version: int
+    incremental_cost_usd: int
+    projected_customer_delay_hours: int
+    projected_completion_eta: str
+    late_units: int
+    delivery_status: str = Field(description="Always projected: physical delivery is not confirmed.")
+    orders: list[PlanOrder]
+    allocations: list[Allocation]
+
+
+class Investigation(Output):
+    """Every feasible plan calculated from the incident's current data; operator_preferences is
+    present when saved preferences apply, with the plan they point to and why."""
+
+    source_version: int
+    plans: list[Plan]
+
+
+class AuditEvent(Output):
+    sequence: int
+    name: str
+    recorded_at: str
+
+
+class ExecutionStatus(Output):
+    status: str
+    source_version: int
+    approvals: list[dict] = Field(description="Current approvals: plan id, version, approver and time.")
+    executions: list[dict]
+    events: list[AuditEvent]
+
+
+class Execution(Output):
+    """The executed plan: units accounted for, simulated notifications and projected delivery."""
+
+    incident_id: str
+    plan_id: str
+    source_version: int
+    status: str
+    accounted_units: int
+    incremental_cost_usd: int
+    projected_customer_delay_hours: int
+    projected_completion_eta: str
+    delivery_status: str
+    notifications: list[dict]
+    fulfillments: list[dict]

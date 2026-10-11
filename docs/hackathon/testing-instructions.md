@@ -30,7 +30,11 @@ LOGIOPS_AGENT_MODE=replay uv run uvicorn logiops.api:app --host 127.0.0.1 --port
    (2025-11-25). The server exposes eight tools: `list_incidents`, `get_shipment`,
    `get_order`, `get_inventory`, `find_alternative_carriers`, `investigate_incident`,
    `get_execution_status` and `execute_approved_plan`.
-   There is no approval tool: approval is a REST call made by a person.
+   There is no approval tool: approval is a REST call made by a person. Every tool
+   has a title, behaviour annotations (six are read-only; `execute_approved_plan` is
+   destructive and idempotent), described inputs that accept the way people say ids
+   ("433", "ship 433") and a typed `outputSchema`; `initialize` returns server
+   instructions describing the workflow and its human-approval rule.
 2. **Open `/demo` on `127.0.0.1` or `localhost`.** The MCP Apps card is rendered
    through a sandbox proxy that must live on a *different origin*, so the page pairs
    `127.0.0.1` with `localhost`. On any other name (`[::1]`, a LAN IP, a tunnel) the
