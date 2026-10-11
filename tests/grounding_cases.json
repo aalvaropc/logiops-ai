@@ -65,6 +65,12 @@
     {"name": "a follow-up about another incident", "incident": "SHIP-421", "passed": false, "issue": "SHIP-452",
      "answer": "SHIP-452 has the same problem."},
     {"name": "a follow-up claiming execution", "incident": "SHIP-421", "passed": false, "issue": "has been executed",
-     "answer": "The split has been executed."}
+     "answer": "The split has been executed."},
+    {"name": "an execution the record shows", "incident": "SHIP-421", "passed": true, "recorded_actions": ["approved", "executed"],
+     "answer": "The split was approved and has been executed; delivery is projected, not physically confirmed."},
+    {"name": "delivery is never recorded", "incident": "SHIP-421", "passed": false, "recorded_actions": ["approved", "executed"], "issue": "were delivered",
+     "answer": "The laptops were delivered."},
+    {"name": "the model never approves", "incident": "SHIP-421", "passed": false, "recorded_actions": ["approved"], "issue": "I approved",
+     "answer": "I approved the split."}
   ]
 }

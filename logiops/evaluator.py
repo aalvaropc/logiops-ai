@@ -122,11 +122,15 @@ def _unknown_times(text: str, known: set[datetime]) -> list[str]:
     return found
 
 
-def _claims(text: str) -> list[str]:
-    """Affirmative claims of approval, execution or delivery (passive or active voice), ignoring negated ones."""
+def _claims(text: str, recorded: frozenset[str] = frozenset()) -> list[str]:
+    """Affirmative claims of approval, execution or delivery (passive or active voice), ignoring negated
+    ones and passive claims of an action the record shows ("was approved" once a person approved).
+    The model itself never approves or executes, so an active claim is always false."""
     found = []
     for pattern in (FALSE_CLAIMS, ACTIVE_CLAIMS):
         for match in pattern.finditer(text):
+            if pattern is FALSE_CLAIMS and match.group(1).lower() in recorded:
+                continue
             if not NEGATION_BEFORE.search(text[max(0, match.start() - 60):match.start()]):
                 found.append(match.group(0))
     return found
@@ -231,7 +235,9 @@ def check_facts(answer: str, plans: list[dict[str, Any]], context: dict[str, Any
     counts, ids and timestamps, which turn on those checks. Gaps between known
     figures are accepted, so comparisons between plans pass. Its optional
     `sources` are web results ({url, text}): a line that cites one of their URLs
-    may also quote figures from that result's text (but not gaps).
+    may also quote figures from that result's text (but not gaps). Its optional
+    `recorded_actions` ("approved", "executed") are actions the record shows,
+    which the answer may state in the passive voice.
     """
     issues: list[str] = []
     sources = context.get("sources") or []
@@ -290,7 +296,7 @@ def check_facts(answer: str, plans: list[dict[str, Any]], context: dict[str, Any
         )
         if unsupported:
             issues.append(f"These figures are not in the cited web result ({source['url']}): {', '.join(unsupported)}.")
-    claims = _claims(answer)
+    claims = _claims(answer, frozenset(action.lower() for action in context.get("recorded_actions", [])))
     if claims:
         issues.append(
             "Do not claim that a plan was approved, executed or delivered; a person approves it later: "
