@@ -26,3 +26,23 @@ output "access_token_parameter_name" {
 output "aws_region" {
   value = var.aws_region
 }
+
+output "cognito_user_pool_id" {
+  value = aws_cognito_user_pool.operators.id
+}
+
+output "cognito_client_id" {
+  value = aws_cognito_user_pool_client.demo_web.id
+}
+
+output "cognito_domain" {
+  value = local.app_config.LOGIOPS_COGNITO_DOMAIN
+}
+
+output "memory_id" {
+  value = aws_bedrockagentcore_memory.app.id
+}
+
+output "config_parameter_path" {
+  value = var.config_parameter_path
+}

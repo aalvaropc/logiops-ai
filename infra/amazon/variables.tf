@@ -18,6 +18,26 @@ variable "bedrock_model_id" {
   }
 }
 
+variable "config_parameter_path" {
+  type    = string
+  default = "/logiops-ai/config"
+
+  validation {
+    condition     = can(regex("^/[a-z0-9/-]+[a-z0-9]$", var.config_parameter_path))
+    error_message = "Use an absolute SSM path without a trailing slash."
+  }
+}
+
+variable "daily_model_calls" {
+  type    = number
+  default = 150
+}
+
+variable "extra_oauth_callback_urls" {
+  type    = list(string)
+  default = ["http://localhost:6274/oauth/callback", "http://localhost:6274/oauth/callback/debug"]
+}
+
 variable "access_token_parameter_name" {
   type    = string
   default = "/logiops-ai/access-token"

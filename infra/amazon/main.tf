@@ -132,6 +132,33 @@ resource "aws_iam_role_policy" "app" {
       },
       {
         Effect = "Allow"
+        Action = ["ssm:GetParametersByPath"]
+        Resource = [
+          "arn:${data.aws_partition.current.partition}:ssm:${var.aws_region}:${data.aws_caller_identity.current.account_id}:parameter${var.config_parameter_path}",
+          "arn:${data.aws_partition.current.partition}:ssm:${var.aws_region}:${data.aws_caller_identity.current.account_id}:parameter${var.config_parameter_path}/*"
+        ]
+      },
+      {
+        Effect   = "Allow"
+        Action   = ["polly:SynthesizeSpeech"]
+        Resource = ["*"]
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "bedrock-agentcore:CreateEvent",
+          "bedrock-agentcore:ListEvents",
+          "bedrock-agentcore:GetEvent",
+          "bedrock-agentcore:DeleteEvent",
+          "bedrock-agentcore:ListSessions",
+          "bedrock-agentcore:RetrieveMemoryRecords",
+          "bedrock-agentcore:ListMemoryRecords",
+          "bedrock-agentcore:BatchDeleteMemoryRecords"
+        ]
+        Resource = [aws_bedrockagentcore_memory.app.arn]
+      },
+      {
+        Effect = "Allow"
         Action = ["bedrock:InvokeModel"]
         Resource = [
           "arn:${data.aws_partition.current.partition}:bedrock:${var.aws_region}:${data.aws_caller_identity.current.account_id}:inference-profile/${var.bedrock_model_id}",
@@ -169,6 +196,7 @@ resource "aws_instance" "app" {
     aws_region     = var.aws_region
     token_param    = var.access_token_parameter_name
     model_id       = var.bedrock_model_id
+    config_path    = var.config_parameter_path
   })
   user_data_replace_on_change = false
   tags                        = { Name = "logiops-ai-demo" }
