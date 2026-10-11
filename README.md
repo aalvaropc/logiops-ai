@@ -31,7 +31,7 @@ the replay command in `docs/hackathon/testing-instructions.md`) runs the whole d
 ## Architecture
 
 ```text
- Browser (/demo): conversation, voice, inbox, preferences, MCP App card in a sandbox proxy
+ Browser (/demo): Alexa+ device screen, conversation, voice, inbox, preferences, MCP App card
         |  REST (approve, execute, preferences)    |  MCP over Streamable HTTP (/mcp)
         v                                          v
  +--------------------------------------------------------------+
@@ -119,7 +119,14 @@ any other credentials in its default chain) and ensure
 `global.anthropic.claude-sonnet-4-6` is accessible in `us-east-1`. Start the
 same server without `LOGIOPS_AGENT_MODE=replay`.
 
-Open the browser demo at <http://127.0.0.1:8000/demo>. The inbox at the top
+Open the browser demo at <http://127.0.0.1:8000/demo>. It opens on a
+simulated Alexa+ screen (an Echo Show-style device): a voice orb that shows
+Ready, Listening, Thinking (with the real seconds elapsed) and Speaking; what was
+heard and the short spoken reply in large type; chips for the incident, its
+critical units at risk and the plan on screen; the plan's legs on a map of Peru;
+each order's promise against its projected arrival; and, after each reply, the
+recorded tool trace replayed step by step with the result of the data check.
+Below it, the operator view shows the same incident in full. The inbox
 lists the four incidents, open ones first, then by critical units at risk
 (units of critical orders that nothing on hand delivers on time), priority and
 due time; pick one (or link to it, as in
