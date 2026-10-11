@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from logiops.evaluator import check_recommendation, check_verification, recommended_plan_id
+from logiops.evaluator import check_recommendation, check_verification, figures_in, recommended_plan_id
 from logiops.scenario import build_plans, known_figures, seed_state
 
 CASES = json.loads((Path(__file__).resolve().parent / "grounding_cases.json").read_text())
@@ -150,3 +150,9 @@ def test_the_verification_check_matches_whole_numbers_and_neutral_wording():
     assert check_verification("Plan P-1: 20 units accounted for, projected.", snapshot)["passed"] is True
     issues = check_verification("Plan P-1: 20 units were delivered.", snapshot)["issues"]
     assert any("do not claim the units were delivered" in issue for issue in issues)
+
+
+def test_figures_written_in_a_text_are_read_like_an_answer():
+    assert figures_in("Keep it under $1.2k, at most 6 hours late, and ship 12 more laptops.") == {
+        "dollars": [1200.0], "hours": [6.0], "units": [12.0]}
+    assert figures_in("No numbers here.") == {"dollars": [], "hours": [], "units": []}

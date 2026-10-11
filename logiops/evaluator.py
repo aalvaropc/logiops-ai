@@ -75,6 +75,12 @@ def _units(text: str) -> set[float]:
     return {_value(number) for number in UNITS.findall(text)}
 
 
+def figures_in(text: str) -> dict[str, list[float]]:
+    """The dollar amounts, hour values and unit counts written in a text, read the way the check reads
+    an answer; for facts given as text, such as an operator's note."""
+    return {"dollars": sorted(_dollars(text)), "hours": sorted(_hours(text)), "units": sorted(_units(text))}
+
+
 def _with_differences(values: set[float], sums: bool = False) -> set[float]:
     """Known values plus the gaps between them (and their sums), so comparisons can be quoted."""
     derived = {abs(a - b) for a, b in combinations(values, 2)}
