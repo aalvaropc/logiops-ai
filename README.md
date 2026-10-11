@@ -282,9 +282,16 @@ which is what an Alexa+ device would say, instead of the whole Markdown answer.
 ### Interactive plan card (MCP Apps)
 
 `investigate_incident` declares an MCP Apps view (`_meta.ui.resourceUri` =
-`ui://logiops/resolution-options.html`, served as `text/html;profile=mcp-app`).
-A host that supports MCP Apps (extension version 2026-01-26) renders the
-calculated plans as cards next to the conversation. The card can only ask the
+`ui://logiops/resolution-options.<sha8>.html`, served as
+`text/html;profile=mcp-app`). The URI carries a hash of the view, so a host
+never shows a stale cached copy after an update. A host that supports MCP Apps
+(extension version 2026-01-26) renders the calculated plans as cards next to
+the conversation, shows the tool's `invoking` and `invoked` status lines, and
+the result repeats `_meta.ui` for hosts that read it there. The view follows
+the host context: light or dark theme, the host's style variables, safe-area
+insets, and a compact layout under 480 px. It shows five plans at a time,
+always including the pick. The resource declares an empty CSP allowlist: the
+view makes no network calls. The card can only ask the
 host to **select** a plan: there is no approval tool, and
 `execute_approved_plan` is marked model-only (`_meta.ui.visibility`), so no
 view can call it in any host. Approval stays with the operator.
@@ -297,7 +304,11 @@ The proxy puts the view in an inner `allow-scripts` iframe (opaque origin)
 under a CSP with no network access, relays messages, and drops the view if it
 navigates away. The host checks the proxy's origin on every message, sends
 `ui/resource-teardown` before removing the view, and shows no card at all if
-no separate sandbox origin is available.
+no separate sandbox origin is available. Its MCP client runs `initialize` once
+and then sends `MCP-Protocol-Version: 2025-11-25` on every request. It passes a
+full `hostContext` (theme, display mode, container size, locale, Lima time
+zone, device capabilities, safe-area insets), and its "Light card" toggle
+sends `ui/notifications/host-context-changed`.
 
 In Swagger, run `POST /demo/reset`, `POST /incidents/SHIP-421/agent/investigate`
 (or the deterministic `/investigate` endpoint),

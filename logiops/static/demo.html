@@ -93,7 +93,10 @@
             </div>
             <ol id="conversation" class="conversation" aria-live="polite" aria-label="Conversation" tabindex="0"></ol>
             <div id="mcp-app" class="mcp-app" hidden>
-              <span class="mcp-app-label">MCP App · <code>ui://logiops/resolution-options.html</code></span>
+              <div class="mcp-app-head">
+                <span class="mcp-app-label">MCP App · <code id="mcp-app-uri">ui://logiops/resolution-options</code> <span id="mcp-app-status"></span></span>
+                <button id="mcp-app-theme" type="button" class="secondary mcp-app-theme" aria-pressed="false">Light card</button>
+              </div>
               <div id="mcp-app-slot"></div>
             </div>
             <div class="suggestions" aria-label="Suggested requests">
