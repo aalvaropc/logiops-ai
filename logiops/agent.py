@@ -5,20 +5,22 @@ from __future__ import annotations
 import asyncio
 import json
 import re
-from typing import Any, Protocol
+from typing import Any, Callable, Protocol
 
 import httpx
 from mcp import ClientSession
 from mcp.client.streamable_http import streamable_http_client
 
 from .bedrock import BedrockError
+from .evaluator import check_recommendation
 from .scenario import INCIDENT_IDS
 
 
 BASE_URL = "http://127.0.0.1:8000"
 INTERNAL_HEADER = "x-logiops-internal"
 DEFAULT_DEADLINE_SECONDS = 50.0
-INVESTIGATE_TURNS, FOLLOWUP_TURNS, BRIEFING_TURNS = 8, 4, 5
+INVESTIGATE_TURNS, FOLLOWUP_TURNS, BRIEFING_TURNS = 9, 4, 5
+REVISION_MIN_SECONDS = 18.0
 READ_TOOLS = {
     "get_shipment",
     "get_order",
@@ -88,6 +90,9 @@ Start with: <incident id>
 BRIEFING_DEADLINE_SECONDS = 40.0
 
 
+Evaluate = Callable[[str, list[dict[str, Any]]], dict[str, Any]]
+
+
 class ConverseClient(Protocol):
     async def converse(
         self, messages: list[dict[str, Any]], system: str, tools: list[dict[str, Any]]
@@ -97,10 +102,15 @@ class ConverseClient(Protocol):
 async def _converse_loop(
     app: Any, client: ConverseClient, shipments: frozenset[str], first_message: str, *,
     system: str, required_tool: str | None, tools: frozenset[str] | set[str] = READ_TOOLS,
-    access_token: str | None = None, internal_key: str | None = None, max_turns: int = 8
+    access_token: str | None = None, internal_key: str | None = None, max_turns: int = 8,
+    evaluate: Evaluate | None = None, revise_until: float | None = None,
 ) -> dict[str, Any]:
+    """The tool-use loop. With `evaluate`, the final answer (its spoken line included) is checked;
+    a failed check is sent back once for a revision while a turn is left and the clock is before
+    `revise_until`, and the result carries the evaluations and whether the last one passed."""
     messages: list[dict[str, Any]] = [{"role": "user", "content": [{"text": first_message}]}]
     trace: list[dict[str, Any]] = []
+    evaluations: list[dict[str, Any]] = []
     usage = {"inputTokens": 0, "outputTokens": 0}
     headers = {"Authorization": f"Bearer {access_token}"} if access_token else {}
     if internal_key:
@@ -124,7 +134,7 @@ async def _converse_loop(
                 ]
                 if {spec["toolSpec"]["name"] for spec in tool_specs} != set(tools):
                     raise BedrockError("The read-only MCP toolset is incomplete")
-                for _ in range(max_turns):
+                for turn in range(max_turns):
                     response = await client.converse(messages, system, tool_specs)
                     turn_usage = response.get("usage", {})
                     for key in usage:
@@ -151,8 +161,16 @@ async def _converse_loop(
                         ).strip()
                         if not answer:
                             raise BedrockError("Bedrock returned an empty explanation")
+                        if evaluate is not None:
+                            evaluations.append({"attempt": len(evaluations) + 1, **evaluate(answer, trace)})
+                            if (not evaluations[-1]["passed"] and len(evaluations) == 1 and turn + 1 < max_turns
+                                    and (revise_until is None or asyncio.get_running_loop().time() < revise_until)):
+                                messages.append({"role": "user", "content": [{"text": revision_request(evaluations[-1])}]})
+                                continue
                         answer, spoken = split_spoken(answer)
                         result = {"answer": answer, "spoken": spoken, "tool_trace": trace, "usage": usage}
+                        if evaluations:
+                            result.update(evaluations=evaluations, grounded=evaluations[-1]["passed"])
                         if stop_reason == "max_tokens":
                             result["truncated"] = True
                         return result
@@ -191,6 +209,22 @@ async def _converse_loop(
                         })
                     messages.append({"role": "user", "content": results})
     raise BedrockError(f"Agent exceeded {max_turns} Converse turns")
+
+
+def revision_request(evaluation: dict[str, Any]) -> str:
+    return (
+        "Your answer failed an automatic check against the tool results:\n- " + "\n- ".join(evaluation["issues"])
+        + "\nRevise it using only the tool results; you may call tools again. End with the same two lines "
+        "(Spoken: and Recommended plan:)."
+    )
+
+
+def plans_from(trace: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """The plans of the last successful investigate_incident call."""
+    for step in reversed(trace):
+        if step["tool"] == "investigate_incident" and not step["is_error"]:
+            return step["output"].get("plans", [])
+    return []
 
 
 SPOKEN = re.compile(r"^[ \t>*_`-]*spoken[*_]*\s*[:：]\s*(.*?)\s*$", re.I | re.M)
@@ -253,12 +287,20 @@ async def _with_deadline(coroutine: Any, deadline_seconds: float) -> dict[str, A
 async def investigate_with_bedrock(
     app: Any, client: ConverseClient, shipment_id: str, question: str, *,
     access_token: str | None = None, internal_key: str | None = None, max_turns: int = INVESTIGATE_TURNS,
-    deadline_seconds: float = DEFAULT_DEADLINE_SECONDS,
+    deadline_seconds: float = DEFAULT_DEADLINE_SECONDS, facts: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
+    """Investigate with read tools. With `facts` (see scenario.known_figures), the answer must pass the
+    grounding check, ending with its Recommended plan line; a failed check gets one revision when at
+    least REVISION_MIN_SECONDS of the deadline remain."""
+    evaluate = None
+    if facts is not None:
+        def evaluate(answer: str, trace: list[dict[str, Any]]) -> dict[str, Any]:
+            return check_recommendation(answer, plans_from(trace), facts, require_line=True)
     return await _with_deadline(_converse_loop(
         app, client, frozenset({shipment_id.upper()}), f"Shipment: {shipment_id}. {question}",
         system=SYSTEM_PROMPT, required_tool="investigate_incident",
-        access_token=access_token, internal_key=internal_key, max_turns=max_turns,
+        access_token=access_token, internal_key=internal_key, max_turns=max_turns, evaluate=evaluate,
+        revise_until=asyncio.get_running_loop().time() + deadline_seconds - REVISION_MIN_SECONDS,
     ), deadline_seconds)
 
 

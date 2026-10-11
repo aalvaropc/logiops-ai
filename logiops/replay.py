@@ -51,10 +51,13 @@ def _lima(iso: str) -> str:
 
 
 def _result(messages: list[dict[str, Any]], tool: str) -> dict[str, Any]:
-    return next(
-        item["toolResult"] for item in messages[-1]["content"]
-        if item["toolResult"]["toolUseId"].split(":", 1)[0] == tool
-    )
+    """The latest result of a tool, also when a revision request came after it."""
+    for message in reversed(messages):
+        for item in message["content"]:
+            result = item.get("toolResult") if isinstance(item, dict) else None
+            if result and result["toolUseId"].split(":", 1)[0] == tool:
+                return result
+    raise BedrockError(f"The replay found no {tool} result")
 
 
 class ReplayConverse:

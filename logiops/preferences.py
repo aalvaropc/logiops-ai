@@ -13,6 +13,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, ContextManager
 
+from .evaluator import figures_in
 from .scenario import best_plan, rank_key
 from .storage import connect
 
@@ -73,6 +74,15 @@ class PreferenceStore:
     def clear(self) -> None:
         with self._connection() as connection:
             connection.execute("DELETE FROM operator_preferences")
+
+
+def with_preference_figures(facts: dict[str, list[Any]], saved: dict[str, Any] | None) -> dict[str, list[Any]]:
+    """The incident's known figures plus what an answer may quote from the saved preferences: the
+    spend cap and the figures in the operator's note."""
+    extra = figures_in((saved or {}).get("note") or "")
+    if saved and saved.get("max_cost_usd") is not None:
+        extra["dollars"].append(float(saved["max_cost_usd"]))
+    return {**facts, **{key: sorted({*facts.get(key, []), *values}) for key, values in extra.items()}}
 
 
 def _late_critical(plan: dict[str, Any]) -> list[dict[str, Any]]:
