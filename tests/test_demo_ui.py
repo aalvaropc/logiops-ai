@@ -96,22 +96,19 @@ def test_a_spoken_approval_is_read_back_before_it_acts():
     assert "state.pendingApproval = null;" in script
 
 
-def test_the_agent_pick_is_the_recommended_plan_not_the_first_one_listed():
+def test_the_agent_pick_follows_the_shared_grounding_cases():
     import json
 
-    plans = [{"id": f"SHIP-421:run:{kind}:v1"} for kind in ("wait", "reroute", "split-express")]
-    answers = {
-        "| Plan | ID |\n|---|---|\n| Wait | SHIP-421:run:wait:v1 |\n| Reroute | SHIP-421:run:reroute:v1 |\n"
-        "| Split | SHIP-421:run:split-express:v1 |\n\nRecommendation: Plan 3\nPlan ID: SHIP-421:run:split-express:v1":
-            "SHIP-421:run:split-express:v1",
-        "I recommend comparing SHIP-421:run:wait:v1 first.\nRecommended plan: `SHIP-421:run:reroute:v1`.":
-            "SHIP-421:run:reroute:v1",
-        "Only SHIP-421:run:wait:v1 is listed, with no pick.": None,
-        "Recommended plan: SHIP-421:run:unknown:v1": None,
-    }
+    from logiops.evaluator import recommended_plan_id
+    from tests.test_grounding import CASES, fill
+
+    filled = [fill(case) + (case.get("require_line", False),) for case in CASES["recommended"]]
+    calls = [{"answer": answer, "plans": [{"id": plan["id"], "kind": plan["kind"]} for plan in plans], "require": require}
+             for _state, plans, answer, _expected, require in filled]
     got = json.loads(_intent(
-        f"console.log(JSON.stringify({json.dumps(list(answers))}.map((a) => m.recommendedPlanId(a, {json.dumps(plans)}))))"))
-    assert dict(zip(answers, got)) == answers
+        f"console.log(JSON.stringify({json.dumps(calls)}.map((c) => m.recommendedPlanId(c.answer, c.plans, c.require))))"))
+    assert got == [expected for _state, _plans, _answer, expected, _require in filled]
+    assert got == [recommended_plan_id(answer, plans, require) for _state, plans, answer, _expected, require in filled]
 
 
 def test_demo_routes_utterances_through_the_intent_module(tmp_path):

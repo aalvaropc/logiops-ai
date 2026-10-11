@@ -324,14 +324,27 @@ def best_plan(plans: list[dict[str, Any]]) -> dict[str, Any] | None:
     return min(plans, key=rank_key) if plans else None
 
 
-def known_figures(state: dict[str, Any]) -> dict[str, list[int]]:
-    """Dollar amounts and hour counts an answer may quote besides the plans' own."""
+def known_figures(state: dict[str, Any]) -> dict[str, list[Any]]:
+    """What an answer may quote besides the plans' own figures: dollar amounts, hour counts, unit
+    counts, the ids of the incident and its orders, and the timestamps in its data."""
     shipment = state["shipment"]
+    orders = state["orders"]
     hours = {delay_hours(shipment["delayed_eta"], shipment["original_eta"])}
-    hours |= {delay_hours(shipment["delayed_eta"], order["due_eta"]) for order in state["orders"]}
+    hours |= {delay_hours(shipment["delayed_eta"], order["due_eta"]) for order in orders}
+    units = {shipment["units_on_delayed_route"], sum(order["quantity"] for order in orders), critical_units_at_risk(state)}
+    units |= {order["quantity"] for order in orders}
+    units |= {stock["available"] for stock in state["inventory"].values()}
+    units |= {quote["capacity"] for quote in state["carriers"].values()}
+    times = {shipment["original_eta"], shipment["delayed_eta"]}
+    times |= {order[key] for order in orders for key in ("due_eta", "placed_at")}
+    times |= {stock["ready_at"] for stock in state["inventory"].values()}
+    times |= {quote["arrival_eta"] for quote in state["carriers"].values()}
     return {
         "dollars": sorted({quote["incremental_cost_usd"] for quote in state["carriers"].values()}),
         "hours": sorted(hours),
+        "units": sorted(units),
+        "ids": [state["incident_id"], *(order["id"] for order in orders)],
+        "times": sorted(times, key=_at),
     }
 
 
