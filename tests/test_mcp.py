@@ -6,6 +6,7 @@ import httpx
 import pytest
 from mcp import ClientSession
 from mcp.client.streamable_http import streamable_http_client
+from mcp.shared.exceptions import McpError
 
 from logiops.api import create_app
 
@@ -44,8 +45,9 @@ def test_mcp_protocol_and_human_approval_boundary(tmp_path):
                             "plan_id": plan["id"],
                             "source_version": plan["source_version"],
                         }
-                        blocked = await session.call_tool("execute_approved_plan", arguments)
-                        assert blocked.isError is True
+                        with pytest.raises(McpError) as blocked:
+                            await session.call_tool("execute_approved_plan", arguments)
+                        assert blocked.value.error.code == -32042
                         assert not (await http_client.get("/incidents/SHIP-421")).json()["executions"]
 
                         approval = await http_client.post(

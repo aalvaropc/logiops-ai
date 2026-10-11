@@ -24,13 +24,22 @@ async def check(url: str) -> None:
                         f"Unexpected MCP protocol version: {initialized.protocolVersion}"
                     )
                 listed = await session.list_tools()
+                prompts = await session.list_prompts()
+                resources = await session.list_resources()
+                templates = await session.list_resource_templates()
                 shipment = await session.call_tool("get_shipment", {"shipment_id": "SHIP-421"})
                 inbox = await session.call_tool("list_incidents", {})
                 if shipment.isError or inbox.isError:
                     raise RuntimeError("get_shipment or list_incidents failed")
+                uris = [str(item.uri) for item in resources.resources]
+                if "skill://logiops-exception-desk/SKILL.md" not in uris:
+                    raise RuntimeError("The Agent Skill resource is missing")
                 print(json.dumps({
                     "protocol_version": initialized.protocolVersion,
                     "tools": [tool.name for tool in listed.tools],
+                    "prompts": [prompt.name for prompt in prompts.prompts],
+                    "resources": uris,
+                    "resource_templates": [item.uriTemplate for item in templates.resourceTemplates],
                     "incidents": [
                         f"{item['incident_id']} · {item['kind_label']} · {item['status']}"
                         for item in inbox.structuredContent["incidents"]

@@ -9,10 +9,15 @@ import re
 from pathlib import Path
 from typing import Annotated, Any
 
-from mcp.server.fastmcp import FastMCP
+from mcp.server.fastmcp import Context, FastMCP
 from mcp.server.fastmcp.exceptions import ToolError
+from mcp.server.fastmcp.prompts.base import UserMessage
 from mcp.server.transport_security import TransportSecuritySettings
-from mcp.types import CallToolResult, Icon, TextContent, ToolAnnotations
+from mcp.shared.exceptions import UrlElicitationRequiredError
+from mcp.types import (
+    CallToolResult, Completion, ElicitRequestURLParams, EmbeddedResource, Icon, TextContent, TextResourceContents,
+    ToolAnnotations,
+)
 from pydantic import Field
 
 from . import __version__
@@ -89,6 +94,29 @@ def create_mcp_server(
             return service.get(normalized_incident(shipment_id))
         except WorkflowError as exc:
             raise fail(exc, f"use one of the open incidents from list_incidents. {OPEN_INCIDENTS}") from exc
+
+    def panel_url(ctx: Context, incident: str) -> str:
+        if public_host:
+            return f"https://{public_host}/demo#{incident}"
+        try:
+            base = str(ctx.request_context.request.base_url).rstrip("/")
+        except (AttributeError, ValueError):
+            base = "http://127.0.0.1:8000"
+        return f"{base}/demo#{incident}"
+
+    def awaiting_approval(incident: str, plan_id: str, source_version: int) -> dict[str, Any] | None:
+        """The current plan a person has not approved yet, or None (unknown, stale, approved or executed)."""
+        snapshot = service.get(incident)
+        if snapshot["source_version"] != source_version or snapshot["executions"]:
+            return None
+        plan = next((item for item in snapshot["plans"]
+                     if item["id"] == plan_id and item["source_version"] == source_version), None)
+        approved = any(item["plan_id"] == plan_id and item["is_current"] for item in snapshot["approvals"])
+        return None if approved else plan
+
+    def skill_message() -> UserMessage:
+        return UserMessage(EmbeddedResource(type="resource", resource=TextResourceContents(
+            uri=SKILL_URI, mimeType=SKILL_MIME_TYPE, text=SKILL_TEXT)))
 
     @server.tool(title="List incidents", annotations=READ)
     async def list_incidents() -> IncidentList:
@@ -181,13 +209,24 @@ def create_mcp_server(
         shipment_id: ShipmentId,
         plan_id: Annotated[str, Field(description="Exact plan id from investigate_incident.")],
         source_version: Annotated[int, Field(description="The plan's source_version.", ge=1)],
+        ctx: Context,
     ) -> Execution:
         """Execute only a plan a person already approved for this exact data version. Repeating the call returns the
-        same execution; it never runs twice. Notifications to customers are simulated."""
+        same execution; it never runs twice. Notifications to customers are simulated. If the plan still needs a
+        person's approval, the error is a URL elicitation (-32042) that opens the operator panel."""
+        incident = normalized_incident(shipment_id)
         try:
-            return service.execute(normalized_incident(shipment_id), plan_id, source_version)
+            return service.execute(incident, plan_id, source_version)
         except WorkflowError as exc:
-            raise fail(exc, "a person approves the exact plan and version in the operator panel; no tool can approve") from exc
+            plan = awaiting_approval(incident, plan_id, source_version) if incident in INCIDENT_IDS else None
+            if plan is None:
+                raise fail(exc, "a person approves the exact plan and version in the operator panel; no tool can approve") from exc
+            url = panel_url(ctx, incident)
+            text = (f"A person must approve “{plan['label']}” for {incident} in the LogiOps operator panel before it can "
+                    f"run. Open {url}, approve the plan there, then ask again. No tool can approve.")
+            raise UrlElicitationRequiredError([ElicitRequestURLParams(
+                mode="url", message=text, url=url, elicitationId=f"approve-{incident}-v{source_version}",
+            )], message=text) from exc
 
     @server.resource(
         UI_URI, name="resolution_options", title="Resolution options",
@@ -204,5 +243,64 @@ def create_mcp_server(
     )
     def exception_desk_skill() -> str:
         return SKILL_TEXT
+
+    @server.resource(
+        "incident://{shipment_id}", name="incident", title="Incident record",
+        description="One incident as JSON: its summary, shipment, current plans, current approval and executions.",
+        mime_type="application/json",
+    )
+    def incident_record(shipment_id: str) -> str:
+        incident = normalized_incident(shipment_id)
+        if incident not in INCIDENT_IDS:
+            raise ValueError(f"Unknown incident: {shipment_id}. {OPEN_INCIDENTS}")
+        snapshot = service.get(incident)
+        version = snapshot["source_version"]
+        return json.dumps({
+            "incident": next(item for item in service.list_incidents() if item["incident_id"] == incident),
+            "shipment": shipment_view(snapshot["state"]),
+            "source_version": version,
+            "plans": [plan for plan in snapshot["plans"] if plan["source_version"] == version],
+            "approval": next((item for item in snapshot["approvals"] if item["is_current"]), None),
+            "executions": snapshot["executions"],
+        }, indent=2)
+
+    @server.prompt(
+        name="morning_briefing", title="Morning briefing",
+        description="Brief me on the incident queue: what is late or held, and which incident to start with.",
+    )
+    def morning_briefing() -> list[UserMessage]:
+        return [skill_message(), UserMessage(
+            "Any delays today? Brief me on the logistics incidents, following the logiops-exception-desk skill above. "
+            "Call list_incidents and keep its order. Give each open incident one short line: what happened, who is "
+            "affected, and why it sits there. Count the resolved ones in one phrase, end with the incident to start "
+            "with, and do not calculate or recommend plans yet."
+        )]
+
+    @server.prompt(
+        name="investigate_incident", title="Investigate an incident",
+        description="Read an incident's facts, calculate its plans and recommend one; a person approves.",
+    )
+    def investigate_prompt(
+        shipment_id: Annotated[str, Field(description="Incident id, such as SHIP-433 or 433.")],
+    ) -> list[UserMessage]:
+        incident = normalized_incident(shipment_id)
+        if incident not in INCIDENT_IDS:
+            raise ValueError(f"Unknown incident: {shipment_id}. {OPEN_INCIDENTS}")
+        return [skill_message(), UserMessage(
+            f"What's happening with {incident}, and which plan should we choose? Follow the logiops-exception-desk "
+            "skill above: read the facts, call investigate_incident, and recommend exactly one plan by its label with "
+            "its exact figures. Do not approve or execute anything."
+        )]
+
+    @server.completion()
+    async def complete(ref: Any, argument: Any, context: Any) -> Completion | None:
+        if argument.name != "shipment_id":
+            return None
+        typed = argument.value.strip().lower()
+        found = SHIPMENT_NUMBER.match(typed)
+        number = found.group(1) if found else typed
+        values = [item["incident_id"] for item in service.list_incidents()
+                  if item["incident_id"].lower().startswith(typed) or item["incident_id"].split("-", 1)[1].startswith(number)]
+        return Completion(values=values, total=len(values), hasMore=False)
 
     return server

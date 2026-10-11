@@ -349,6 +349,30 @@ read it. Tests check the frontmatter rules, that every tool it names exists,
 and that the file, the MCP resource and the system block are byte-identical.
 The release archive and the Docker image include it.
 
+### Prompts, completions, incident records and URL elicitation
+
+Beyond tools, the MCP server offers what a host needs to start a conversation:
+
+- **Prompts.** `morning_briefing` ("any delays today?") and
+  `investigate_incident(shipment_id)`. Each embeds the Agent Skill as a resource
+  message, then asks for the briefing or the investigation. Neither approves
+  anything.
+- **Completions.** `completion/complete` suggests incident ids for the prompt
+  argument and the resource template, in the order to work them. It accepts
+  "43", "ship-46" or "case 45".
+- **Incident records.** The resource template `incident://{shipment_id}` returns
+  one incident as JSON: its summary, shipment, the plans for the current data
+  version, the current approval and the executions.
+- **URL elicitation.** `execute_approved_plan` on a current plan that no person
+  has approved returns the MCP error `-32042` (URL elicitation required). It
+  carries the operator panel's URL and a message that names the plan by its
+  label. A host that supports URL elicitation can open the panel; any other
+  client still gets a message that explains what to do. A stale or unknown plan
+  is an ordinary tool error with a next step.
+
+`scripts/check_mcp.py` lists the prompts, resources and templates, and fails
+if the skill resource is missing.
+
 ## License
 
 MIT — see [LICENSE](LICENSE).
