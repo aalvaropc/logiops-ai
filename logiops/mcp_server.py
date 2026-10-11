@@ -53,7 +53,8 @@ def create_mcp_server(
 
     @server.tool()
     async def list_incidents() -> dict[str, Any]:
-        """List every open and resolved incident with its kind, priority, due time and status."""
+        """List every incident with its kind, priority, due time, status and critical units at risk, in the
+        order to work them: open first, then the most critical units at risk, priority and due time."""
         return {"incidents": service.list_incidents()}
 
     @server.tool()

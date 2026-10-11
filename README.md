@@ -209,8 +209,8 @@ curl -sS -X POST http://127.0.0.1:8000/agent/briefing \
 ```
 
 The agent calls `list_incidents` (and, if it needs to, the other read tools),
-ranks the open incidents (a critical order at risk first, then the earliest
-due time, then the longest delay) and ends with `Start with: <incident id>`,
+keeps the inbox order (open first, then the most critical units at risk,
+priority and due time) and ends with `Start with: <incident id>`,
 returned as `start_with`. It cannot calculate plans: `investigate_incident`
 is not in its toolset, so a briefing changes nothing and stores nothing. In
 the browser, "Any delays today?" or "brief me" runs it and marks that incident
