@@ -18,7 +18,6 @@ from .tools import find_alternative_carriers, get_local_inventory, get_orders, g
 
 logger = logging.getLogger(__name__)
 
-# Bump when the stored state, plan or table shape changes. Additive tables don't need it.
 SCHEMA_VERSION = 2
 APPROVER_MAX_LENGTH = 80
 INCIDENT_TABLES = ("events", "executions", "approvals", "plans", "snapshot")
@@ -54,17 +53,12 @@ def _json(value: Any) -> str:
 class LogiOpsService:
     def __init__(self, db_path: str | Path, scenario_day: Callable[[], date | None] | None = None) -> None:
         self.db_path = Path(db_path)
-        # Called at each seed, reset and inbox read: the scenario's anchor day (see scenario_clock),
-        # or None to keep the seed's own dates.
         self._scenario_day = scenario_day or (lambda: None)
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
-        # One transaction: a failed migration leaves the old database untouched.
-        # (executescript would commit first, so each statement runs on its own.)
         with self._connection(write=True) as connection:
             stored = self._stored_schema(connection)
             migrated_from = stored if stored is not None and stored != SCHEMA_VERSION else None
             if migrated_from is not None:
-                # The incidents are synthetic, so an older layout is rebuilt, not converted.
                 for table in INCIDENT_TABLES:
                     connection.execute(f"DROP TABLE IF EXISTS {table}")
             for statement in SCHEMA:
@@ -94,7 +88,6 @@ class LogiOpsService:
             row = connection.execute("SELECT value FROM meta WHERE key = 'schema_version'").fetchone()
             if row:
                 return int(row[0])
-        # Before the meta table, the only layout was the single-incident one.
         return 1 if "snapshot" in tables else None
 
     @contextmanager
@@ -103,8 +96,6 @@ class LogiOpsService:
         connection.row_factory = sqlite3.Row
         connection.execute("PRAGMA busy_timeout=5000")
         try:
-            # Reads take a transaction too, so a write that commits between two SELECTs
-            # cannot mix the old state with the new rows (a deferred BEGIN holds the read lock).
             connection.execute("BEGIN IMMEDIATE" if write else "BEGIN")
             yield connection
             connection.commit()
@@ -150,7 +141,6 @@ class LogiOpsService:
             return []
         refreshed = []
         with self._connection(write=True) as connection:
-            # Checked again inside the write transaction, so two readers never refresh twice.
             for row in connection.execute("SELECT incident_id, state_json, version FROM snapshot").fetchall():
                 if self._stale(json.loads(row["state_json"]), row["version"], day):
                     for table in INCIDENT_TABLES:
@@ -172,7 +162,6 @@ class LogiOpsService:
 
     @staticmethod
     def _plan(connection: sqlite3.Connection, incident_id: str, plan_id: str) -> dict[str, Any]:
-        # A plan id from another incident is unknown here, never applied to this one.
         row = connection.execute(
             "SELECT plan_json FROM plans WHERE plan_id = ? AND incident_id = ?", (plan_id, incident_id)
         ).fetchone()
@@ -203,8 +192,6 @@ class LogiOpsService:
                 json.loads(row[0]) for row in connection.execute(
                     "SELECT plan_json FROM plans WHERE incident_id = ? ORDER BY rowid", (incident_id,))
             ]
-            # Approvals from earlier versions stay in the audit trail, but only the
-            # current version's approval can be executed, so flag it explicitly.
             approvals = [
                 {**dict(row), "is_current": row["source_version"] == version}
                 for row in connection.execute(
@@ -374,7 +361,6 @@ class LogiOpsService:
                         "units": allocation["units"],
                         "arrival_eta": allocation["arrival_eta"],
                     })
-            # Units of these orders that stay on the delayed shipment (all of them for "wait").
             state["shipment"]["units_on_delayed_route"] = use.get(SHIPMENT_SOURCE, 0)
             state["selected_plan_id"] = plan_id
             notifications = [
@@ -445,7 +431,6 @@ class LogiOpsService:
                         {"warehouse_id": warehouse, "available": available, "source_version": version + 1})
         return self.get(incident_id)
 
-    # autopilot_decision: a bounded server policy's auto-or-escalate verdict, with its reasons.
     AGENT_EVENTS = frozenset({"agent_run_failed", "agent_verification_completed", "autopilot_decision"})
 
     def record_agent_event(self, incident_id: str, name: str, data: dict[str, Any]) -> dict[str, Any]:
@@ -478,7 +463,6 @@ class LogiOpsService:
                 "tool_trace": run["tool_trace"],
                 "usage": run["usage"],
                 "mode": run["mode"],
-                # The grounding checks and the model, when the agent ran them, so a reload shows them.
                 **{key: run[key] for key in ("model", "evaluations", "grounded") if key in run},
             })
             return {"plans": plans, "source_version": version}
