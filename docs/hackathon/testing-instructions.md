@@ -95,7 +95,17 @@ LOGIOPS_AGENT_MODE=replay uv run uvicorn logiops.api:app --host 127.0.0.1 --port
    investigation offers only the plans that are still feasible.
 11. **Idempotence.** Repeat `POST /incidents/SHIP-421/execute` with the approved
    `plan_id` and `source_version`: the response is identical and nothing is duplicated.
-12. **Book and pay the carriers.** With a plan approved (for example SHIP-421's split +
+12. **Book and pay by voice.** On SHIP-421, after the investigation, say or type "book it"
+   (or press "Book and pay"). LogiOps reads back the plan, its delay and the price:
+   carriers and services, service fee, IGV 18% and total, and the card it goes to.
+   Nothing is charged until you say "yes". That one "yes" approves the plan and pays:
+   - you get a confirmation number, spoken character by character;
+   - the receipt appears in the execute panel and on the device screen, with "Open
+     printable receipt";
+   - "book it" again answers that it is already booked;
+   - "no" drops the purchase, and a bare "yes" with nothing pending does nothing;
+   - a purchase interrupted by a reload can be heard again with "resume".
+13. **Book and pay the carriers (API).** With a plan approved (for example SHIP-421's split +
    express), run `POST /incidents/SHIP-421/bookings/quote`. The quote reads "carriers
    and services $120.00, service fee $5.00, IGV 18% $22.50, total $147.50". Confirm it
    with `POST /quotes/{quote_id}/confirm` and `{"confirmed_total_usd": 147.50,

@@ -357,6 +357,18 @@ receipt (`logiops/booking.py`):
 `book_carrier` is destructive, idempotent and model-only. `/demo/reset`
 forgets the bookings, and the follow-up check accepts the booking's amounts.
 
+In the demo, "book it" (or the "Book and pay" chip) reads the plan and the full
+price back before anything happens. If the plan is not approved yet, a single
+"yes" approves it and pays, because the read-back named both. The reply gives
+the written confirmation and speaks the number character by character. The
+receipt shows in the execute panel and on the device screen. Other commands:
+- "no" drops the purchase;
+- a bare "yes" with nothing pending does nothing;
+- the idempotency key is chosen at read-back, so a retry after a network error
+  cannot pay twice;
+- the pending quote survives a reload in `sessionStorage`, and "resume" reads
+  it back again.
+
 ### Agent Skill
 
 [`skills/logiops-exception-desk/SKILL.md`](skills/logiops-exception-desk/SKILL.md)

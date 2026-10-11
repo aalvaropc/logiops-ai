@@ -218,6 +218,23 @@
     });
   }
 
+  function receipt(booking) {
+    const box = byId("device-receipt");
+    if (!box) return;
+    if (!booking) {
+      box.hidden = true;
+      box.replaceChildren();
+      return;
+    }
+    box.replaceChildren(
+      el("strong", "", `Receipt ${booking.number}`),
+      el("p", "receipt-total", `$${Number(booking.total_usd).toFixed(2)}`),
+      el("p", "", `${booking.plan_label} · incl. IGV $${Number(booking.igv_usd).toFixed(2)}`),
+      el("p", "", `${String(booking.payment?.method || "").replace(/\s*\(simulated\)$/i, "")} · simulated payment`),
+    );
+    box.hidden = false;
+  }
+
   function show(snapshot, plan, summary) {
     drawChips(snapshot, plan || null, summary);
     drawMap(snapshot, plan || null);
@@ -232,5 +249,5 @@
     drawBars(null);
   }
 
-  root.LogiOpsDevice = { mount, heard, reply, voice: setVoice, show, trace };
+  root.LogiOpsDevice = { mount, heard, reply, voice: setVoice, show, trace, receipt };
 })(window);
