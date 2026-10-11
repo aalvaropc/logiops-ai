@@ -239,6 +239,14 @@ def test_the_demo_is_an_inbox_of_incidents():
     assert "window.LogiOpsIntent.mentionedIncident(text," in script
 
 
+def test_the_inbox_and_the_greeting_name_the_critical_units_at_risk():
+    root = Path(__file__).resolve().parents[1] / "logiops" / "static"
+    script, style = (root / "demo.js").read_text(), (root / "demo.css").read_text()
+    assert 'tag("at-risk", `${item.critical_units_at_risk} critical units at risk`)' in script
+    assert "critical units nothing on hand delivers in time" in script
+    assert ".incident-card .at-risk {" in style
+
+
 def test_sentences_open_incidents_and_name_the_new_plan_kinds():
     import json
 
