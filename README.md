@@ -174,7 +174,19 @@ curl -sS http://127.0.0.1:8000/incidents/SHIP-421
 
 The agent receives only read and investigation tools. Its MCP tool results,
 response, and token usage are recorded in the incident's events. The API
-returns the calculated plans separately from the model's explanation. For a
+returns the calculated plans separately from the model's explanation.
+
+Before an answer is shown, a deterministic grounding check (`logiops/evaluator.py`)
+reads it, spoken line included, against the incident's data: it must end with
+`Recommended plan:` naming a real plan; every dollar amount, hour value and
+unit count must match the plans, orders, stock, carrier quotes or the saved
+preferences (spend cap and note), or the gap between two of them; every
+SHIP-/ORD- id must belong to the incident and every timestamp must be one in
+its data; and it must not claim that anything was approved, executed or
+delivered. A failed check goes back to the model once with the reasons, if at
+least 18 of the 50 seconds remain; an answer that still fails is returned with
+`grounded: false`. The response and the recorded event carry `evaluations`
+(one per attempt) and `grounded`. For a
 deterministic rehearsal, launch the server with `LOGIOPS_AGENT_MODE=replay`;
 the response says `mode: replay` and reports zero tokens. Normal mode is
 `bedrock`. It calls Converse through boto3 with SDK retries, and a run stops

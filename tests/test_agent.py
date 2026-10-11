@@ -34,7 +34,8 @@ class FakeConverse:
             "stopReason": "end_turn",
             "usage": {"inputTokens": 800, "outputTokens": 100},
             "output": {"message": {"role": "assistant", "content": [
-                {"text": "The shipment is delayed. Compare three plans; I recommend split-express. Delivery remains projected. Human approval is required."}
+                {"text": "The shipment is delayed. Compare three plans; I recommend split-express. Delivery remains projected. "
+                         "Human approval is required.\nRecommended plan: split-express"}
             ]}},
         }
 
@@ -51,6 +52,8 @@ def test_agent_uses_mcp_and_persists_trace(tmp_path):
                 assert len(body["plans"]) == 3
                 assert body["source_version"] == 1
                 assert body["usage"] == {"inputTokens": 920, "outputTokens": 190}
+                assert body["grounded"] is True and len(body["evaluations"]) == 1
+                assert body["evaluations"][0]["recommended_plan_id"].endswith(":split-express:v1")
                 assert {step["tool"] for step in body["tool_trace"]} == {
                     "get_shipment", "get_order", "get_inventory",
                     "find_alternative_carriers", "investigate_incident",

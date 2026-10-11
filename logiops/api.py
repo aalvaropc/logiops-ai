@@ -23,9 +23,9 @@ from .bedrock import BedrockConverse, BedrockError
 from .budget import FALLBACK, BudgetedConverse, DailyModelBudget
 from .service import APPROVER_MAX_LENGTH, LogiOpsService, WorkflowError
 from .mcp_server import create_mcp_server
-from .preferences import COST_LIMIT, NOTE_LIMIT, RULES, PreferenceStore, preference_for
+from .preferences import COST_LIMIT, NOTE_LIMIT, RULES, PreferenceStore, preference_for, with_preference_figures
 from .replay import ReplayConverse
-from .scenario import INCIDENT_ID, INCIDENT_IDS, scenario_clock
+from .scenario import INCIDENT_ID, INCIDENT_IDS, known_figures, scenario_clock
 from .security import SANDBOX_PATH, install_security
 
 logger = logging.getLogger(__name__)
@@ -299,12 +299,14 @@ def create_app(
 
     @app.post("/incidents/{incident_id}/agent/investigate")
     async def agent_investigate(incident_id: str, request: AgentInvestigationRequest) -> dict[str, Any]:
-        source_version = service.get(incident_id)["source_version"]
+        snapshot = service.get(incident_id)
+        source_version = snapshot["source_version"]
+        facts = with_preference_figures(known_figures(snapshot["state"]), preferences.get())
         async with agent_client(bedrock_client, INVESTIGATE_TURNS) as (client, run_mode, fallback):
             try:
                 run = await investigate_with_bedrock(
                     app, client, incident_id, request.question,
-                    access_token=access_token, internal_key=internal_key,
+                    access_token=access_token, internal_key=internal_key, facts=facts,
                 )
             except BedrockError as exc:
                 service.record_agent_event(

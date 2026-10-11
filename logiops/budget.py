@@ -9,7 +9,7 @@ runs on the replay model and says so (`fallback: "daily_budget"`), instead of
 failing or spending more.
 
 Calls are counted, not tokens: the cap is a simple, predictable bound (an
-investigation is at most 8 calls), not an exact bill. SDK retries inside one
+investigation is at most 9 calls, its revision included), not an exact bill. SDK retries inside one
 call are not counted separately.
 """
 
