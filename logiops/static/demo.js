@@ -9,6 +9,10 @@ const state = {
   briefingPick: null, prefsShown: undefined,
 };
 const incidentPath = (suffix = "") => `/incidents/${encodeURIComponent(state.incidentId)}${suffix}`;
+const device = (method, ...args) => {
+  const api = window.LogiOpsDevice;
+  if (api && typeof api[method] === "function") api[method](...args);
+};
 const MCP_APP = { uri: "ui://logiops/resolution-options.html", mime: "text/html;profile=mcp-app", protocol: "2026-01-26", proxyPath: "/mcp-app/sandbox.html" };
 const SANDBOX_ORIGIN = (() => {
   const value = document.querySelector('meta[name="logiops-sandbox-origin"]')?.content || "";
@@ -82,13 +86,22 @@ async function request(path, method = "GET", body) {
   const headers = {};
   if (state.token) headers.Authorization = `Bearer ${state.token}`;
   if (body !== undefined) headers["Content-Type"] = "application/json";
-  const response = await fetch(path, {
-    method,
-    headers,
-    body: body === undefined ? undefined : JSON.stringify(body),
-    cache: "no-store",
-  });
+  const agentCall = method === "POST" && /\/agent\//.test(path);
+  if (agentCall) device("voice", "request");
+  let response;
+  try {
+    response = await fetch(path, {
+      method,
+      headers,
+      body: body === undefined ? undefined : JSON.stringify(body),
+      cache: "no-store",
+    });
+  } catch (error) {
+    if (agentCall) device("voice", "error");
+    throw error;
+  }
   if (!response.ok) {
+    if (agentCall) device("voice", "error");
     let detail = `HTTP ${response.status}`;
     try { detail = (await response.json()).detail || detail; } catch (_) { }
     const error = new Error(explainError(response.status, detail));
@@ -326,6 +339,7 @@ function renderPlans(snapshot) {
     radio.addEventListener("change", () => {
       state.selectedPlanId = plan.id;
       renderPlans(snapshot);
+      showOnDevice(snapshot);
       renderControls();
     });
     const description = document.createElement("div");
@@ -539,12 +553,31 @@ function welcomeText() {
 function say(role, text, meta, spoken, check) {
   state.conversation.push({ role, text, meta, check });
   renderConversation();
-  if (role === "assistant" && $("speak-replies").checked && "speechSynthesis" in window) {
+  if (role !== "assistant") {
+    device("heard", text);
+    return;
+  }
+  const speak = $("speak-replies").checked && "speechSynthesis" in window;
+  device("reply", text, spoken, speak);
+  if (speak) {
     window.speechSynthesis.cancel();
     const utterance = new SpeechSynthesisUtterance(spoken || window.LogiOpsMarkdown.plainText(text));
     utterance.lang = "en-US";
+    const done = () => {
+      clearTimeout(state.speechTimer);
+      device("voice", "speech-end");
+    };
+    utterance.addEventListener("end", done);
+    utterance.addEventListener("error", done);
+    clearTimeout(state.speechTimer);
+    state.speechTimer = setTimeout(done, 20000);
     window.speechSynthesis.speak(utterance);
   }
+}
+
+function showOnDevice(snapshot) {
+  const plan = visiblePlans(snapshot).find((item) => item.id === state.selectedPlanId) || null;
+  device("show", snapshot, plan, state.inbox.find((item) => item.incident_id === snapshot.state.incident_id));
 }
 
 function renderControls() {
@@ -642,6 +675,7 @@ function render(snapshot) {
   renderPreferenceLine(snapshot);
   renderPreferences(snapshot);
   renderPlans(snapshot);
+  showOnDevice(snapshot);
   renderTimeline(snapshot.events);
   const execution = snapshot.executions[0];
   $("execution-state").textContent = execution ? "Operationally verified" : visibleApproval(snapshot) ? "Approved · ready" : "Waiting for approval";
@@ -929,6 +963,7 @@ function setUpVoice() {
   recognition.addEventListener("end", () => {
     mic.textContent = "Speak";
     mic.setAttribute("aria-pressed", "false");
+    device("voice", "listen-end");
   });
   recognition.addEventListener("error", (event) => {
     if (event.error !== "no-speech" && event.error !== "aborted") message(`Voice input unavailable: ${event.error}`);
@@ -940,6 +975,7 @@ function setUpVoice() {
     }
     mic.textContent = "Listening…";
     mic.setAttribute("aria-pressed", "true");
+    device("voice", "listen-start");
     recognition.start();
   });
 }
@@ -1004,6 +1040,7 @@ $("approve").addEventListener("click", () => act(
 ).catch(() => {}));
 $("execute").addEventListener("click", () => act(executeApproved, "Execution was operationally verified.").catch(() => {}));
 
+device("mount");
 setUpVoice();
 renderConversation();
 state.token = storedToken();

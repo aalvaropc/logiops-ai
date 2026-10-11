@@ -35,7 +35,7 @@ HOSTNAME = re.compile(r"[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?")
 LOOPBACK_PAIRS = {"127.0.0.1": "localhost", "localhost": "127.0.0.1"}
 START_WITH = re.compile(r"start with[*_`]*\s*[:：]\s*[*_`]*\s*(SHIP-\d+)", re.I)
 SANDBOX_META = '<meta name="logiops-sandbox-origin" content="">'
-DEMO_ASSETS = ("demo.css", "demo.js", "markdown.js", "intent.js")
+DEMO_ASSETS = ("demo.css", "demo.js", "markdown.js", "intent.js", "route.js", "device.js")
 ASSET_TYPES = {".css": "text/css", ".js": "text/javascript"}
 
 

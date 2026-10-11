@@ -10,6 +10,8 @@
   <link rel="stylesheet" href="/assets/demo.css">
   <script src="/assets/markdown.js"></script>
   <script src="/assets/intent.js"></script>
+  <script src="/assets/route.js"></script>
+  <script src="/assets/device.js"></script>
   <script src="/assets/demo.js" defer></script>
 </head>
 <body>
@@ -19,7 +21,31 @@
       <div class="topbar-right"><span class="track">Simulated Alexa+ experience · MCP · Amazon Bedrock</span><span id="connection" class="connection">Connecting</span></div>
     </header>
 
+    <section id="device" class="device" aria-label="Alexa+ device, simulated">
+      <div class="device-screen">
+        <div class="device-bar"><span class="device-brand">Alexa+ <span>simulated</span></span><span id="device-clock" class="device-clock">Lima</span></div>
+        <div class="device-body">
+          <div class="device-voice">
+            <div class="orb-row"><div id="device-orb" class="orb" data-state="ready" aria-hidden="true"><span></span></div><p id="device-state" class="orb-label" role="status" aria-live="polite">Ready</p></div>
+            <p class="device-heard"><span class="device-label">You said</span> <span id="device-heard">Try “any delays today?”</span></p>
+            <p class="device-spoken-wrap"><span class="device-label">Alexa+</span> <span id="device-spoken" class="device-spoken">Ask about the queue, an incident, or a plan.</span></p>
+            <div id="device-chips" class="device-chips" aria-label="Incident on screen"></div>
+          </div>
+          <figure class="device-map">
+            <svg id="device-map" viewBox="0 0 240 300" role="img" aria-labelledby="device-map-title"><title id="device-map-title">Plan route on a map of Peru</title></svg>
+            <figcaption id="device-map-caption"></figcaption>
+          </figure>
+          <div class="device-promise">
+            <p class="device-label">Promise vs projection</p>
+            <ol id="device-bars" class="promise-list"></ol>
+          </div>
+        </div>
+      </div>
+      <p class="device-note">A simulated Alexa+ screen on the same MCP tools and data as the operator view below. Projections are from synthetic quotes; delivery is not physically confirmed.</p>
+    </section>
+
     <main>
+      <p class="operator-label">Operator view · the same incident, in full</p>
       <section class="hero" aria-labelledby="page-title">
         <div class="eyebrow">Incident command center <span>·</span> Synthetic scenario</div>
         <div class="hero-grid">
