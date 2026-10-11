@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from logiops.evaluator import check_recommendation, check_verification, figures_in, recommended_plan_id
+from logiops.evaluator import check_facts, check_recommendation, check_verification, figures_in, recommended_plan_id
 from logiops.scenario import build_plans, known_figures, seed_state
 
 CASES = json.loads((Path(__file__).resolve().parent / "grounding_cases.json").read_text())
@@ -31,6 +31,15 @@ def test_the_recommended_plan_follows_the_shared_cases(case):
 def test_the_grounding_check_follows_the_shared_cases(case):
     state, plans, answer, _expected = fill(case)
     result = check_recommendation(answer, plans, known_figures(state), case.get("require_line", False))
+    assert result["passed"] is case["passed"], result["issues"]
+    if "issue" in case:
+        assert case["issue"] in " ".join(result["issues"])
+
+
+@pytest.mark.parametrize("case", CASES["facts"], ids=lambda case: case["name"])
+def test_the_facts_check_follows_the_shared_cases(case):
+    state, plans, answer, _expected = fill(case)
+    result = check_facts(answer, plans, known_figures(state))
     assert result["passed"] is case["passed"], result["issues"]
     if "issue" in case:
         assert case["issue"] in " ".join(result["issues"])

@@ -54,5 +54,17 @@
      "answer": "Trujillo has 30 laptops, ready Oct 13, 08:00. ORD-460 (hospital, 20 units) is served first; ORD-461 (school, 25 units) gets the other 10 and 15 more by express transfer, arriving Oct 13, 8:00 PM, for $300.\nRecommended plan: {id:express-transfer}"},
     {"name": "a required line that is missing", "incident": "SHIP-460", "passed": false, "require_line": true, "issue": "End with one line",
      "answer": "I recommend {id:express-transfer}."}
+  ],
+  "facts": [
+    {"name": "a follow-up without a pick", "incident": "SHIP-421", "passed": true,
+     "answer": "Rerouting costs $80 and arrives Oct 12, 17:00, so ORD-421 would be 3 h late; express carries at most 8 units."},
+    {"name": "a follow-up quoting a gap", "incident": "SHIP-433", "passed": true,
+     "answer": "Flying only the hospital order saves $150 against the default, but the store order waits 24 h instead of 8 h."},
+    {"name": "a follow-up with an invented price", "incident": "SHIP-421", "passed": false, "issue": "$95",
+     "answer": "Rerouting would cost $95."},
+    {"name": "a follow-up about another incident", "incident": "SHIP-421", "passed": false, "issue": "SHIP-452",
+     "answer": "SHIP-452 has the same problem."},
+    {"name": "a follow-up claiming execution", "incident": "SHIP-421", "passed": false, "issue": "has been executed",
+     "answer": "The split has been executed."}
   ]
 }

@@ -222,10 +222,9 @@ def _split_attributed(
     return "\n".join(plain), attributed
 
 
-def check_recommendation(
-    answer: str, plans: list[dict[str, Any]], context: dict[str, Any], require_line: bool = False,
-) -> dict[str, Any]:
-    """Grounding check for an investigation answer.
+def check_facts(answer: str, plans: list[dict[str, Any]], context: dict[str, Any]) -> dict[str, Any]:
+    """The checks of an answer that need not pick a plan (a follow-up, a briefing), and the part of
+    check_recommendation besides the pick.
 
     `context` carries the other facts the answer may legitimately quote (see
     scenario.known_figures): carrier quotes and delays, and when present unit
@@ -238,15 +237,6 @@ def check_recommendation(
     sources = context.get("sources") or []
     plain, attributed = _split_attributed(answer, plans, sources)
     web_hint = " A figure taken from a web result must be on the same line as its URL." if sources else ""
-    recommended = recommended_plan_id(answer, plans, require_line)
-    if recommended is None:
-        choices = ", ".join(plan["id"] for plan in plans)
-        if RECOMMENDED_LINE.search(answer):
-            issues.append(f"The Recommended plan line does not name one of the plans from investigate_incident ({choices}).")
-        elif require_line:
-            issues.append(f"End with one line: Recommended plan: <exact plan id> (one of: {choices}).")
-        else:
-            issues.append(f"Recommend exactly one plan and cite its exact plan id from investigate_incident (one of: {choices}).")
     known_dollars = {float(plan["incremental_cost_usd"]) for plan in plans} | {
         float(value) for value in context.get("dollars", [])
     }
@@ -306,6 +296,25 @@ def check_recommendation(
             "Do not claim that a plan was approved, executed or delivered; a person approves it later: "
             + "; ".join(claims) + "."
         )
+    return {"passed": not issues, "issues": issues}
+
+
+def check_recommendation(
+    answer: str, plans: list[dict[str, Any]], context: dict[str, Any], require_line: bool = False,
+) -> dict[str, Any]:
+    """Grounding check for an investigation answer: it must recommend exactly one of the plans (from
+    its closing "Recommended plan:" line when `require_line`), and pass check_facts."""
+    issues: list[str] = []
+    recommended = recommended_plan_id(answer, plans, require_line)
+    if recommended is None:
+        choices = ", ".join(plan["id"] for plan in plans)
+        if RECOMMENDED_LINE.search(answer):
+            issues.append(f"The Recommended plan line does not name one of the plans from investigate_incident ({choices}).")
+        elif require_line:
+            issues.append(f"End with one line: Recommended plan: <exact plan id> (one of: {choices}).")
+        else:
+            issues.append(f"Recommend exactly one plan and cite its exact plan id from investigate_incident (one of: {choices}).")
+    issues += check_facts(answer, plans, context)["issues"]
     return {"passed": not issues, "issues": issues, "recommended_plan_id": recommended}
 
 
