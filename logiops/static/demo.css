@@ -240,3 +240,14 @@ main > .operator-label + .hero { padding-top: 26px; }
 @media (max-width: 1100px) { .device-body { grid-template-columns: minmax(0, 1fr) minmax(200px, .8fr); } .device-promise { grid-column: 1 / -1; } }
 @media (max-width: 650px) { .device-screen { padding: 14px 14px 18px; border-width: 6px; border-radius: 18px; } .device-body { grid-template-columns: minmax(0, 1fr); gap: 18px; } .device-map svg { max-width: 220px; } .device-spoken { font-size: 19px; } }
 @media (prefers-reduced-motion: reduce) { .orb { animation: none !important; } }
+.device-elapsed { color: #8fd8ee; font-size: 12px; font-variant-numeric: tabular-nums; }
+.device-trace { margin-top: 18px; }
+.device-trace[hidden] { display: none; }
+.device-check { margin-right: 6px; padding: 2px 8px; border-radius: 99px; font-size: 10px; letter-spacing: .04em; text-transform: none; }
+.device-check.passed { color: #071318; background: #77dfc8; }
+.device-check.failed { color: #ffd6d1; background: #5c2621; }
+.device-check[hidden] { display: none; }
+.device-steps { list-style: none; margin: 6px 0 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; }
+.device-steps li { padding: 3px 9px; border: 1px solid #1d4552; border-radius: 99px; color: #cfe8ef; font-size: 11px; animation: step-in .25s ease-out; }
+.device-steps li.error { border-color: #7a3a33; color: #ffb8b0; }
+@keyframes step-in { from { opacity: 0; transform: translateY(3px); } to { opacity: 1; transform: none; } }

@@ -341,3 +341,14 @@ def test_the_device_view_sits_above_the_operator_view():
         assert hook in script, hook
     assert "@media (prefers-reduced-motion: reduce) { .orb { animation: none !important; } }" in style
     assert "@media (max-width: 650px) { .device-screen" in style
+
+
+def test_the_device_replays_the_recorded_tool_trace_and_the_check():
+    root = Path(__file__).resolve().parents[1] / "logiops" / "static"
+    html, script, device = ((root / name).read_text() for name in ("demo.html", "demo.js", "device.js"))
+    assert 'id="device-elapsed" class="device-elapsed" aria-hidden="true"' in html
+    assert 'aria-label="Steps the agent took, from the recorded tool trace"' in html and 'id="device-check"' in html
+    assert script.count('device("trace", run);') == 2
+    assert "From the recorded tool trace · ${steps.length} MCP call" in device
+    assert 'matchMedia("(prefers-reduced-motion: reduce)")' in device and "answered in ${" in device
+    assert '"Checked against the data after one revision"' in device and '"Did not pass the data check"' in device

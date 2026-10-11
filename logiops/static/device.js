@@ -3,7 +3,14 @@
   const CLOCK = new Intl.DateTimeFormat("en-US", { timeZone: "America/Lima", weekday: "short", hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
   const WHEN = new Intl.DateTimeFormat("en-US", { timeZone: "America/Lima", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
   const byId = (id) => document.getElementById(id);
+  const STEP_NAMES = {
+    get_shipment: "Shipment", get_order: "Order", get_inventory: "Stock", find_alternative_carriers: "Carrier quotes",
+    investigate_incident: "Plans calculated", get_execution_status: "Execution status", list_incidents: "Inbox",
+  };
   let voice = "ready";
+  let started = 0;
+  let ticker = 0;
+  let reveal = [];
 
   function el(tag, className, text) {
     const node = document.createElement(tag);
@@ -24,8 +31,24 @@
     return Number.isNaN(time) ? "—" : WHEN.format(new Date(time));
   }
 
+  function elapsed() {
+    const line = byId("device-elapsed");
+    if (line && started) line.textContent = `${Math.floor((performance.now() - started) / 1000)} s`;
+  }
+
   function setVoice(event, speaking = false) {
     const next = root.LogiOpsRoute.voiceState(voice, event, speaking);
+    const line = byId("device-elapsed");
+    if (next.state === "thinking" && voice !== "thinking") {
+      started = performance.now();
+      if (line) line.textContent = "0 s";
+      clearInterval(ticker);
+      ticker = setInterval(elapsed, 250);
+    } else if (next.state !== "thinking" && voice === "thinking") {
+      clearInterval(ticker);
+      if (line && started) line.textContent = `answered in ${((performance.now() - started) / 1000).toFixed(1)} s`;
+      started = 0;
+    }
     voice = next.state;
     const orb = byId("device-orb");
     if (orb) orb.dataset.state = voice;
@@ -152,6 +175,48 @@
     if (plan) add("chip-plan", `${plan.label} · $${plan.incremental_cost_usd}`);
   }
 
+  function stepLabel(step) {
+    const input = step.input || {};
+    const output = step.output || {};
+    let detail = input.shipment_id || input.order_id || (input.warehouse_id ? `${input.warehouse_id} warehouse` : "");
+    if (step.tool === "investigate_incident" && Array.isArray(output.plans)) detail = `${output.plans.length} plans`;
+    if (step.tool === "list_incidents" && Array.isArray(output.incidents)) detail = `${output.incidents.length} incidents`;
+    if (step.tool === "find_alternative_carriers" && output && !step.is_error) detail = `${Object.keys(output).length} quotes`;
+    return `${STEP_NAMES[step.tool] || step.tool}${detail ? ` · ${detail}` : ""}${step.is_error ? " · error" : ""}`;
+  }
+
+  function checkText(run) {
+    if (!run.evaluations?.length) return null;
+    if (!run.grounded) return { passed: false, text: "Did not pass the data check" };
+    return { passed: true, text: run.evaluations.length > 1 ? "Checked against the data after one revision" : "Checked against the data" };
+  }
+
+  function trace(run) {
+    const box = byId("device-trace");
+    const list = byId("device-steps");
+    if (!box || !list) return;
+    for (const timer of reveal) clearTimeout(timer);
+    reveal = [];
+    list.replaceChildren();
+    const steps = run?.tool_trace || [];
+    box.hidden = !steps.length;
+    const title = byId("device-trace-title");
+    if (title) title.textContent = `From the recorded tool trace · ${steps.length} MCP call${steps.length === 1 ? "" : "s"}`;
+    const badge = byId("device-check");
+    const check = run ? checkText(run) : null;
+    if (badge) {
+      badge.textContent = check ? check.text : "";
+      badge.className = `device-check${check ? (check.passed ? " passed" : " failed") : ""}`;
+      badge.hidden = !check;
+    }
+    const still = root.matchMedia && root.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    steps.forEach((step, index) => {
+      const item = el("li", step.is_error ? "error" : "", stepLabel(step));
+      if (still) list.append(item);
+      else reveal.push(setTimeout(() => list.append(item), index * 220));
+    });
+  }
+
   function show(snapshot, plan, summary) {
     drawChips(snapshot, plan || null, summary);
     drawMap(snapshot, plan || null);
@@ -166,5 +231,5 @@
     drawBars(null);
   }
 
-  root.LogiOpsDevice = { mount, heard, reply, voice: setVoice, show };
+  root.LogiOpsDevice = { mount, heard, reply, voice: setVoice, show, trace };
 })(window);
