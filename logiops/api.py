@@ -28,7 +28,7 @@ from .booking import BookingStore, receipt_html
 from .evaluator import figures_in
 from .budget import FALLBACK, BudgetedConverse, DailyModelBudget
 from .service import APPROVER_MAX_LENGTH, LogiOpsService, WorkflowError
-from .identity import actor_of
+from .identity import actor_of, profile_of
 from .mcp_server import create_mcp_server
 from .oauth import OAuthSettings, install_oauth
 from .preferences import COST_LIMIT, NOTE_LIMIT, RULES, PreferenceStore, preference_for, with_preference_figures
@@ -187,6 +187,10 @@ def create_app(
     )
     if oauth:
         install_oauth(app, oauth, public_host or None)
+    else:
+        @app.get("/auth/config", include_in_schema=False)
+        async def auth_off() -> dict[str, Any]:
+            return {"enabled": False}
     static_dir = Path(__file__).resolve().parent / "static"
     demo_page_html = (static_dir / "demo.html").read_text(encoding="utf-8")
     demo_assets = {name: (static_dir / name).read_bytes() for name in DEMO_ASSETS}
@@ -257,7 +261,7 @@ def create_app(
         """Restore every synthetic incident and forget the preferences and bookings, or reset only the incident named."""
         incident_id = request.incident_id if request else None
         if incident_id is None:
-            preferences.clear()
+            preferences.clear_all()
         snapshot = service.reset(incident_id)
         bookings.clear(incident_id)
         alerts.clear(incident_id)
@@ -269,22 +273,22 @@ def create_app(
         return [plan for plan in snapshot["plans"] if plan["source_version"] == version]
 
     @app.get("/operator/preferences")
-    async def get_preferences() -> dict[str, Any]:
-        """The operator's saved preferences (they persist across sessions) and the rules on offer."""
-        return {"preferences": preferences.get(), "rules": RULES}
+    async def get_preferences(request: Request) -> dict[str, Any]:
+        """Your saved preferences (they persist across sessions; a signed-in user has their own) and the rules on offer."""
+        return {"preferences": preferences.get(profile_of(actor_of(request))), "rules": RULES}
 
     @app.put("/operator/preferences")
-    async def put_preferences(update: PreferenceUpdate) -> dict[str, Any]:
+    async def put_preferences(update: PreferenceUpdate, request: Request) -> dict[str, Any]:
         """Save preferences for every incident; they steer the pick and never approve a plan."""
         try:
-            saved = preferences.put(update.rule, update.max_cost_usd, update.note)
+            saved = preferences.put(update.rule, update.max_cost_usd, update.note, subject=profile_of(actor_of(request)))
         except ValueError as exc:
             raise WorkflowError(str(exc), 422) from exc
         return {"preferences": saved, "rules": RULES}
 
     @app.delete("/operator/preferences")
-    async def clear_preferences() -> dict[str, Any]:
-        preferences.clear()
+    async def clear_preferences(request: Request) -> dict[str, Any]:
+        preferences.clear(profile_of(actor_of(request)))
         return {"preferences": None, "rules": RULES}
 
     @app.post("/demo/inventory")
@@ -325,9 +329,9 @@ def create_app(
         return {"incidents": service.list_incidents()}
 
     @app.get("/incidents/{incident_id}")
-    async def get_incident(incident_id: str) -> dict[str, Any]:
+    async def get_incident(incident_id: str, request: Request) -> dict[str, Any]:
         snapshot = service.get(incident_id)
-        saved = preferences.get()
+        saved = preferences.get(profile_of(actor_of(request)))
         for event in snapshot["events"]:
             if event["name"] == "agent_investigation_completed":
                 version_plans = [plan for plan in snapshot["plans"] if plan["source_version"] == event["data"]["source_version"]]
@@ -369,6 +373,14 @@ def create_app(
             finally:
                 client.settle()
 
+    def agent_token(request: Request) -> str | None:
+        """The token the agent's in-process MCP calls carry: a signed-in user's own (so the tools apply
+        their preferences), otherwise the operator token."""
+        supplied = request.headers.get("authorization", "")
+        if actor_of(request).kind == "user" and supplied[:7].lower() == "bearer ":
+            return supplied[7:].strip()
+        return access_token
+
     def labelled(run: dict[str, Any], mode: str, fallback: str | None) -> dict[str, Any]:
         return {**run, "mode": mode, **({"fallback": fallback} if fallback else {})}
 
@@ -376,12 +388,12 @@ def create_app(
     async def agent_investigate(incident_id: str, request: AgentInvestigationRequest, http_request: Request) -> dict[str, Any]:
         snapshot = service.get(incident_id)
         source_version = snapshot["source_version"]
-        facts = with_preference_figures(known_figures(snapshot["state"]), preferences.get())
+        facts = with_preference_figures(known_figures(snapshot["state"]), preferences.get(profile_of(actor_of(http_request))))
         async with agent_client(bedrock_client, INVESTIGATE_TURNS, http_request) as (client, run_mode, fallback):
             try:
                 run = await investigate_with_bedrock(
                     app, client, incident_id, request.question,
-                    access_token=access_token, internal_key=internal_key, facts=facts,
+                    access_token=agent_token(http_request), internal_key=internal_key, facts=facts,
                 )
             except BedrockError as exc:
                 service.record_agent_event(
@@ -418,7 +430,7 @@ def create_app(
             ),
             "execution": executions[0] if executions else None,
         }
-        saved = preferences.get()
+        saved = preferences.get(profile_of(actor_of(http_request)))
         preference = preference_for(context["plans"], saved)
         if preference:
             context["operator_preferences"] = preference
@@ -432,7 +444,7 @@ def create_app(
                 run = await ask_with_bedrock(
                     app, client, incident_id, request.question, context,
                     [turn.model_dump() for turn in request.history],
-                    access_token=access_token, internal_key=internal_key, facts=facts,
+                    access_token=agent_token(http_request), internal_key=internal_key, facts=facts,
                     plans=[plan for plan in snapshot["plans"] if plan["source_version"] == version],
                 )
             except BedrockError as exc:
@@ -445,7 +457,7 @@ def create_app(
     @app.post("/agent/briefing")
     async def agent_briefing(request: AgentBriefingRequest, http_request: Request) -> dict[str, Any]:
         """Brief the open incidents in inbox order and say which to open first; it reads, and changes nothing."""
-        saved = preferences.get()
+        saved = preferences.get(profile_of(actor_of(http_request)))
         facts = merged_facts(
             *(known_figures(service.get(incident_id)["state"]) for incident_id in INCIDENT_IDS),
             with_preference_figures({}, saved), figures_in(request.question))
@@ -453,7 +465,7 @@ def create_app(
             try:
                 run = await brief_with_bedrock(
                     app, client, request.question, saved,
-                    access_token=access_token, internal_key=internal_key, facts=facts,
+                    access_token=agent_token(http_request), internal_key=internal_key, facts=facts,
                 )
             except BedrockError as exc:
                 logger.warning("Briefing failed (%s mode): %s", run_mode, exc)

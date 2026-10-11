@@ -7,7 +7,7 @@ const state = {
   token: "", snapshot: null, selectedPlanId: null, busy: false, conversation: [], speaking: false, app: null,
   awaitingExecute: false, pendingApproval: null, incidentId: hashIncident(), inbox: [], conversations: {}, selections: {}, stockFor: null,
   briefingPick: null, prefsShown: undefined, cardTheme: "dark", pendingPurchase: null, alerts: [],
-  voice: { engine: "browser", voice: null, fillers: [] }, speechTurn: 0,
+  voice: { engine: "browser", voice: null, fillers: [] }, speechTurn: 0, auth: { enabled: false }, session: null,
 };
 const CAPABILITIES_TEXT = "I'm LogiOps, your operations desk for late or held shipments. I can:\n"
   + "- brief your queue: say “any delays today?”;\n"
@@ -76,6 +76,12 @@ function setBusy(busy) {
 }
 
 function explainError(status, detail) {
+  if (status === 401 && state.auth.enabled) {
+    return state.session
+      ? "Your sign-in expired. Say “link my account” to sign in again."
+      : "Sign in to do that: say “link my account” or press Link account. Guests can read and ask, but not act.";
+  }
+  if (status === 403 && state.auth.enabled) return "Your sign-in does not allow that action.";
   if (status === 401) {
     return state.token
       ? "That access token was not accepted. Copy it again from the testing instructions, paste it above, and press Connect."
@@ -106,6 +112,120 @@ function forgetPurchase() {
   keepPurchase(null);
 }
 
+const SESSION_KEY = "logiops-session";
+const OAUTH_KEY = "logiops-oauth";
+function readSession() {
+  try { return JSON.parse(sessionStorage.getItem(SESSION_KEY) || "null"); } catch (_) { return null; }
+}
+function keepSession(session) {
+  try {
+    if (session) sessionStorage.setItem(SESSION_KEY, JSON.stringify(session)); else sessionStorage.removeItem(SESSION_KEY);
+  } catch (_) { }
+  state.session = session;
+  state.token = session ? session.access : storedToken();
+  if (session) $("approver").value = session.username;
+  renderAccount();
+}
+function base64url(bytes) {
+  return btoa(String.fromCharCode(...bytes)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+function randomText(size) {
+  const bytes = new Uint8Array(size);
+  window.crypto.getRandomValues(bytes);
+  return base64url(bytes);
+}
+function tokenClaims(token) {
+  try { return JSON.parse(atob(String(token).split(".")[1].replace(/-/g, "+").replace(/_/g, "/"))); } catch (_) { return {}; }
+}
+function sessionFrom(body, previous) {
+  const claims = tokenClaims(body.access_token);
+  return {
+    access: body.access_token, refresh: body.refresh_token || previous?.refresh || null,
+    expiresAt: Date.now() + Number(body.expires_in || 3600) * 1000, username: String(claims.username || "you").slice(0, 80),
+  };
+}
+async function tokenGrant(fields) {
+  const response = await fetch("/auth/token", {
+    method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, cache: "no-store",
+    body: new URLSearchParams({ client_id: state.auth.client_id, ...fields }),
+  });
+  const body = await response.json().catch(() => ({}));
+  return response.ok && body.access_token ? body : null;
+}
+function renderAccount() {
+  const box = $("account");
+  box.hidden = !state.auth.enabled;
+  box.classList.toggle("signed-in", Boolean(state.session));
+  $("account-status").textContent = state.session ? `Signed in as ${state.session.username}` : "Guest · read only";
+  $("link-account").hidden = Boolean(state.session);
+  $("sign-out").hidden = !state.session;
+}
+async function loadAuth() {
+  try {
+    const response = await fetch("/auth/config", { cache: "no-store" });
+    state.auth = response.ok ? await response.json() : { enabled: false };
+  } catch (_) {
+    state.auth = { enabled: false };
+  }
+  if (!state.auth.enabled) keepSession(null);
+  renderAccount();
+}
+async function linkAccount() {
+  if (!state.auth.enabled) {
+    say("assistant", "Sign-in isn't set up on this server, so the demo already acts as the operator.");
+    return;
+  }
+  const verifier = randomText(48);
+  const digest = await window.crypto.subtle.digest("SHA-256", new TextEncoder().encode(verifier));
+  const nonce = randomText(24);
+  try {
+    sessionStorage.setItem(OAUTH_KEY, JSON.stringify({ verifier, state: nonce, hash: location.hash }));
+  } catch (_) {
+    say("assistant", "This browser blocks session storage, so I can't sign you in here.");
+    return;
+  }
+  const url = new URL(state.auth.authorize_endpoint);
+  url.search = new URLSearchParams({
+    response_type: "code", client_id: state.auth.client_id, redirect_uri: `${location.origin}/demo`, scope: state.auth.scope,
+    state: nonce, code_challenge: base64url(new Uint8Array(digest)), code_challenge_method: "S256",
+  }).toString();
+  location.assign(url.toString());
+}
+async function finishSignIn() {
+  const params = new URLSearchParams(location.search);
+  const code = params.get("code");
+  const failure = params.get("error");
+  if (!code && !failure) return;
+  let pending = null;
+  try {
+    pending = JSON.parse(sessionStorage.getItem(OAUTH_KEY) || "null");
+    sessionStorage.removeItem(OAUTH_KEY);
+  } catch (_) { }
+  history.replaceState(null, "", `/demo${pending?.hash || location.hash}`);
+  if (failure || !pending || params.get("state") !== pending.state || !state.auth.enabled) {
+    state.signInNote = failure ? "Sign-in was cancelled, so you're still a guest." : "That sign-in didn't match this browser's request, so I ignored it. Say “link my account” to try again.";
+    return;
+  }
+  const body = await tokenGrant({ grant_type: "authorization_code", code, redirect_uri: `${location.origin}/demo`, code_verifier: pending.verifier });
+  if (!body) {
+    state.signInNote = "Sign-in didn't complete. Say “link my account” to try again.";
+    return;
+  }
+  keepSession(sessionFrom(body));
+  state.signInNote = `Account linked: you're signed in as ${state.session.username}. You can now approve, execute and book.`;
+}
+async function refreshSession() {
+  const session = state.session;
+  if (!session?.refresh || !state.auth.enabled) return false;
+  const body = await tokenGrant({ grant_type: "refresh_token", refresh_token: session.refresh }).catch(() => null);
+  keepSession(body ? sessionFrom(body, session) : null);
+  return Boolean(body);
+}
+function signOut() {
+  keepSession(null);
+  state.token = storedToken();
+}
+
 const TOKEN_KEY = "logiops-access-token";
 function storedToken() {
   try { return sessionStorage.getItem(TOKEN_KEY) || ""; } catch (_) { return ""; }
@@ -114,7 +234,7 @@ function storeToken(token) {
   try { if (token) sessionStorage.setItem(TOKEN_KEY, token); else sessionStorage.removeItem(TOKEN_KEY); } catch (_) { }
 }
 
-async function request(path, method = "GET", body) {
+async function request(path, method = "GET", body, retried = false) {
   const headers = {};
   if (state.token) headers.Authorization = `Bearer ${state.token}`;
   if (body !== undefined) headers["Content-Type"] = "application/json";
@@ -139,6 +259,10 @@ async function request(path, method = "GET", body) {
     throw error;
   }
   if (agentCall) clearTimeout(state.fillerTimer);
+  if (!response.ok && response.status === 401 && !retried && state.session
+      && /invalid_token/.test(response.headers.get("www-authenticate") || "") && await refreshSession()) {
+    return request(path, method, body, true);
+  }
   if (!response.ok) {
     if (agentCall) device("voice", "error");
     let detail = `HTTP ${response.status}`;
@@ -929,7 +1053,10 @@ async function act(work, success) {
     if (success) message(success, true);
   } catch (error) {
     message(error.message || String(error));
-    if (error.status === 401) {
+    if (error.status === 401 && state.auth.enabled) {
+      if (state.session) keepSession(null);
+      $("link-account").focus();
+    } else if (error.status === 401) {
       storeToken("");
       $("connection").textContent = "Token required";
       $("connection").className = "connection error";
@@ -1268,6 +1395,16 @@ async function handleUtterance(raw) {
       } else {
         say("assistant", pending ? "Okay, nothing was approved." : "Okay. Ask me anything else about the queue or this incident.");
       }
+    } else if (command === "link") {
+      if (state.session) say("assistant", `You're already signed in as ${state.session.username}.`);
+      else await linkAccount();
+    } else if (command === "unlink") {
+      if (!state.session) {
+        say("assistant", "You're not signed in.");
+      } else {
+        signOut();
+        say("assistant", "Signed out on this page. You're a guest again: you can read and ask, but not act.");
+      }
     } else if (command === "resume") {
       const parked = storedPurchase();
       if (!parked) {
@@ -1447,6 +1584,11 @@ $("set-stock").addEventListener("click", () => act(async () => {
   await request("/demo/inventory", "POST", { incident_id: state.incidentId, available });
   state.selectedPlanId = null;
 }, "Stock changed. Earlier plans and approvals no longer apply.").then(checkAlerts).catch(() => {}));
+$("link-account").addEventListener("click", () => { linkAccount().catch((error) => message(error.message || String(error))); });
+$("sign-out").addEventListener("click", () => {
+  signOut();
+  message("Signed out. You're a guest: you can read and ask, but not act.", true);
+});
 $("alerts-bell").addEventListener("click", async () => {
   const alert = state.alerts.find((item) => item.incident_id !== state.incidentId);
   if (!alert || state.busy) return;
@@ -1474,8 +1616,15 @@ device("mount");
 setUpVoice();
 renderConversation();
 state.token = storedToken();
+const resumed = readSession();
+if (resumed) {
+  state.session = resumed;
+  state.token = resumed.access;
+}
 setInterval(() => { checkAlerts().catch(() => {}); }, 5000);
-act(refresh, "").then(() => {
+loadAuth().then(finishSignIn).catch(() => {}).then(() => act(refresh, "").catch(() => {})).then(() => {
+  if (state.signInNote) say("assistant", state.signInNote);
+  if (state.session) $("approver").value = state.session.username;
   loadVoice();
   checkAlerts().catch(() => {});
   const parked = storedPurchase();

@@ -59,6 +59,11 @@
             <p>Work the incident inbox: investigate each exception, compare delivery options, approve one plan, and verify the operational result.</p>
           </div>
           <div class="hero-actions">
+            <div id="account" class="account-row" hidden>
+              <span id="account-status" class="account-status" role="status">Guest · read only</span>
+              <button id="link-account" type="button" class="secondary">Link account</button>
+              <button id="sign-out" type="button" class="quiet" hidden>Sign out</button>
+            </div>
             <label for="access-token">Demo access token <span>(public deployment only)</span></label>
             <div class="token-row"><input id="access-token" type="password" autocomplete="off" placeholder="Paste operator token"><button id="connect" type="button" class="secondary">Connect</button></div>
             <label for="stock-input" class="stock-label">Simulate a stock change <span id="stock-scope">(this incident's warehouse; invalidates approvals)</span></label>

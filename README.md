@@ -409,6 +409,21 @@ by the three `LOGIOPS_COGNITO_*` settings; without them nothing changes.
 - **Static token.** The operator token still works, for scripts and the
   testing instructions.
 
+**Linking the account in the demo.** The page acts as the Alexa+ app would. On
+"Link account" (or "link my account"):
+1. It creates a 64-character PKCE verifier, its S256 challenge and a random
+   `state`, keeps them in `sessionStorage`, and opens Cognito's sign-in.
+2. On the way back it checks the `state`, exchanges the code and verifier at
+   `/auth/token`, and removes `?code` from the address with `replaceState`.
+3. The tokens stay in `sessionStorage` (never `localStorage`) and travel as
+   the bearer. A `401 invalid_token` refreshes once, then retries.
+
+The approver name becomes the signed-in user. "Sign out" returns to guest.
+**Preferences are per user**: a signed-in user's spend cap and rule belong to
+their account (keyed by the token's `sub`). The agent's in-process MCP calls
+carry that user's token, so `investigate_incident` applies their own
+preferences. Guests and the operator token share the demo profile.
+
 ### Voice (Amazon Polly)
 
 On a voice device every reply is heard, so the demo speaks with Amazon Polly

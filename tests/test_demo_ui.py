@@ -413,3 +413,20 @@ def test_replies_speak_with_polly_and_stop_when_the_person_talks():
     assert "stopSpeaking();\n    mic.textContent = \"Listening…\";" in script
     assert "startFiller();" in script and "}, 2500);" in script and "stopSpeaking({ quiet: true });" in script
     assert 'state.voice = await request("/voice/config");' in script and '$("speak-replies").checked = true;' in script
+
+
+def test_link_account_uses_pkce_s256_and_a_checked_state():
+    import json
+
+    script = (Path(__file__).resolve().parents[1] / "logiops" / "static" / "demo.js").read_text()
+    assert "const verifier = randomText(48);" in script and 'window.crypto.subtle.digest("SHA-256", new TextEncoder().encode(verifier))' in script
+    assert 'code_challenge_method: "S256"' in script and "params.get(\"state\") !== pending.state" in script
+    assert "sessionStorage.removeItem(OAUTH_KEY);" in script and 'history.replaceState(null, "", `/demo${pending?.hash || location.hash}`);' in script
+    assert 'grant_type: "authorization_code", code, redirect_uri: `${location.origin}/demo`, code_verifier: pending.verifier' in script
+    assert "/invalid_token/.test(response.headers.get(\"www-authenticate\") || \"\") && await refreshSession()" in script
+    assert "localStorage" not in script
+    cases = {"link my account": "link", "sign in": "link", "log in": "link", "Link account": "link",
+             "sign out": "unlink", "log out": "unlink", "unlink my account": "unlink",
+             "link the express": None, "sign in as admin": None}
+    got = json.loads(_intent(f"console.log(JSON.stringify({json.dumps(list(cases))}.map(m.parseCommand)))"))
+    assert dict(zip(cases, got)) == cases

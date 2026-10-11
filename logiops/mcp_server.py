@@ -23,7 +23,7 @@ from pydantic import Field
 from . import __version__
 from .alerts import AlertWatcher
 from .booking import BookingStore, receipt_text
-from .identity import OPERATOR, Actor, actor_of
+from .identity import OPERATOR, Actor, actor_of, profile_of
 from .mcp_models import (
     AlertList, Booking, CarrierQuote, Execution, ExecutionStatus, IncidentList, Investigation, Order, OrderId, Quote, Shipment,
     ShipmentId, Stock,
@@ -192,7 +192,7 @@ def create_mcp_server(
         annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, idempotentHint=True, openWorldHint=False),
         meta={"ui": {"resourceUri": UI_URI, "invoking": UI_INVOKING, "invoked": UI_INVOKED}, "ui/resourceUri": UI_URI},
     )
-    async def investigate_incident(shipment_id: ShipmentId) -> Investigation:
+    async def investigate_incident(shipment_id: ShipmentId, ctx: Context) -> Investigation:
         """Investigate the incident and calculate every feasible plan from its current data, with the operator's
         saved preferences applied. Calculating plans records them for this data version; it approves nothing."""
         try:
@@ -200,7 +200,7 @@ def create_mcp_server(
         except WorkflowError as exc:
             raise fail(exc, "read the incident's shipment, stock and carriers; a person may need to change the data") from exc
         result = {"source_version": plans[0]["source_version"], "plans": plans}
-        preference = preference_for(plans, preferences.get() if preferences else None)
+        preference = preference_for(plans, preferences.get(profile_of(actor(ctx))) if preferences else None)
         if preference:
             result["operator_preferences"] = preference
         return CallToolResult(

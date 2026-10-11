@@ -271,3 +271,7 @@ main > .operator-label + .hero { padding-top: 26px; }
 .alerts-bell { white-space: nowrap; padding: 5px 12px; border: 1px solid #b8862f; border-radius: 99px; background: #2a2217; color: #f0d9a6; font-size: 12px; font-weight: 800; }
 .alerts-bell[hidden] { display: none; }
 .alerts-bell:hover { background: #3a2f1d; }
+.account-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 0 0 12px; }
+.account-row[hidden] { display: none; }
+.account-status { color: #b9d8d2; font-size: 12px; font-weight: 700; }
+.account-row.signed-in .account-status { color: #9ff0dc; }
