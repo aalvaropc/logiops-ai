@@ -179,7 +179,7 @@ class BookingStore:
                 "ORDER BY created_at DESC LIMIT 1", (plan["id"], plan["source_version"], now.isoformat()),
             ).fetchone()
             if row:
-                return json.loads(row[0])
+                return {**json.loads(row[0]), "approved": self._approved(snapshot, plan)}
             price = breakdown(plan)
             expires = now + timedelta(minutes=QUOTE_MINUTES)
             quote = {

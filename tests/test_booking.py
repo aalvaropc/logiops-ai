@@ -128,6 +128,9 @@ def test_an_unapproved_plan_is_priced_but_not_booked(tmp_path):
         bookings.confirm(quote["quote_id"], 466.1, "key-00000006", OPERATOR)
     with pytest.raises(WorkflowError, match="No plan is approved yet"):
         bookings.quote("SHIP-433", None, OPERATOR)
+    service.approve("SHIP-433", plan["id"], plan["source_version"], "operator")
+    reused = bookings.quote("SHIP-433", None, OPERATOR)
+    assert reused["quote_id"] == quote["quote_id"] and reused["approved"] is True
 
 
 def test_an_executed_plan_can_still_be_booked(tmp_path):
