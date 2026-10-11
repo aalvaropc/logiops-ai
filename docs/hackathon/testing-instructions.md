@@ -28,11 +28,11 @@ LOGIOPS_AGENT_MODE=replay uv run uvicorn logiops.api:app --host 127.0.0.1 --port
    performs `initialize`, `tools/list`, `tools/call(get_shipment)` and
    `tools/call(list_incidents)`, and prints the negotiated protocol version
    (2025-11-25). It also lists the prompts, resources and resource templates. The server
-   exposes eleven tools: `list_incidents`, `get_shipment`, `get_order`, `get_inventory`,
-   `find_alternative_carriers`, `investigate_incident`, `get_execution_status`,
+   exposes twelve tools: `list_incidents`, `list_alerts`, `get_shipment`, `get_order`,
+   `get_inventory`, `find_alternative_carriers`, `investigate_incident`, `get_execution_status`,
    `execute_approved_plan`, `quote_carrier_booking`, `book_carrier` and `get_booking`.
    There is no approval tool: approval is a REST call made by a person. Every tool
-   has a title, behaviour annotations (seven are read-only; `execute_approved_plan` and
+   has a title, behaviour annotations (eight are read-only; `execute_approved_plan` and
    `book_carrier` are destructive and idempotent), described inputs that accept the way people say ids
    ("433", "ship 433") and a typed `outputSchema`; `initialize` returns server
    instructions describing the workflow and its human-approval rule.
@@ -105,7 +105,14 @@ LOGIOPS_AGENT_MODE=replay uv run uvicorn logiops.api:app --host 127.0.0.1 --port
    - "book it" again answers that it is already booked;
    - "no" drops the purchase, and a bare "yes" with nothing pending does nothing;
    - a purchase interrupted by a reload can be heard again with "resume".
-13. **Book and pay the carriers (API).** With a plan approved (for example SHIP-421's split +
+13. **A proactive alert.** On SHIP-421, investigate and approve the recommended plan.
+   Then set its stock to 3 in "Simulate a stock change". Within a moment LogiOps says
+   "Heads up on SHIP-421: Arequipa stock is now 3 units, so your approved plan … no
+   longer applies", with the recalculated pick ($80, 3 h late) preselected for
+   approval. Nothing was approved. Do the same on another incident from a second tab:
+   a bell in the top bar opens it. `GET /alerts` and the MCP tool `list_alerts` show
+   the same alerts.
+14. **Book and pay the carriers (API).** With a plan approved (for example SHIP-421's split +
    express), run `POST /incidents/SHIP-421/bookings/quote`. The quote reads "carriers
    and services $120.00, service fee $5.00, IGV 18% $22.50, total $147.50". Confirm it
    with `POST /quotes/{quote_id}/confirm` and `{"confirmed_total_usd": 147.50,

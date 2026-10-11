@@ -18,7 +18,8 @@ recommend. A person approves.
 ## Workflow
 
 1. **Find the work.** `list_incidents` returns every incident already in the order to
-   work them: open ones first, then the most critical units at risk.
+   work them: open ones first, then the most critical units at risk. `list_alerts` shows
+   incidents whose data changed after they were planned, already re-planned; start there.
 2. **Read the facts** you need, and only those:
    - `get_shipment`: route, delayed ETA, order ids, local warehouse;
    - `get_order`: quantity, priority and promised time for each order id;

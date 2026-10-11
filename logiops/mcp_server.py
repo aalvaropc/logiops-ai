@@ -21,10 +21,11 @@ from mcp.types import (
 from pydantic import Field
 
 from . import __version__
+from .alerts import AlertWatcher
 from .booking import BookingStore, receipt_text
 from .identity import OPERATOR, Actor, actor_of
 from .mcp_models import (
-    Booking, CarrierQuote, Execution, ExecutionStatus, IncidentList, Investigation, Order, OrderId, Quote, Shipment,
+    AlertList, Booking, CarrierQuote, Execution, ExecutionStatus, IncidentList, Investigation, Order, OrderId, Quote, Shipment,
     ShipmentId, Stock,
 )
 from .preferences import PreferenceStore, preference_for
@@ -70,9 +71,10 @@ def normalized_incident(shipment_id: str) -> str:
 
 def create_mcp_server(
     service: LogiOpsService, *, preferences: PreferenceStore | None = None, bookings: BookingStore | None = None,
-    public_host: str | None = None,
+    alerts: AlertWatcher | None = None, public_host: str | None = None,
 ) -> FastMCP:
     bookings = bookings or BookingStore(service.db_path, service)
+    alerts = alerts or AlertWatcher(service.db_path, service, preferences or PreferenceStore(service.db_path))
     allowed_hosts = ["127.0.0.1:*", "localhost:*", "[::1]:*"]
     allowed_origins = ["http://127.0.0.1:*", "http://localhost:*", "http://[::1]:*"]
     if public_host:
@@ -205,6 +207,12 @@ def create_mcp_server(
             content=[TextContent(type="text", text=json.dumps(result, indent=2))], structuredContent=result,
             _meta={"ui": {"resourceUri": UI_URI, "invoked": UI_INVOKED}},
         )
+
+    @server.tool(title="List proactive alerts", annotations=READ)
+    async def list_alerts() -> AlertList:
+        """Read open alerts: incidents whose data changed after they were investigated, re-planned on the new data.
+        Each names what changed, the plan it affects and the new pick; an alert never approves anything."""
+        return {"alerts": alerts.open_alerts()}
 
     @server.tool(title="Get execution status", annotations=READ)
     async def get_execution_status(shipment_id: ShipmentId) -> ExecutionStatus:
