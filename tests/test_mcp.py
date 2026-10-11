@@ -222,10 +222,10 @@ def test_investigate_incident_reports_the_saved_preference(tmp_path):
         service = LogiOpsService(tmp_path / "prefs-mcp.sqlite3")
         preferences = PreferenceStore(tmp_path / "prefs-mcp.sqlite3")
         server = create_mcp_server(service, preferences=preferences)
-        plain = (await server.call_tool("investigate_incident", {"shipment_id": "SHIP-460"}))[1]
+        plain = (await server.call_tool("investigate_incident", {"shipment_id": "SHIP-460"})).structuredContent
         assert "operator_preferences" not in plain
         preferences.put("balanced", 250)
-        result = (await server.call_tool("investigate_incident", {"shipment_id": "SHIP-460"}))[1]
+        result = (await server.call_tool("investigate_incident", {"shipment_id": "SHIP-460"})).structuredContent
         preference = result["operator_preferences"]
         assert preference["preferred_plan_id"].split(":")[2] == "priority-first" and preference["changes_pick"]
         assert json.dumps(preference)

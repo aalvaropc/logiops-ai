@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import base64
+import hashlib
+import json
 import re
 from pathlib import Path
 from typing import Annotated, Any
@@ -10,7 +12,7 @@ from typing import Annotated, Any
 from mcp.server.fastmcp import FastMCP
 from mcp.server.fastmcp.exceptions import ToolError
 from mcp.server.transport_security import TransportSecuritySettings
-from mcp.types import Icon, ToolAnnotations
+from mcp.types import CallToolResult, Icon, TextContent, ToolAnnotations
 from pydantic import Field
 
 from . import __version__
@@ -23,9 +25,11 @@ from .service import LogiOpsService, WorkflowError
 from .tools import inventory_hint, inventory_view, order_view, orders_hint, shipment_view
 
 
-UI_URI = "ui://logiops/resolution-options.html"
 UI_MIME_TYPE = "text/html;profile=mcp-app"
 UI_HTML = (Path(__file__).resolve().parent / "static" / "resolution_options.html").read_text(encoding="utf-8")
+UI_URI = f"ui://logiops/resolution-options.{hashlib.sha256(UI_HTML.encode()).hexdigest()[:8]}.html"
+UI_INVOKING = "Calculating every feasible plan…"
+UI_INVOKED = "Plans ready to compare"
 WEBSITE_URL = "https://github.com/aalvaropc/logiops-ai"
 ICON_SVG = (
     '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" rx="14" fill="#071318"/>'
@@ -134,7 +138,7 @@ def create_mcp_server(
     @server.tool(
         title="Investigate incident and calculate plans",
         annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, idempotentHint=True, openWorldHint=False),
-        meta={"ui": {"resourceUri": UI_URI}, "ui/resourceUri": UI_URI},
+        meta={"ui": {"resourceUri": UI_URI, "invoking": UI_INVOKING, "invoked": UI_INVOKED}, "ui/resourceUri": UI_URI},
     )
     async def investigate_incident(shipment_id: ShipmentId) -> Investigation:
         """Investigate the incident and calculate every feasible plan from its current data, with the operator's
@@ -147,7 +151,10 @@ def create_mcp_server(
         preference = preference_for(plans, preferences.get() if preferences else None)
         if preference:
             result["operator_preferences"] = preference
-        return result
+        return CallToolResult(
+            content=[TextContent(type="text", text=json.dumps(result, indent=2))], structuredContent=result,
+            _meta={"ui": {"resourceUri": UI_URI, "invoked": UI_INVOKED}},
+        )
 
     @server.tool(title="Get execution status", annotations=READ)
     async def get_execution_status(shipment_id: ShipmentId) -> ExecutionStatus:
@@ -184,7 +191,7 @@ def create_mcp_server(
     @server.resource(
         UI_URI, name="resolution_options", title="Resolution options",
         description="Interactive comparison of the calculated plans. It can select a plan, never approve one.",
-        mime_type=UI_MIME_TYPE, meta={"ui": {"prefersBorder": True}},
+        mime_type=UI_MIME_TYPE, meta={"ui": {"prefersBorder": True, "csp": {"connectDomains": [], "resourceDomains": []}}},
     )
     def resolution_options() -> str:
         return UI_HTML

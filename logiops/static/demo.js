@@ -6,7 +6,7 @@ const hashIncident = () => decodeURIComponent(location.hash.slice(1)).trim().toU
 const state = {
   token: "", snapshot: null, selectedPlanId: null, busy: false, conversation: [], speaking: false, app: null,
   awaitingExecute: false, pendingApproval: null, incidentId: hashIncident(), inbox: [], conversations: {}, selections: {}, stockFor: null,
-  briefingPick: null, prefsShown: undefined,
+  briefingPick: null, prefsShown: undefined, cardTheme: "dark",
 };
 const CAPABILITIES_TEXT = "I'm LogiOps, your operations desk for late or held shipments. I can:\n"
   + "- brief your queue: say “any delays today?”;\n"
@@ -22,7 +22,10 @@ const device = (method, ...args) => {
   const api = window.LogiOpsDevice;
   if (api && typeof api[method] === "function") api[method](...args);
 };
-const MCP_APP = { uri: "ui://logiops/resolution-options.html", mime: "text/html;profile=mcp-app", protocol: "2026-01-26", proxyPath: "/mcp-app/sandbox.html" };
+const MCP_APP = {
+  uriPrefix: "ui://logiops/resolution-options", mime: "text/html;profile=mcp-app", protocol: "2026-01-26",
+  mcpVersion: "2025-11-25", proxyPath: "/mcp-app/sandbox.html",
+};
 const SANDBOX_ORIGIN = (() => {
   const value = document.querySelector('meta[name="logiops-sandbox-origin"]')?.content || "";
   try {
@@ -121,17 +124,49 @@ async function request(path, method = "GET", body) {
   return response.json();
 }
 
-async function mcpRequest(method, params) {
+async function mcpPost(message, version) {
   const headers = { "Content-Type": "application/json", Accept: "application/json, text/event-stream" };
   if (state.token) headers.Authorization = `Bearer ${state.token}`;
-  const response = await fetch("/mcp", {
-    method: "POST", headers, cache: "no-store",
-    body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, params }),
-  });
+  if (version) headers["MCP-Protocol-Version"] = version;
+  const response = await fetch("/mcp", { method: "POST", headers, cache: "no-store", body: JSON.stringify({ jsonrpc: "2.0", ...message }) });
   if (!response.ok) throw new Error(`MCP HTTP ${response.status}`);
-  const body = await response.json();
+  return response.status === 202 ? null : response.json();
+}
+
+function mcpProtocol() {
+  app.protocol ??= (async () => {
+    const body = await mcpPost({ id: 0, method: "initialize", params: {
+      protocolVersion: MCP_APP.mcpVersion, capabilities: {}, clientInfo: { name: "LogiOps demo host", version: "1.0.0" },
+    } });
+    if (body.error) throw new Error(body.error.message || "MCP error");
+    await mcpPost({ method: "notifications/initialized" }, body.result.protocolVersion);
+    return body.result.protocolVersion;
+  })().catch((error) => { app.protocol = null; throw error; });
+  return app.protocol;
+}
+
+async function mcpRequest(method, params) {
+  const body = await mcpPost({ id: 1, method, params }, await mcpProtocol());
   if (body.error) throw new Error(body.error.message || "MCP error");
   return body.result;
+}
+
+function hostContext() {
+  const slot = $("mcp-app-slot");
+  const width = Math.round(slot?.clientWidth || window.innerWidth);
+  return {
+    theme: state.cardTheme, displayMode: "inline", availableDisplayModes: ["inline"],
+    containerDimensions: { width, maxHeight: 640 }, locale: navigator.language || "en-US", timeZone: "America/Lima",
+    platform: "web", deviceClass: width < 480 ? "compact" : "regular",
+    deviceCapabilities: { touch: matchMedia("(pointer: coarse)").matches, hover: matchMedia("(hover: hover)").matches },
+    safeAreaInsets: { top: 0, right: 0, bottom: 0, left: 0 },
+  };
+}
+
+function sendHostContext() {
+  const frame = $("mcp-app-frame");
+  if (!state.app?.ready || !frame) return;
+  frame.contentWindow.postMessage({ jsonrpc: "2.0", method: "ui/notifications/host-context-changed", params: hostContext() }, SANDBOX_ORIGIN);
 }
 
 function loadAppResource() {
@@ -139,12 +174,12 @@ function loadAppResource() {
     const listed = await mcpRequest("tools/list", {});
     const tool = listed.tools.find((item) => item.name === "investigate_incident");
     const uri = tool?._meta?.ui?.resourceUri ?? tool?._meta?.["ui/resourceUri"];
-    if (uri !== MCP_APP.uri) return null;
+    if (typeof uri !== "string" || !uri.startsWith(MCP_APP.uriPrefix)) return null;
     const read = await mcpRequest("resources/read", { uri });
     const content = read.contents?.[0];
     if (!content || content.mimeType !== MCP_APP.mime || typeof content.text !== "string") return null;
     const ui = content._meta?.ui || {};
-    return { html: content.text, csp: ui.csp || {}, prefersBorder: ui.prefersBorder !== false };
+    return { uri, html: content.text, csp: ui.csp || {}, prefersBorder: ui.prefersBorder !== false, invoked: tool._meta.ui?.invoked || "" };
   })().catch((error) => { app.resource = null; throw error; });
   return app.resource;
 }
@@ -183,6 +218,8 @@ async function showMcpApp(run) {
   frame.setAttribute("referrerpolicy", "no-referrer");
   frame.src = `${SANDBOX_ORIGIN}${MCP_APP.proxyPath}?host=${encodeURIComponent(location.origin)}`;
   $("mcp-app-slot").replaceChildren(frame);
+  $("mcp-app-uri").textContent = resource.uri;
+  $("mcp-app-status").textContent = resource.invoked ? `· ${resource.invoked}` : "";
   $("mcp-app").classList.toggle("borderless", !resource.prefersBorder);
   $("mcp-app").hidden = false;
 }
@@ -225,8 +262,20 @@ function showMcpAppNote(text) {
   note.className = "mcp-app-note";
   note.textContent = text;
   $("mcp-app-slot").replaceChildren(note);
+  $("mcp-app-status").textContent = "";
   $("mcp-app").hidden = false;
 }
+
+$("mcp-app-theme").addEventListener("click", () => {
+  state.cardTheme = state.cardTheme === "dark" ? "light" : "dark";
+  $("mcp-app-theme").setAttribute("aria-pressed", String(state.cardTheme === "light"));
+  sendHostContext();
+});
+let contextTimer = 0;
+window.addEventListener("resize", () => {
+  clearTimeout(contextTimer);
+  contextTimer = setTimeout(sendHostContext, 200);
+});
 
 function selectFromApp(params) {
   const text = params?.content?.type === "text" ? String(params.content.text) : "";
@@ -257,7 +306,7 @@ window.addEventListener("message", (event) => {
       protocolVersion: MCP_APP.protocol,
       hostInfo: { name: "LogiOps Alexa+-style demo", version: "1.0.0" },
       hostCapabilities: {},
-      hostContext: { theme: "dark", displayMode: "inline" },
+      hostContext: hostContext(),
     } });
   } else if (msg.method === "ui/notifications/initialized") {
     state.app.ready = true;

@@ -47,7 +47,8 @@ LOGIOPS_AGENT_MODE=replay uv run uvicorn logiops.api:app --host 127.0.0.1 --port
    projection; and the steps of the recorded tool trace appear one by one with
    "Checked against the data". Picking another plan in the operator view
    redraws the map and bars. The MCP App card highlights the same plan as the
-   panel ("Agent pick").
+   panel ("Agent pick"). "Light card" switches the card's theme through the MCP
+   Apps host context, without reloading it.
 4. **Ask.** Type, or speak in Chrome or Edge: "What's happening with SHIP-421?". The
    agent calls the MCP tools and the reply lists three plans: wait ($0, 12 h late),
    reroute ($80, 3 h late), split + express ($120, on time). An **MCP App** card with
