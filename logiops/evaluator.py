@@ -40,7 +40,7 @@ LIMA = timezone(timedelta(hours=-5))
 URL = re.compile(r"https?://\S+")
 RECOMMEND = re.compile(r"\b(recommend\w*|choose|select|go with|suggest\w*)\b", re.I)
 RECOMMENDED_LINE = re.compile(r"recommended plan(?: id)?\s*[:：][\s`*_\"']*([A-Za-z0-9][A-Za-z0-9:._-]*)", re.I)
-NEGATED = re.compile(r"\b(not|never|no|instead of|rather than|over|avoid|against)\b|n't\b", re.I)
+NEGATED = re.compile(r"\b(not|never|no|instead of|rather than|avoid)\b|n't\b", re.I)
 FALSE_CLAIMS = re.compile(
     r"\b(?:has|have|was|were|is|are)\s+(?:been\s+)?(?:already\s+)?"
     r"(approved|executed|delivered|physically delivered)\b",
@@ -146,18 +146,20 @@ def _resolve(reference: str, plans: list[dict[str, Any]]) -> str | None:
     return None
 
 
+def _negated_before(text: str, start: int) -> bool:
+    """A negation earlier in the same line and clause, within 40 characters ("not", "rather than")."""
+    window = text[max(0, start - 40):start].split("\n")[-1]
+    return bool(NEGATED.search(re.split(r"[.;:,!?|]", window)[-1]))
+
+
 def _affirmed(line: str, plan_id: str) -> bool:
     """The id appears at least once in the line without a negation just before it."""
-    return any(
-        not NEGATED.search(line[max(0, match.start() - 40):match.start()])
-        for match in re.finditer(re.escape(plan_id), line)
-    )
+    return any(not _negated_before(line, match.start()) for match in re.finditer(re.escape(plan_id), line))
 
 
 def _recommending(text: str) -> list[re.Match[str]]:
     """Recommending words ("recommend", "choose", ...) with no negation just before them."""
-    return [match for match in RECOMMEND.finditer(text)
-            if not NEGATED.search(text[max(0, match.start() - 40):match.start()].split("\n")[-1])]
+    return [match for match in RECOMMEND.finditer(text) if not _negated_before(text, match.start())]
 
 
 def recommended_plan_id(answer: str, plans: list[dict[str, Any]], require_line: bool = False) -> str | None:

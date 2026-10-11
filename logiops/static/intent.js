@@ -27,7 +27,7 @@
   const BRIEFING = /\b(?:any (?:delays?|incidents?|problems?|issues?|exceptions?)(?: today)?|brief(?:ing)? me|(?:daily|morning|queue) briefing|what needs (?:my )?attention|what should i (?:look at|work on|handle) first|which incident (?:first|should i)|summari[sz]e (?:the |my )?(?:queue|inbox|incidents))\b/;
   const RECOMMEND = /\b(recommend\w*|choose|select|go with|suggest\w*)\b/gi;
   const RECOMMENDED_LINE = /recommended plan(?: id)?\s*[:：][\s`*_"']*([A-Za-z0-9][A-Za-z0-9:._-]*)/gi;
-  const NEGATED = /\b(not|never|no|instead of|rather than|over|avoid|against)\b|n't\b/i;
+  const NEGATED = /\b(not|never|no|instead of|rather than|avoid)\b|n't\b/i;
 
   function isQuestion(text) {
     return QUESTION.test(String(text).trim().toLowerCase());
@@ -98,16 +98,20 @@
     return null;
   }
 
+  function negatedBefore(text, start) {
+    const window = text.slice(Math.max(0, start - 40), start).split("\n").pop();
+    return NEGATED.test(window.split(/[.;:,!?|]/).pop());
+  }
+
   function affirmed(line, id) {
     for (let at = line.indexOf(id); at >= 0; at = line.indexOf(id, at + 1)) {
-      if (!NEGATED.test(line.slice(Math.max(0, at - 40), at))) return true;
+      if (!negatedBefore(line, at)) return true;
     }
     return false;
   }
 
   function recommending(text) {
-    return [...text.matchAll(RECOMMEND)]
-      .filter((match) => !NEGATED.test(text.slice(Math.max(0, match.index - 40), match.index).split("\n").pop()));
+    return [...text.matchAll(RECOMMEND)].filter((match) => !negatedBefore(text, match.index));
   }
 
   function recommendedPlanId(answer, plans, requireLine = false) {

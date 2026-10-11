@@ -15,6 +15,8 @@
     {"name": "a recommending line among listed plans", "incident": "SHIP-421", "answer": "Options:\n- Wait ({id:wait})\n- Reroute ({id:reroute})\n- Split ({id:split-express})\nI recommend {id:reroute} for the cost.", "expected": "reroute"},
     {"name": "a negated plan is not the pick", "incident": "SHIP-421", "answer": "I would not recommend {id:wait}; choose {id:split-express}.", "expected": "split-express"},
     {"name": "rather than", "incident": "SHIP-421", "answer": "Go with {id:split-express} rather than {id:reroute}.", "expected": "split-express"},
+    {"name": "a negation in an earlier clause", "incident": "SHIP-421", "answer": "It leaves no order late and costs $120; I recommend {id:split-express}.\nThe others: {id:wait}, {id:reroute}.", "expected": "split-express"},
+    {"name": "choose one over another", "incident": "SHIP-421", "answer": "Waiting is over 12 hours late, so choose {id:split-express} over {id:wait}.", "expected": "split-express"},
     {"name": "a table marking the rejected plans", "incident": "SHIP-421", "answer": "| Plan | Verdict |\n|---|---|\n| {id:wait} | not recommended |\n| {id:reroute} | avoid: 3 h late |\n| {id:split-express} | recommended, on time |", "expected": "split-express"},
     {"name": "only rejections", "incident": "SHIP-421", "answer": "| {id:wait} | not recommended |\n| {id:reroute} | do not choose |", "expected": null},
     {"name": "the id after the recommendation", "incident": "SHIP-421", "answer": "| Plan | ID |\n|---|---|\n| Wait | {id:wait} |\n| Reroute | {id:reroute} |\n| Split | {id:split-express} |\n\nRecommendation: Plan 3\nPlan ID: {id:split-express}", "expected": "split-express"},
