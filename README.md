@@ -212,6 +212,10 @@ after the context, so user text cannot open or close a block. Answers change
 nothing and are not stored; failed calls are audited as `agent_run_failed`
 with `job: "ask"`. The browser routes questions (anything ending in `?` or
 starting with how/what/should/…) to the agent, never to approve or execute.
+A follow-up passes the same data check without needing a pick
+(`evaluator.check_facts`): its figures may also come from the question and
+earlier user turns (a hypothetical "only 11 units"), and once the record shows
+an approval or execution it may say so in the passive voice ("was executed").
 
 ### Queue briefing
 
@@ -227,7 +231,11 @@ returned as `start_with`. It cannot calculate plans: `investigate_incident`
 is not in its toolset, so a briefing changes nothing and stores nothing. In
 the browser, "Any delays today?" or "brief me" runs it and marks that incident
 "Start here" in the inbox. The first message on the page also summarises the
-queue, from the inbox itself, at no cost.
+queue, from the inbox itself, at no cost. The briefing passes the data check
+against every incident's facts (amounts, delays, units, ids and times), with one
+revision. In the browser, every checked reply carries a badge: "Checked against
+the data", "… after one revision", or, in red, "Did not pass the data check"
+with the first reason, plus a notice that the plan cards are the reference.
 
 ### Operator preferences
 

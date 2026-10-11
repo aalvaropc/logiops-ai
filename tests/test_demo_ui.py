@@ -287,5 +287,15 @@ def test_the_demo_shows_preferences_briefings_and_speaks_the_short_line():
     assert 'request("/agent/briefing", "POST"' in script and 'tag("start-here", "Start here")' in script
     assert '"Your preference", "badge preference"' in script and "never approve" in script
     assert "new SpeechSynthesisUtterance(spoken || window.LogiOpsMarkdown.plainText(text))" in script
-    assert "run.spoken);" in script
+    assert "run.spoken, checkBadge(run));" in script
     assert "operator_preferences" in view and '"Your preference"' in view
+
+
+def test_replies_show_whether_they_passed_the_data_check():
+    root = Path(__file__).resolve().parents[1] / "logiops" / "static"
+    script, style = (root / "demo.js").read_text(), (root / "demo.css").read_text()
+    assert "function checkBadge(run)" in script and '"Checked against the data"' in script
+    assert "Did not pass the data check: ${issue}" in script and "noteCheck(run);" in script
+    assert "check: checkBadge(agentEvent.data)" in script
+    assert ".turn .check-badge {" in style and ".turn .check-badge.failed {" in style
+

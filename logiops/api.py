@@ -17,9 +17,10 @@ from pydantic import BaseModel, Field
 
 from .agent import (
     BRIEFING_TURNS, FOLLOWUP_TURNS, INVESTIGATE_TURNS, ConverseClient, ask_with_bedrock, brief_with_bedrock,
-    investigate_with_bedrock,
+    investigate_with_bedrock, merged_facts,
 )
 from .bedrock import BedrockConverse, BedrockError
+from .evaluator import figures_in
 from .budget import FALLBACK, BudgetedConverse, DailyModelBudget
 from .service import APPROVER_MAX_LENGTH, LogiOpsService, WorkflowError
 from .mcp_server import create_mcp_server
@@ -342,15 +343,21 @@ def create_app(
             ),
             "execution": executions[0] if executions else None,
         }
-        preference = preference_for(context["plans"], preferences.get())
+        saved = preferences.get()
+        preference = preference_for(context["plans"], saved)
         if preference:
             context["operator_preferences"] = preference
+        asked = " ".join([request.question, *(turn.text for turn in request.history if turn.role == "user")])
+        recorded = ["approved"] * bool(context["current_approval"] or executions) + ["executed"] * bool(executions)
+        facts = merged_facts(
+            with_preference_figures(known_figures(snapshot["state"]), saved), figures_in(asked), {"recorded_actions": recorded})
         async with agent_client(followup_client or bedrock_client, FOLLOWUP_TURNS) as (client, run_mode, fallback):
             try:
                 run = await ask_with_bedrock(
                     app, client, incident_id, request.question, context,
                     [turn.model_dump() for turn in request.history],
-                    access_token=access_token, internal_key=internal_key,
+                    access_token=access_token, internal_key=internal_key, facts=facts,
+                    plans=[plan for plan in snapshot["plans"] if plan["source_version"] == version],
                 )
             except BedrockError as exc:
                 service.record_agent_event(
@@ -362,11 +369,15 @@ def create_app(
     @app.post("/agent/briefing")
     async def agent_briefing(request: AgentBriefingRequest) -> dict[str, Any]:
         """Brief the open incidents in inbox order and say which to open first; it reads, and changes nothing."""
+        saved = preferences.get()
+        facts = merged_facts(
+            *(known_figures(service.get(incident_id)["state"]) for incident_id in INCIDENT_IDS),
+            with_preference_figures({}, saved), figures_in(request.question))
         async with agent_client(followup_client or bedrock_client, BRIEFING_TURNS) as (client, run_mode, fallback):
             try:
                 run = await brief_with_bedrock(
-                    app, client, request.question, preferences.get(),
-                    access_token=access_token, internal_key=internal_key,
+                    app, client, request.question, saved,
+                    access_token=access_token, internal_key=internal_key, facts=facts,
                 )
             except BedrockError as exc:
                 logger.warning("Briefing failed (%s mode): %s", run_mode, exc)
