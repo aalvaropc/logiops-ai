@@ -50,9 +50,10 @@ input::placeholder { color: #6b888e; }
 .incident-card[aria-pressed="true"] { border-color: #76dcc5; background: #15302f; }
 .incident-card .incident-top { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
 .incident-card .incident-id { font-weight: 800; letter-spacing: -.02em; }
-.incident-card .kind, .incident-card .critical, .incident-card .state { padding: 3px 6px; border-radius: 3px; font-size: 9px; font-weight: 800; text-transform: uppercase; letter-spacing: .06em; }
+.incident-card .kind, .incident-card .critical, .incident-card .at-risk, .incident-card .state { padding: 3px 6px; border-radius: 3px; font-size: 9px; font-weight: 800; text-transform: uppercase; letter-spacing: .06em; }
 .incident-card .kind { color: #b9d8d2; background: #1d3338; }
 .incident-card .critical { color: #ffd0a1; background: #4a3218; }
+.incident-card .at-risk { color: #ffd6d1; background: #5c2621; }
 .incident-card .state { color: #72dfc7; background: #234742; }
 .incident-card .start-here { padding: 3px 6px; border-radius: 3px; color: #0b2420; background: #77dfc8; font-size: 9px; font-weight: 800; text-transform: uppercase; letter-spacing: .06em; }
 .incident-card .incident-text { color: #c9d9d8; font-size: 12.5px; line-height: 1.4; }
