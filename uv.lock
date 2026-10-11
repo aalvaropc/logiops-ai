@@ -405,6 +405,7 @@ dependencies = [
     { name = "fastapi" },
     { name = "mcp" },
     { name = "pydantic" },
+    { name = "pyjwt", extra = ["crypto"] },
     { name = "uvicorn" },
 ]
 
@@ -423,6 +424,7 @@ requires-dist = [
     { name = "mcp", specifier = "==1.28.1" },
     { name = "pydantic", specifier = "==2.13.4" },
     { name = "pygments", marker = "extra == 'dev'", specifier = "==2.20.0" },
+    { name = "pyjwt", extras = ["crypto"], specifier = ">=2.10" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8,<10" },
     { name = "uvicorn", specifier = ">=0.30,<1" },
 ]

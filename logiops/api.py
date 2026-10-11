@@ -30,6 +30,7 @@ from .budget import FALLBACK, BudgetedConverse, DailyModelBudget
 from .service import APPROVER_MAX_LENGTH, LogiOpsService, WorkflowError
 from .identity import actor_of
 from .mcp_server import create_mcp_server
+from .oauth import OAuthSettings, install_oauth
 from .preferences import COST_LIMIT, NOTE_LIMIT, RULES, PreferenceStore, preference_for, with_preference_figures
 from .presentation import customer_text, shown_run
 from .replay import ReplayConverse
@@ -119,6 +120,7 @@ def create_app(
     mcp_limit_per_minute: int = 60,
     agent_limit_per_minute: int | None = None,
     voice: PollyVoice | None = None,
+    oauth: OAuthSettings | None = None,
 ) -> FastAPI:
     access_token = access_token or os.environ.get("LOGIOPS_ACCESS_TOKEN")
     public_host = os.environ.get("LOGIOPS_PUBLIC_HOST", "").strip().lower()
@@ -147,6 +149,8 @@ def create_app(
     bedrock = BedrockConverse()
     mcp = create_mcp_server(
         service, preferences=preferences, bookings=bookings, alerts=alerts, public_host=public_host or None)
+    oauth = oauth if oauth is not None else OAuthSettings.from_env()
+    public = os.environ.get("LOGIOPS_PUBLIC") == "1"
     scan_seconds = float(os.environ.get("LOGIOPS_ALERT_SCAN_SECONDS", "30"))
 
     async def watch() -> None:
@@ -178,7 +182,11 @@ def create_app(
         agent_limit_per_minute=agent_limit_per_minute,
         trust_cloudfront=os.environ.get("LOGIOPS_TRUST_CLOUDFRONT") == "1",
         sandbox_host=sandbox_host or None,
+        oauth=oauth,
+        public_host=public_host or None,
     )
+    if oauth:
+        install_oauth(app, oauth, public_host or None)
     static_dir = Path(__file__).resolve().parent / "static"
     demo_page_html = (static_dir / "demo.html").read_text(encoding="utf-8")
     demo_assets = {name: (static_dir / name).read_bytes() for name in DEMO_ASSETS}
@@ -337,15 +345,18 @@ def create_app(
 
     @asynccontextmanager
     async def agent_client(
-        custom: ConverseClient | None, max_calls: int,
+        custom: ConverseClient | None, max_calls: int, request: Request | None = None,
     ) -> AsyncIterator[tuple[ConverseClient, str, str | None]]:
         """(client, mode, fallback) for one agent request. A live request first reserves its run's
         maximum calls from the daily budget and releases what it did not use; when the run no longer
-        fits, it runs on the replay model with fallback "daily_budget"."""
+        fits, it runs on the replay model with fallback "daily_budget". A guest on the public
+        deployment always runs on the replay model, with fallback "sign_in"."""
         mode = os.environ.get("LOGIOPS_AGENT_MODE", "bedrock")
         if mode not in ("bedrock", "replay"):
             raise BedrockError("LOGIOPS_AGENT_MODE must be bedrock or replay")
-        if custom:
+        if public and request is not None and actor_of(request).kind == "guest":
+            yield ReplayConverse(), "replay", "sign_in"
+        elif custom:
             yield custom, "custom", None
         elif mode == "replay":
             yield ReplayConverse(), "replay", None
@@ -362,11 +373,11 @@ def create_app(
         return {**run, "mode": mode, **({"fallback": fallback} if fallback else {})}
 
     @app.post("/incidents/{incident_id}/agent/investigate")
-    async def agent_investigate(incident_id: str, request: AgentInvestigationRequest) -> dict[str, Any]:
+    async def agent_investigate(incident_id: str, request: AgentInvestigationRequest, http_request: Request) -> dict[str, Any]:
         snapshot = service.get(incident_id)
         source_version = snapshot["source_version"]
         facts = with_preference_figures(known_figures(snapshot["state"]), preferences.get())
-        async with agent_client(bedrock_client, INVESTIGATE_TURNS) as (client, run_mode, fallback):
+        async with agent_client(bedrock_client, INVESTIGATE_TURNS, http_request) as (client, run_mode, fallback):
             try:
                 run = await investigate_with_bedrock(
                     app, client, incident_id, request.question,
@@ -383,7 +394,7 @@ def create_app(
         return {**shown_run(run, recorded["plans"]), **recorded, "recommended_plan_id": picked}
 
     @app.post("/incidents/{incident_id}/agent/ask")
-    async def agent_ask(incident_id: str, request: AgentAskRequest) -> dict[str, Any]:
+    async def agent_ask(incident_id: str, request: AgentAskRequest, http_request: Request) -> dict[str, Any]:
         """Answer a follow-up from the latest investigation of the data being shown."""
         snapshot = service.get(incident_id)
         executions = snapshot["executions"]
@@ -416,7 +427,7 @@ def create_app(
         facts = merged_facts(
             with_preference_figures(known_figures(snapshot["state"]), saved), figures_in(asked), {"recorded_actions": recorded},
             bookings.figures(incident_id))
-        async with agent_client(followup_client or bedrock_client, FOLLOWUP_TURNS) as (client, run_mode, fallback):
+        async with agent_client(followup_client or bedrock_client, FOLLOWUP_TURNS, http_request) as (client, run_mode, fallback):
             try:
                 run = await ask_with_bedrock(
                     app, client, incident_id, request.question, context,
@@ -432,13 +443,13 @@ def create_app(
         return {**shown_run(labelled(run, run_mode, fallback), context["plans"]), "source_version": version}
 
     @app.post("/agent/briefing")
-    async def agent_briefing(request: AgentBriefingRequest) -> dict[str, Any]:
+    async def agent_briefing(request: AgentBriefingRequest, http_request: Request) -> dict[str, Any]:
         """Brief the open incidents in inbox order and say which to open first; it reads, and changes nothing."""
         saved = preferences.get()
         facts = merged_facts(
             *(known_figures(service.get(incident_id)["state"]) for incident_id in INCIDENT_IDS),
             with_preference_figures({}, saved), figures_in(request.question))
-        async with agent_client(followup_client or bedrock_client, BRIEFING_TURNS) as (client, run_mode, fallback):
+        async with agent_client(followup_client or bedrock_client, BRIEFING_TURNS, http_request) as (client, run_mode, fallback):
             try:
                 run = await brief_with_bedrock(
                     app, client, request.question, saved,
