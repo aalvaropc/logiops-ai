@@ -25,6 +25,9 @@
   const CHEAPEST = /\bcheap(?:est|er)?\b|\blowest cost\b|\bleast expensive\b|\bsave money\b/;
   const BALANCED = /\b(?:balanced|default (?:ranking|pick|rule))\b/;
   const BRIEFING = /\b(?:any (?:delays?|incidents?|problems?|issues?|exceptions?)(?: today)?|brief(?:ing)? me|(?:daily|morning|queue) briefing|what needs (?:my )?attention|what should i (?:look at|work on|handle) first|which incident (?:first|should i)|summari[sz]e (?:the |my )?(?:queue|inbox|incidents))\b/;
+  const RECOMMEND = /\b(recommend\w*|choose|select|go with|suggest\w*)\b/gi;
+  const RECOMMENDED_LINE = /recommended plan(?: id)?\s*[:：][\s`*_"']*([A-Za-z0-9][A-Za-z0-9:._-]*)/gi;
+  const NEGATED = /\b(not|never|no|instead of|rather than|avoid)\b|n't\b/i;
 
   function isQuestion(text) {
     return QUESTION.test(String(text).trim().toLowerCase());
@@ -78,26 +81,59 @@
     return BRIEFING.test(String(text).trim().toLowerCase());
   }
 
-  function recommendedPlanId(answer, plans) {
+  function resolvePlan(reference, plans) {
+    const wanted = reference.trim().replace(/[.,;:]+$/, "").toLowerCase();
+    const [, base, version] = wanted.match(/^(.+?)(?::v(\d+))?$/);
+    const sameVersion = (plan) => version === undefined || plan.id.toLowerCase().endsWith(`:v${version}`);
+    const rules = [
+      (plan) => plan.id.toLowerCase() === wanted,
+      (plan) => base === String(plan.kind || "").toLowerCase() && sameVersion(plan),
+      (plan) => base === `${plan.id.split(":")[0]}:${plan.kind || ""}`.toLowerCase() && sameVersion(plan),
+      (plan) => plan.id.toLowerCase().endsWith(`:${wanted}`),
+    ];
+    for (const rule of rules) {
+      const found = plans.filter(rule);
+      if (found.length === 1) return found[0].id;
+    }
+    return null;
+  }
+
+  function negatedBefore(text, start) {
+    const window = text.slice(Math.max(0, start - 40), start).split("\n").pop();
+    return NEGATED.test(window.split(/[.;:,!?|]/).pop());
+  }
+
+  function affirmed(line, id) {
+    for (let at = line.indexOf(id); at >= 0; at = line.indexOf(id, at + 1)) {
+      if (!negatedBefore(line, at)) return true;
+    }
+    return false;
+  }
+
+  function recommending(text) {
+    return [...text.matchAll(RECOMMEND)].filter((match) => !negatedBefore(text, match.index));
+  }
+
+  function recommendedPlanId(answer, plans, requireLine = false) {
     const text = String(answer || "");
-    const ids = plans.map((plan) => plan.id);
-    const byLower = new Map(ids.map((id) => [id.toLowerCase(), id]));
-    const explicit = [...text.matchAll(/recommended plan(?: id)?\s*[:：]\s*[`*_]*([a-z0-9][a-z0-9:._-]*)/gi)];
-    for (const match of explicit.reverse()) {
-      const id = byLower.get(match[1].toLowerCase().replace(/[._-]+$/, ""));
-      if (id) return id;
+    const explicit = [...text.matchAll(RECOMMENDED_LINE)];
+    if (explicit.length) return resolvePlan(explicit[explicit.length - 1][1], plans);
+    if (requireLine) return null;
+    const lines = text.split(/\r?\n/);
+    const cited = plans.filter((plan) => lines.some((line) => affirmed(line, plan.id)));
+    if (cited.length === 1) return cited[0].id;
+    for (const line of lines) {
+      if (!recommending(line).length) continue;
+      const inLine = plans.filter((plan) => affirmed(line, plan.id));
+      if (inLine.length === 1) return inLine[0].id;
     }
-    const lower = text.toLowerCase();
-    const start = lower.search(/recommend/);
-    if (start < 0) return null;
-    const tail = lower.slice(start);
-    let best = null;
-    let position = Infinity;
-    for (const [key, id] of byLower) {
-      const at = tail.indexOf(key);
-      if (at >= 0 && at < position) { position = at; best = id; }
-    }
-    return best;
+    const words = recommending(text);
+    if (!words.length) return null;
+    const last = words[words.length - 1];
+    const tail = text.slice(last.index + last[0].length);
+    const after = plans.filter((plan) => tail.includes(plan.id))
+      .sort((a, b) => tail.indexOf(a.id) - tail.indexOf(b.id) || (a.id < b.id ? -1 : 1));
+    return after.length ? after[0].id : null;
   }
 
   function mentionedIncident(text, ids) {

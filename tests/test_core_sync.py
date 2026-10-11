@@ -2,7 +2,7 @@
 
 After changing a core file, regenerate the manifest:
 sha256sum logiops/service.py logiops/scenario.py logiops/tools.py logiops/evaluator.py \
-    tests/test_flow.py tests/test_grounding.py > core.sha256
+    tests/test_flow.py tests/test_grounding.py tests/grounding_cases.json > core.sha256
 """
 
 import hashlib
@@ -11,7 +11,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 CORE = (
     "logiops/service.py", "logiops/scenario.py", "logiops/tools.py", "logiops/evaluator.py",
-    "tests/test_flow.py", "tests/test_grounding.py",
+    "tests/test_flow.py", "tests/test_grounding.py", "tests/grounding_cases.json",
 )
 
 

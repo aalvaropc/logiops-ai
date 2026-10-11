@@ -377,9 +377,16 @@ def test_an_older_single_incident_database_is_rebuilt_once(tmp_path):
     assert [plan["id"] for plan in reopened.get("SHIP-421")["plans"]] == [plan["id"] for plan in plans]
 
 
-def test_known_figures_are_the_numbers_an_answer_may_quote():
-    assert known_figures(seed_state("SHIP-421")) == {"dollars": [80, 120], "hours": [12]}
-    assert known_figures(seed_state("SHIP-460")) == {"dollars": [300], "hours": [6, 30, 48]}
+def test_known_figures_are_the_facts_an_answer_may_quote():
+    ship_421 = known_figures(seed_state("SHIP-421"))
+    assert {key: ship_421[key] for key in ("dollars", "hours", "units", "ids")} == {
+        "dollars": [80, 120], "hours": [12], "units": [0, 8, 12, 20], "ids": ["SHIP-421", "ORD-421"]}
+    assert ship_421["times"][0] == "2026-10-05T09:00:00-05:00" and ship_421["times"][-1] == "2026-10-13T02:00:00-05:00"
+    ship_460 = known_figures(seed_state("SHIP-460"))
+    assert (ship_460["dollars"], ship_460["hours"], ship_460["ids"]) == ([300], [6, 30, 48], ["SHIP-460", "ORD-460", "ORD-461"])
+    assert ship_460["units"] == [0, 15, 20, 25, 30, 45]
+    shifted = known_figures(seed_state("SHIP-421", SEED_DAY + timedelta(days=3)))
+    assert shifted["times"][-1] == "2026-10-16T02:00:00-05:00" and shifted["units"] == ship_421["units"]
 
 
 def test_a_snapshot_is_read_in_one_transaction(tmp_path, monkeypatch):
