@@ -81,6 +81,35 @@ def test_only_the_closed_grammar_acts():
     assert dict(zip(cases, got)) == cases
 
 
+def test_buying_declining_and_resuming_are_closed_commands():
+    import json
+
+    cases = {
+        "book it": "book", "Book the express": "book", "book and pay": "book", "pay for it": "book",
+        "book and pay for the recommended plan": "book", "book the carriers": "book", "Alexa, book it please": "book",
+        "yes, book it": "confirm", "yes pay": "confirm", "yes, approve and pay": "confirm",
+        "no": "decline", "No thanks": "decline", "nope": "decline", "cancel": "decline", "cancel it": "decline",
+        "no, cancel": "decline", "never mind": "decline", "don't book it": "decline", "no, don't book it": "decline",
+        "resume": "resume", "continue the booking": "resume", "resume my purchase": "resume",
+        "book a flight to Paris": None, "book it?": None, "should I book it?": None, "book it after lunch": None,
+        "Don't approve the wait plan.": None, "no, approve the split": None, "pay the store directly": None,
+    }
+    got = json.loads(_intent(f"console.log(JSON.stringify({json.dumps(list(cases))}.map(m.parseCommand)))"))
+    assert dict(zip(cases, got)) == cases
+
+
+def test_a_purchase_is_read_back_and_paid_once():
+    script = (Path(__file__).resolve().parents[1] / "logiops" / "static" / "demo.js").read_text()
+    assert 'command === "confirm" && purchase' in script and "await confirmPurchase(purchase);" in script
+    assert "Say “yes” to approve and pay, or “no”." in script and "Say “yes” to pay, or “no”." in script
+    assert "IGV 18% ${dollars(quote.igv_usd)}, total ${dollars(quote.total_usd)}" in script
+    assert "confirmed_total_usd: purchase.quote.total_usd, idempotency_key: purchase.key" in script
+    assert "keepPurchase({ ...purchase, approve: false });" in script
+    assert "Say “yes” to try again; it never charges twice." in script
+    assert script.index("const purchase = state.pendingPurchase;") < script.index("const preference = window.LogiOpsIntent.parsePreference(text);")
+    assert "Nothing is waiting for a “yes” right now." in script
+
+
 def test_approval_phrases_can_name_a_price_or_the_cheapest_plan():
     import json
 

@@ -34,6 +34,7 @@
               <p class="device-label"><span id="device-check" class="device-check"></span> <span id="device-trace-title">From the recorded tool trace</span></p>
               <ol id="device-steps" class="device-steps" aria-label="Steps the agent took, from the recorded tool trace"></ol>
             </div>
+            <div id="device-receipt" class="device-receipt" aria-label="Receipt" hidden></div>
           </div>
           <figure class="device-map">
             <svg id="device-map" viewBox="0 0 240 300" role="img" aria-labelledby="device-map-title"><title id="device-map-title">Plan route on a map of Peru</title></svg>
@@ -104,6 +105,7 @@
               <button id="chip-status" type="button" class="chip" data-say="What's happening with shipment SHIP-421, and which plan should we choose?">What's happening with SHIP-421?</button>
               <button type="button" class="chip" data-say="Approve the recommended plan">Approve the recommended plan</button>
               <button type="button" class="chip" data-say="Execute the approved plan">Execute it</button>
+              <button type="button" class="chip" data-say="Book and pay for the recommended plan">Book and pay</button>
             </div>
             <form id="ask-form" class="ask-row">
               <label class="visually-hidden" for="ask-input">Message to LogiOps</label>
@@ -129,6 +131,7 @@
             <p>Execution updates the synthetic fulfillment state, simulates notifications, and checks every order's units are accounted for.</p>
             <button id="execute" class="primary" type="button" disabled>Execute approved plan <span>→</span></button>
             <div id="execution-result" class="result" hidden></div>
+            <section id="booking" class="booking" aria-label="Carrier booking receipt" hidden></section>
           </section>
         </div>
 

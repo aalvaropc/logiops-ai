@@ -6,7 +6,8 @@
     "the a an my it this that plan option recommended recommendation agent agent's agents pick preferred preference "
     + "cheapest cheaper lowest least cost expensive split express expedite expedited clearance broker reroute re-route "
     + "rebook economy ground air fly flight freight hospital school store first come first-come placed as priority "
-    + "local stock warehouse wait transfer order orders both and with on approved dollar dollars usd"
+    + "local stock warehouse wait transfer order orders both and with on approved dollar dollars usd "
+    + "carrier carriers service services transport booking for"
   ).split(" "));
   const AMOUNT = /^\$?(?:\d{1,3}(?:,\d{3})+|\d{1,6})$/;
   const GRAMMAR = [
@@ -14,7 +15,10 @@
     ["approve", /^approve(?: (?<rest>.+))?$/],
     ["execute", /^(?:(?:execute|run|do) it|go ahead|execute(?: (?<rest>.+))?)$/],
     ["open", /^(?:open|show|switch to|go to) ship-\d+$/],
-    ["confirm", /^(?:yes|yeah|yep|confirm(?:ed)?)(?:[,\s]+(?:please|do it|go ahead|confirm|approve it|execute it))?$/],
+    ["book", /^(?:book(?: and pay(?: for)?)?|pay for)(?: (?<rest>.+))?$/],
+    ["confirm", /^(?:yes|yeah|yep|confirm(?:ed)?)(?:[,\s]+(?:please|do it|go ahead|confirm|approve it|execute it|book it|pay(?: for it)?|approve and pay))?$/],
+    ["decline", /^(?:(?:no|nope)(?:[,\s]+(?:thanks|thank you))?|(?:no[,\s]+)?(?:cancel(?: it)?|never mind|don'?t (?:book|pay for) it|don'?t))$/],
+    ["resume", /^(?:resume|continue (?:the|my) (?:booking|purchase)|resume (?:the|my) (?:booking|purchase))$/],
   ];
 
   const REMEMBER = new RegExp(`${OPENER}(?:remember|from now on)\\b[,:]?\\s*(?:that\\s+)?`);

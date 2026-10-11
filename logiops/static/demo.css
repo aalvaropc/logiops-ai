@@ -256,3 +256,15 @@ main > .operator-label + .hero { padding-top: 26px; }
 .device-steps li.error { border-color: #7a3a33; color: #ffb8b0; }
 .device-steps li.skill { border-color: #4f7f76; color: #9ff0dc; }
 @keyframes step-in { from { opacity: 0; transform: translateY(3px); } to { opacity: 1; transform: none; } }
+.booking { margin-top: 14px; padding: 12px 14px; border: 1px solid #2f6b5f; border-radius: 10px; background: #0e2420; }
+.booking[hidden] { display: none; }
+.booking-head { margin: 0 0 8px; color: #9ff0dc; font-size: 13px; font-weight: 800; }
+.booking-lines { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 16px; margin: 0 0 10px; font-size: 12px; }
+.booking-lines dt { color: #b9d8d2; }
+.booking-lines dd { margin: 0; text-align: right; color: #e6f6f1; font-variant-numeric: tabular-nums; }
+.booking-lines dt:nth-last-of-type(1), .booking-lines dd:last-of-type { font-weight: 800; color: #fff; }
+.device-receipt { margin-top: 14px; padding: 10px 12px; border: 1px solid #2f6b5f; border-radius: 12px; background: #0b1f1b; }
+.device-receipt[hidden] { display: none; }
+.device-receipt strong { display: block; color: #9ff0dc; font-size: 13px; letter-spacing: .02em; }
+.device-receipt p { margin: 4px 0 0; color: #cfe8ef; font-size: 12px; }
+.device-receipt .receipt-total { color: #fff; font-size: 18px; font-weight: 800; font-variant-numeric: tabular-nums; }
