@@ -92,7 +92,7 @@ def walk(client: httpx.Client) -> None:
     pick = outage.json()["plans"] if outage.status_code == 200 else []
     best = kind(pick, "priority-air-ground") if pick else None
     check("a carrier outage with a critical order: the hospital flies, the store is rebooked",
-          bool(best) and outage.json()["answer"].rstrip().endswith(f"Recommended plan: {best['id']}"))
+          bool(best) and outage.json().get("recommended_plan_id") == best["id"] and best["label"] in outage.json()["answer"])
     body = {"plan_id": best["id"], "source_version": best["source_version"]}
     post("/incidents/SHIP-433/approvals", approved_by="rehearsal", **body)
     done = post("/incidents/SHIP-433/execute", **body)
@@ -111,7 +111,7 @@ def walk(client: httpx.Client) -> None:
     capped = post("/incidents/SHIP-433/agent/investigate")
     cheaper = kind(capped.json()["plans"], "priority-air") if capped.status_code == 200 else None
     check("with the cap, the agent recommends the $240 plan that still flies the hospital order",
-          bool(cheaper) and capped.json()["answer"].rstrip().endswith(f"Recommended plan: {cheaper['id']}")
+          bool(cheaper) and capped.json().get("recommended_plan_id") == cheaper["id"] and cheaper["label"] in capped.json()["answer"]
           and capped.json()["spoken"])
     state = client.get("/incidents/SHIP-433").json()
     check("the preference points to it and approves nothing",
