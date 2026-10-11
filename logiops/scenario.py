@@ -14,7 +14,7 @@ from typing import Any, Callable
 from uuid import uuid4
 
 
-INCIDENT_ID = "SHIP-421"  # the default incident, and the one the demos open first
+INCIDENT_ID = "SHIP-421"
 INCIDENT_IDS = ("SHIP-421", "SHIP-433", "SHIP-452", "SHIP-460")
 KIND_LABELS = {
     "delay": "Delayed in transit",
@@ -24,10 +24,7 @@ KIND_LABELS = {
 }
 PRIORITY_RANK = {"critical": 0, "standard": 1}
 SHIPMENT_SOURCE = "delayed-shipment"
-LIMA = timezone(timedelta(hours=-5))  # Peru keeps UTC-05:00 all year
-# The scenario's anchor day: the first seeded orders are due on it (the others one or two days
-# later). A demo moves every timestamp by whole days so the anchor is always tomorrow; tests
-# keep the seed's own dates.
+LIMA = timezone(timedelta(hours=-5))
 SEED_DAY = date(2026, 10, 12)
 ISO_TIMESTAMP = re.compile(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}")
 ANCHOR_SETTING = re.compile(r"\d{4}-\d{2}-\d{2}")
@@ -123,12 +120,6 @@ def _seed(incident_id: str) -> dict[str, Any]:
     raise KeyError(incident_id)
 
 
-# The options each incident offers, in display order (ties in the ranking go to the
-# first). "sources" lists where each order draws units from, in order; a dict keys
-# them by order priority. "sequence" is the order in which orders are served:
-# "priority" (critical first, then earliest due) or "placed" (first come, first
-# served). With "use_all", every listed source must contribute, so a split that
-# would not need its second source is not offered as a split.
 PLAYBOOKS: dict[str, list[dict[str, Any]]] = {
     "SHIP-421": [
         {"kind": "wait", "label": "Keep the delayed shipment", "sources": [SHIPMENT_SOURCE]},
@@ -209,7 +200,7 @@ def seed_state(incident_id: str = INCIDENT_ID, day: date | None = None) -> dict[
     return {
         "incident_id": incident_id,
         "scenario_run_id": str(uuid4()),
-        "scenario_day": anchor.isoformat(),  # lets the service tell when the dates went stale
+        "scenario_day": anchor.isoformat(),
         "kind": seed["kind"],
         "title": seed["title"],
         "simulated": True,
@@ -312,7 +303,6 @@ def build_plans(state: dict[str, Any], source_version: int) -> list[dict[str, An
             "label": option["label"],
             "allocations": allocations,
             "orders": orders,
-            # A carrier or service is paid once per plan, however many units it moves.
             "incremental_cost_usd": sum(quote["incremental_cost_usd"] for name, quote in state["carriers"].items() if name in used),
             "projected_completion_eta": max((item["arrival_eta"] for item in allocations), key=_at),
             "projected_customer_delay_hours": max(order["delay_hours"] for order in orders),

@@ -95,7 +95,6 @@ def test_inventory_change_invalidates_approved_plan(tmp_path):
             changed = await client.post("/demo/inventory", json={"available": 11})
             assert changed.status_code == 200
             assert changed.json()["source_version"] == 2
-            # The old approval stays in the audit trail but is no longer current.
             assert [item["is_current"] for item in changed.json()["approvals"]] == [False]
             approval_event = next(e for e in changed.json()["events"] if e["name"] == "plan_approved")
             assert approval_event["data"]["source_version"] == 1
@@ -203,9 +202,6 @@ def test_agent_events_are_audited_with_the_current_version(tmp_path):
     assert decided == {"source_version": 2} and service.get("SHIP-421")["events"][-1]["name"] == "autopilot_decision"
 
 
-# --- Several incidents (R1, 2026-10-07) -------------------------------------------
-
-
 def _summary(plans):
     return {plan["kind"]: (plan["incremental_cost_usd"], plan["projected_customer_delay_hours"], plan["late_units"])
             for plan in plans}
@@ -258,12 +254,10 @@ def test_incidents_are_isolated_from_each_other(tmp_path):
                                       json={**request, "approved_by": "demo-operator"})).status_code == 200
             executed = await client.post("/incidents/SHIP-433/execute", json=request)
             assert executed.status_code == 200 and executed.json()["accounted_units"] == 30
-            # SHIP-421 at the same version keeps its own plans, approvals and events.
             other = (await client.get("/incidents/SHIP-421")).json()
             assert other["state"]["status"] == "investigated" and other["approvals"] == [] and other["executions"] == []
             assert {event["name"] for event in other["events"]} == {"scenario_reset", "incident_investigated"}
             assert all(item["id"].startswith("SHIP-421:") for item in other["plans"])
-            # A plan id from one incident is unknown under another.
             foreign = {"plan_id": ship_421_plan["id"], "source_version": 1}
             assert (await client.post("/incidents/SHIP-433/approvals",
                                       json={**foreign, "approved_by": "demo-operator"})).status_code == 404
@@ -284,8 +278,8 @@ def test_two_orders_share_the_stock_and_every_unit_is_accounted_for(tmp_path):
             assert result["orders"] == [{"order_id": "ORD-460", "units": 20}, {"order_id": "ORD-461", "units": 25}]
             state = (await client.get("/incidents/SHIP-460")).json()["state"]
             assert state["inventory"]["trujillo"]["available"] == 0
-            assert state["shipment"]["units_on_delayed_route"] == 15  # the school's shortfall waits
-            assert len(state["notifications"]) == 3  # one customer per order, plus operations
+            assert state["shipment"]["units_on_delayed_route"] == 15
+            assert len(state["notifications"]) == 3
 
     asyncio.run(run())
 
@@ -304,7 +298,7 @@ def test_execution_rejects_a_plan_that_does_not_match_its_incident(tmp_path):
             connection.execute("UPDATE plans SET plan_json = ? WHERE plan_id = ?", (json.dumps(tampered), plan["id"]))
         with pytest.raises(WorkflowError, match=message):
             service.execute("SHIP-452", plan["id"], 1)
-    assert service.get("SHIP-452")["state"]["inventory"]["lima"]["available"] == 25  # nothing changed
+    assert service.get("SHIP-452")["state"]["inventory"]["lima"]["available"] == 25
 
 
 def test_the_stock_control_targets_each_incident_own_warehouse(tmp_path):
@@ -350,7 +344,7 @@ def test_an_older_single_incident_database_is_rebuilt_once(tmp_path):
     assert [item["incident_id"] for item in service.list_incidents()] == ["SHIP-421", "SHIP-452", "SHIP-433", "SHIP-460"]
     assert [e["name"] for e in service.get("SHIP-433")["events"]] == ["scenario_reset", "schema_migrated"]
     plans = service.investigate("SHIP-421")
-    reopened = LogiOpsService(path)  # the current layout is kept as it is
+    reopened = LogiOpsService(path)
     assert [plan["id"] for plan in reopened.get("SHIP-421")["plans"]] == [plan["id"] for plan in plans]
 
 
@@ -359,11 +353,7 @@ def test_known_figures_are_the_numbers_an_answer_may_quote():
     assert known_figures(seed_state("SHIP-460")) == {"dollars": [300], "hours": [6, 30, 48]}
 
 
-# --- Consistent reads and bounded inputs (2026-10-08) -----------------------------
-
-
 def test_a_snapshot_is_read_in_one_transaction(tmp_path, monkeypatch):
-    # A reset that commits while get() is between two reads must not mix the old state with the new rows.
     service = LogiOpsService(tmp_path / "consistent.sqlite3")
     plan = service.investigate("SHIP-421")[0]
     service.approve("SHIP-421", plan["id"], plan["source_version"], "demo-operator")
@@ -384,7 +374,6 @@ def test_a_snapshot_is_read_in_one_transaction(tmp_path, monkeypatch):
     assert snapshot["state"]["status"] == "approved"
     assert [approval["plan_id"] for approval in snapshot["approvals"]] == [plan["id"]]
     assert {event["name"] for event in snapshot["events"]} >= {"incident_investigated", "plan_approved"}
-    # The reset still lands, right after the read.
     assert service.get("SHIP-421")["state"]["status"] == "detected"
 
 
@@ -428,9 +417,6 @@ def test_an_agent_run_keeps_its_checks_and_model(tmp_path):
     assert not {"model", "evaluations", "grounded"} & plain.keys()
 
 
-# --- Dates anchored to the scenario day (2026-10-08) -------------------------------
-
-
 ISO_LIKE = re.compile(r"\d{4}-\d{2}-\d{2}T")
 
 
@@ -451,7 +437,7 @@ def test_a_scenario_day_moves_every_timestamp_by_whole_days_and_keeps_the_plans(
         assert before.keys() == after.keys() and len(before) >= 4
         for path, value in before.items():
             assert datetime.fromisoformat(after[path]) - datetime.fromisoformat(value) == timedelta(days=51), path
-            assert after[path][10:] == value[10:]  # same Lima time of day and offset
+            assert after[path][10:] == value[10:]
         assert (fixed["scenario_day"], moved["scenario_day"]) == ("2026-10-12", "2026-12-02")
         plans = {key: [(plan["kind"], plan["incremental_cost_usd"], plan["projected_customer_delay_hours"])
                        for plan in build_plans(state, 1)] for key, state in (("fixed", fixed), ("moved", moved))}
@@ -465,21 +451,19 @@ def test_the_service_seeds_and_resets_on_its_scenario_day(tmp_path):
     assert service.get("SHIP-421")["state"]["orders"][0]["due_eta"].startswith("2026-11-10T")
     service.investigate("SHIP-421")
     service.reset("SHIP-433")
-    assert service.get("SHIP-433")["state"]["orders"][0]["due_eta"].startswith("2026-11-11T")  # due a day later
+    assert service.get("SHIP-433")["state"]["orders"][0]["due_eta"].startswith("2026-11-11T")
 
 
 def test_stale_dates_move_forward_without_a_reset(tmp_path):
     day = [date(2026, 11, 10)]
     service = LogiOpsService(tmp_path / "rolling.sqlite3", scenario_day=lambda: day[0])
-    service.investigate("SHIP-421")  # someone is working on it
+    service.investigate("SHIP-421")
     day[0] = date(2026, 11, 11)
     due = {item["incident_id"]: item["due_eta"][:10] for item in service.list_incidents()}
-    # Untouched incidents follow the new day; the one in progress keeps its dates while still current.
     assert due["SHIP-452"] == "2026-11-11" and due["SHIP-421"] == "2026-11-10"
     assert service.get("SHIP-421")["state"]["status"] == "investigated"
     events = service.get("SHIP-452")["events"]
     assert [event["name"] for event in events] == ["scenario_reset"] and events[0]["data"]["dates_refreshed"] is True
-    # Once its anchor day has passed, an incident in progress is re-seeded too.
     day[0] = date(2026, 11, 12)
     assert {item["due_eta"][:10] for item in service.list_incidents() if item["incident_id"] in ("SHIP-421", "SHIP-452")} \
         == {"2026-11-12"}
@@ -487,7 +471,7 @@ def test_stale_dates_move_forward_without_a_reset(tmp_path):
 
 
 def test_a_database_seeded_with_fixed_dates_moves_to_the_scenario_day_at_startup(tmp_path):
-    LogiOpsService(tmp_path / "deployed.sqlite3")  # an older release: the seed's own dates
+    LogiOpsService(tmp_path / "deployed.sqlite3")
     service = LogiOpsService(tmp_path / "deployed.sqlite3", scenario_day=lambda: date(2026, 12, 2))
     assert service.get("SHIP-460")["state"]["scenario_day"] == "2026-12-02"
     assert {item["due_eta"][:10] for item in service.list_incidents()} == {"2026-12-02", "2026-12-03"}
@@ -495,8 +479,8 @@ def test_a_database_seeded_with_fixed_dates_moves_to_the_scenario_day_at_startup
 
 def test_the_anchor_setting():
     today = lambda: date(2026, 10, 19)  # noqa: E731
-    assert scenario_clock(None, today)() == date(2026, 10, 20)  # tomorrow, Lima time
-    assert scenario_clock("  ", today)() == date(2026, 10, 20)  # a blank value is the default
+    assert scenario_clock(None, today)() == date(2026, 10, 20)
+    assert scenario_clock("  ", today)() == date(2026, 10, 20)
     assert scenario_clock("Relative", today)() == date(2026, 10, 20)
     assert scenario_clock("fixed", today)() is None
     assert scenario_clock("2026-11-10", today)() == date(2026, 11, 10)
@@ -512,5 +496,5 @@ def test_the_app_anchors_the_scenario_on_tomorrow_by_default(tmp_path):
 
     before = scenario_clock(None)()
     anchored = asyncio.run(scenario())
-    assert anchored in {before.isoformat(), scenario_clock(None)().isoformat()}  # even across midnight
+    assert anchored in {before.isoformat(), scenario_clock(None)().isoformat()}
     assert anchored != SEED_DAY.isoformat() or before == SEED_DAY
