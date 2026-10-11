@@ -2,13 +2,21 @@
 
 from __future__ import annotations
 
+import base64
+import re
 from pathlib import Path
-from typing import Any
+from typing import Annotated, Any
 
 from mcp.server.fastmcp import FastMCP
 from mcp.server.fastmcp.exceptions import ToolError
 from mcp.server.transport_security import TransportSecuritySettings
+from mcp.types import Icon, ToolAnnotations
+from pydantic import Field
 
+from . import __version__
+from .mcp_models import (
+    CarrierQuote, Execution, ExecutionStatus, IncidentList, Investigation, Order, OrderId, Shipment, ShipmentId, Stock,
+)
 from .preferences import PreferenceStore, preference_for
 from .scenario import INCIDENT_IDS
 from .service import LogiOpsService, WorkflowError
@@ -18,9 +26,31 @@ from .tools import inventory_hint, inventory_view, order_view, orders_hint, ship
 UI_URI = "ui://logiops/resolution-options.html"
 UI_MIME_TYPE = "text/html;profile=mcp-app"
 UI_HTML = (Path(__file__).resolve().parent / "static" / "resolution_options.html").read_text(encoding="utf-8")
-
+WEBSITE_URL = "https://github.com/aalvaropc/logiops-ai"
+ICON_SVG = (
+    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" rx="14" fill="#071318"/>'
+    '<path d="M18 16h8v24h20v8H18z" fill="#72dfc7"/></svg>'
+)
+ICON = Icon(src="data:image/svg+xml;base64," + base64.b64encode(ICON_SVG.encode()).decode(), mimeType="image/svg+xml", sizes=["any"])
+INSTRUCTIONS = """LogiOps AI resolves synthetic logistics exceptions (late or held shipments in Peru) with a person in charge.
+Flow: list_incidents (already ordered by what needs attention first) -> read facts with get_shipment, get_order,
+get_inventory and find_alternative_carriers -> investigate_incident calculates every feasible plan from the current
+data -> recommend one plan, quoting its exact figures and calling it by its label.
+Rules: plans and their numbers are calculated by code; never estimate new ones. Approval is human-only and bound to one
+exact plan and data version; no tool approves. execute_approved_plan runs only an approved plan, is idempotent, and
+sends simulated notifications. Delivery is projected, not physically confirmed. Times are Lima time (UTC-05:00).
+All data is synthetic."""
 
 OPEN_INCIDENTS = "Incidents: " + ", ".join(INCIDENT_IDS) + "."
+SHIPMENT_NUMBER = re.compile(r"^(?:ship(?:ment)?|case|incident)?[\s#_-]*(\d+)$", re.I)
+READ = ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=False)
+
+
+def normalized_incident(shipment_id: str) -> str:
+    """SHIP-433 from SHIP-433, ship-433, ship 433, case 433 or 433; anything else is upper-cased as given."""
+    text = str(shipment_id).strip()
+    found = SHIPMENT_NUMBER.match(text)
+    return f"SHIP-{found.group(1)}" if found else text.upper()
 
 
 def create_mcp_server(
@@ -33,6 +63,9 @@ def create_mcp_server(
         allowed_origins.append(f"https://{public_host}")
     server = FastMCP(
         "LogiOps AI",
+        instructions=INSTRUCTIONS,
+        website_url=WEBSITE_URL,
+        icons=[ICON],
         stateless_http=True,
         json_response=True,
         transport_security=TransportSecuritySettings(
@@ -41,44 +74,49 @@ def create_mcp_server(
             allowed_origins=allowed_origins,
         ),
     )
+    server._mcp_server.version = __version__
 
-    def incident(shipment_id: str) -> str:
-        return str(shipment_id).strip().upper()
+    def fail(exc: Exception, next_step: str) -> ToolError:
+        return ToolError(f"{str(exc).rstrip('.')}. Next step: {next_step}")
 
-    def state_of(shipment_id: str) -> dict[str, Any]:
+    def snapshot_of(shipment_id: str) -> dict[str, Any]:
         try:
-            return service.get(incident(shipment_id))["state"]
+            return service.get(normalized_incident(shipment_id))
         except WorkflowError as exc:
-            raise ToolError(f"{exc}. {OPEN_INCIDENTS}") from exc
+            raise fail(exc, f"use one of the open incidents from list_incidents. {OPEN_INCIDENTS}") from exc
 
-    @server.tool()
-    async def list_incidents() -> dict[str, Any]:
+    @server.tool(title="List incidents", annotations=READ)
+    async def list_incidents() -> IncidentList:
         """List every incident with its kind, priority, due time, status and critical units at risk, in the
         order to work them: open first, then the most critical units at risk, priority and due time."""
         return {"incidents": service.list_incidents()}
 
-    @server.tool()
-    async def get_shipment(shipment_id: str) -> dict[str, Any]:
+    @server.tool(title="Get shipment", annotations=READ)
+    async def get_shipment(shipment_id: ShipmentId) -> Shipment:
         """Read the shipment behind an incident: route, delayed ETA, its order ids and its local warehouse."""
-        return shipment_view(state_of(shipment_id))
+        return shipment_view(snapshot_of(shipment_id)["state"])
 
-    @server.tool()
-    async def get_order(order_id: str) -> dict[str, Any]:
+    @server.tool(title="Get customer order", annotations=READ)
+    async def get_order(order_id: OrderId) -> Order:
         """Read a customer order (quantity, priority, due time); order ids look like ORD-421."""
         states = [service.get(item)["state"] for item in INCIDENT_IDS]
         for state in states:
             order = order_view(state, order_id)
             if order is not None:
                 return order
-        linked = next((state for state in states if state["incident_id"] == incident(order_id)), None)
+        linked = next((state for state in states if state["incident_id"] == normalized_incident(order_id)), None)
         hint = orders_hint(linked) if linked else "Read the shipment first; it lists its order ids."
-        raise ToolError(f"Unknown order: {order_id}. {hint}")
+        raise ToolError(f"Unknown order: {order_id}. Next step: {hint}")
 
-    @server.tool()
-    async def get_inventory(warehouse_id: str, sku: str, shipment_id: str | None = None) -> dict[str, Any]:
+    @server.tool(title="Get warehouse stock", annotations=READ)
+    async def get_inventory(
+        warehouse_id: Annotated[str, Field(description="Warehouse id from get_shipment, such as arequipa.")],
+        sku: Annotated[str, Field(description="Product SKU from get_shipment, such as LAPTOP-01.")],
+        shipment_id: ShipmentId | None = None,
+    ) -> Stock:
         """Read synthetic available stock at an incident's local warehouse (the shipment lists its warehouse_id)."""
         if shipment_id is not None:
-            candidates = [state_of(shipment_id)]
+            candidates = [snapshot_of(shipment_id)["state"]]
         else:
             candidates = [service.get(item)["state"] for item in INCIDENT_IDS]
         for state in candidates:
@@ -86,36 +124,35 @@ def create_mcp_server(
             if stock is not None:
                 return stock
         hint = inventory_hint(candidates[0]) if len(candidates) == 1 else "Read the shipment first; it names its warehouse."
-        raise ToolError(f"Unknown warehouse or SKU. {hint}")
+        raise ToolError(f"Unknown warehouse or SKU. Next step: {hint}")
 
-    @server.tool()
-    async def find_alternative_carriers(shipment_id: str) -> dict[str, Any]:
-        """Read alternative carrier and service quotes: capacity, ETA and incremental cost."""
-        try:
-            return service.get(incident(shipment_id))["state"]["carriers"]
-        except WorkflowError as exc:
-            raise ToolError(str(exc)) from exc
+    @server.tool(title="Find alternative carriers", annotations=READ)
+    async def find_alternative_carriers(shipment_id: ShipmentId) -> dict[str, CarrierQuote]:
+        """Read alternative carrier and service quotes for the incident's route: capacity, ETA and incremental cost."""
+        return snapshot_of(shipment_id)["state"]["carriers"]
 
-    @server.tool(meta={"ui": {"resourceUri": UI_URI}, "ui/resourceUri": UI_URI})
-    async def investigate_incident(shipment_id: str) -> dict[str, Any]:
-        """Investigate the incident and calculate feasible plans, with the operator's saved preferences applied."""
+    @server.tool(
+        title="Investigate incident and calculate plans",
+        annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, idempotentHint=True, openWorldHint=False),
+        meta={"ui": {"resourceUri": UI_URI}, "ui/resourceUri": UI_URI},
+    )
+    async def investigate_incident(shipment_id: ShipmentId) -> Investigation:
+        """Investigate the incident and calculate every feasible plan from its current data, with the operator's
+        saved preferences applied. Calculating plans records them for this data version; it approves nothing."""
         try:
-            plans = service.investigate(incident(shipment_id))
+            plans = service.investigate(normalized_incident(shipment_id))
         except WorkflowError as exc:
-            raise ToolError(str(exc)) from exc
+            raise fail(exc, "read the incident's shipment, stock and carriers; a person may need to change the data") from exc
         result = {"source_version": plans[0]["source_version"], "plans": plans}
         preference = preference_for(plans, preferences.get() if preferences else None)
         if preference:
             result["operator_preferences"] = preference
         return result
 
-    @server.tool()
-    async def get_execution_status(shipment_id: str) -> dict[str, Any]:
+    @server.tool(title="Get execution status", annotations=READ)
+    async def get_execution_status(shipment_id: ShipmentId) -> ExecutionStatus:
         """Read the current approval, execution status, and audit event names."""
-        try:
-            snapshot = service.get(incident(shipment_id))
-        except WorkflowError as exc:
-            raise ToolError(str(exc)) from exc
+        snapshot = snapshot_of(shipment_id)
         return {
             "status": snapshot["state"]["status"],
             "source_version": snapshot["source_version"],
@@ -127,13 +164,22 @@ def create_mcp_server(
             ],
         }
 
-    @server.tool(meta={"ui": {"visibility": ["model"]}})
-    async def execute_approved_plan(shipment_id: str, plan_id: str, source_version: int) -> dict[str, Any]:
-        """Execute only a plan already approved by a human through the local API."""
+    @server.tool(
+        title="Execute approved plan",
+        annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=True, idempotentHint=True, openWorldHint=False),
+        meta={"ui": {"visibility": ["model"]}},
+    )
+    async def execute_approved_plan(
+        shipment_id: ShipmentId,
+        plan_id: Annotated[str, Field(description="Exact plan id from investigate_incident.")],
+        source_version: Annotated[int, Field(description="The plan's source_version.", ge=1)],
+    ) -> Execution:
+        """Execute only a plan a person already approved for this exact data version. Repeating the call returns the
+        same execution; it never runs twice. Notifications to customers are simulated."""
         try:
-            return service.execute(incident(shipment_id), plan_id, source_version)
+            return service.execute(normalized_incident(shipment_id), plan_id, source_version)
         except WorkflowError as exc:
-            raise ToolError(str(exc)) from exc
+            raise fail(exc, "a person approves the exact plan and version in the operator panel; no tool can approve") from exc
 
     @server.resource(
         UI_URI, name="resolution_options", title="Resolution options",

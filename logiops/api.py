@@ -15,6 +15,7 @@ from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse, JSONResponse, Response
 from pydantic import BaseModel, Field
 
+from . import __version__
 from .agent import (
     BRIEFING_TURNS, FOLLOWUP_TURNS, INVESTIGATE_TURNS, ConverseClient, ask_with_bedrock, brief_with_bedrock,
     investigate_with_bedrock, merged_facts,
@@ -127,7 +128,7 @@ def create_app(
         async with mcp.session_manager.run():
             yield
 
-    app = FastAPI(title="LogiOps AI", version="0.1.0", lifespan=lifespan)
+    app = FastAPI(title="LogiOps AI", version=__version__, lifespan=lifespan)
     internal_key = secrets.token_hex(32)
     if agent_limit_per_minute is None:
         agent_limit_per_minute = int(os.environ.get("LOGIOPS_AGENT_LIMIT_PER_MINUTE", "10"))
