@@ -8,6 +8,7 @@ dependencies = [
     "fastapi>=0.115,<1",
     "mcp==1.28.1",
     "pydantic==2.13.4",
+    "pyjwt[crypto]>=2.10",
     "uvicorn>=0.30,<1",
 ]
 

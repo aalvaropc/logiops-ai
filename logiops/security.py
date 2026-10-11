@@ -12,10 +12,12 @@ from fastapi.responses import JSONResponse
 
 from .agent import INTERNAL_HEADER
 from .identity import OPERATOR
+from .oauth import GUEST, InvalidToken, OAuthSettings, base_url, challenge, needed_scope, scope_name, verify_async
 
 
 SANDBOX_PATH = "/mcp-app/sandbox.html"
 PUBLIC_PATHS = ("/healthz", "/docs", "/openapi.json", "/redoc", "/demo", SANDBOX_PATH)
+OAUTH_PATHS = ("/auth/config", "/auth/token")
 
 
 class _SlidingWindow:
@@ -67,6 +69,8 @@ def install_security(
     agent_limit_per_minute: int = 10,
     trust_cloudfront: bool = False,
     sandbox_host: str | None = None,
+    oauth: OAuthSettings | None = None,
+    public_host: str | None = None,
 ) -> None:
     mcp_limiter = _SlidingWindow(limit_per_minute, 60)
     agent_limiter = _SlidingWindow(agent_limit_per_minute, 60)
@@ -77,21 +81,50 @@ def install_security(
         path = request.url.path
         if sandbox_host and request.headers.get("host", "").split(":")[0].lower() == sandbox_host and path != SANDBOX_PATH:
             return JSONResponse(status_code=404, content={"detail": "Not found"})
+        key = client_key(request, trust_cloudfront=trust_cloudfront)
+        if oauth and (path in OAUTH_PATHS or path.startswith("/.well-known/")):
+            if path == "/auth/token" and not mcp_limiter.allow(key):
+                return JSONResponse(status_code=429, content={"error": "slow_down"})
+            response = await call_next(request)
+            response.headers.setdefault("Cache-Control", "no-store")
+            return response
         if path in PUBLIC_PATHS or path.startswith("/assets/"):
             response = await call_next(request)
             response.headers.setdefault("Cache-Control", "no-cache")
             return response
-        if access_token:
-            supplied = request.headers.get("authorization", "")
-            if not _constant_time_equal(supplied, f"Bearer {access_token}"):
-                return JSONResponse(
-                    status_code=401,
-                    content={"detail": "Bearer token required"},
-                    headers={"WWW-Authenticate": "Bearer"},
-                )
-        request.state.actor = OPERATOR
+        supplied = request.headers.get("authorization", "")
+        scopes: set[str] | None = None
+        if access_token and _constant_time_equal(supplied, f"Bearer {access_token}"):
+            actor = OPERATOR
+        elif oauth and supplied[:7].lower() == "bearer ":
+            try:
+                actor, scopes = await verify_async(oauth, supplied[7:].strip())
+            except InvalidToken as exc:
+                base = base_url(request, public_host)
+                return JSONResponse(status_code=401, content={"detail": str(exc)},
+                                    headers={"WWW-Authenticate": challenge(base, error="invalid_token", description=str(exc))})
+        elif oauth:
+            actor = GUEST
+        elif access_token:
+            return JSONResponse(
+                status_code=401,
+                content={"detail": "Bearer token required"},
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+        else:
+            actor = OPERATOR
+        if actor.kind != "operator":
+            need = await needed_scope(request)
+            if need:
+                base = base_url(request, public_host)
+                if actor.kind == "guest":
+                    return JSONResponse(status_code=401, content={"detail": "Sign in to do this; guests can only read."},
+                                        headers={"WWW-Authenticate": challenge(base, need)})
+                if scope_name(base, need) not in (scopes or set()):
+                    return JSONResponse(status_code=403, content={"detail": "Your sign-in does not allow this action."},
+                                        headers={"WWW-Authenticate": challenge(base, need, error="insufficient_scope")})
+        request.state.actor = actor
         internal = _constant_time_equal(request.headers.get(INTERNAL_HEADER, ""), internal_key)
-        key = client_key(request, trust_cloudfront=trust_cloudfront)
         if path.startswith("/mcp") and not internal and not mcp_limiter.allow(key):
             return JSONResponse(status_code=429, content={"detail": "MCP rate limit exceeded"})
         if path == "/voice/speech" and not speech_limiter.allow(key):

@@ -71,6 +71,7 @@ More detail in `docs/architecture.md`.
 | `LOGIOPS_VOICE` | `polly` (Amazon Polly) or `browser` (the browser's own voice) | `polly` with `bedrock`, `browser` with `replay` |
 | `LOGIOPS_POLLY_VOICE`, `LOGIOPS_POLLY_ENGINE` | Polly voice and engine | `Ruth`, `generative` |
 | `LOGIOPS_DAILY_SPEECH_CHARS` | characters Polly may synthesize per day (Lima time) for the whole demo; repeated lines come from the cache and cost nothing | `30000` |
+| `LOGIOPS_COGNITO_ISSUER`, `LOGIOPS_COGNITO_DOMAIN`, `LOGIOPS_COGNITO_CLIENT_ID` | turn on OAuth 2.1 sign-in: the user pool's issuer URL, its hosted domain, and the public PKCE app client (`LOGIOPS_COGNITO_EXTRA_CLIENT_IDS` allows more clients) | off |
 | `LOGIOPS_ALERT_SCAN_SECONDS` | how often the proactive alert watcher scans; `0` turns the background scan off (a stock change is still scanned at once) | `30` |
 
 ## Status
@@ -372,6 +373,41 @@ receipt shows in the execute panel and on the device screen. Other commands:
   cannot pay twice;
 - the pending quote survives a reload in `sessionStorage`, and "resume" reads
   it back again.
+
+### Sign-in (OAuth 2.1 with Amazon Cognito)
+
+The MCP server is an OAuth 2.1 protected resource, as the Alexa+ account linking
+guide and the MCP authorization spec ask (`logiops/oauth.py`). It is turned on
+by the three `LOGIOPS_COGNITO_*` settings; without them nothing changes.
+
+- **Discovery.**
+  - `/.well-known/oauth-protected-resource/mcp` (RFC 9728) names the resource
+    `https://<host>/mcp`, its authorization server and the two scopes:
+    `…/mcp/incidents.operate` and `…/mcp/bookings.write`.
+  - Cognito's own discovery document does not list PKCE methods, so
+    `/.well-known/oauth-authorization-server` (RFC 8414) is served here. It has
+    `code_challenge_methods_supported: ["S256"]`, Cognito's authorize endpoint,
+    and a token endpoint here (`/auth/token`). That endpoint forwards only
+    authorization-code grants (with their PKCE verifier) and refresh grants of
+    the allowed public clients.
+- **Tokens.** Access tokens are Cognito JWTs. Each one is checked for:
+  - an RS256 signature against the pool's JWKS (cached, refetched at most once
+    a minute for an unknown key);
+  - the issuer, the expiry, and `token_use: access`;
+  - an allowed `client_id`;
+  - the scope that the action needs.
+
+  The signed-in user's name is recorded on quotes and bookings.
+- **Guests.** Without a token a visitor can read, ask the agent and use the
+  read tools. On the public deployment the agent then runs on the replay model
+  (`fallback: "sign_in"`), so a guest never spends a model call. Approving,
+  executing, changing data, speaking with Polly, booking (and the MCP tools
+  `execute_approved_plan`, `quote_carrier_booking`, `book_carrier`,
+  `get_booking`) answer `401` with `WWW-Authenticate: Bearer
+  resource_metadata="…", scope="…"`. A token without the scope gets `403
+  insufficient_scope`, and a bad token gets `401 invalid_token`.
+- **Static token.** The operator token still works, for scripts and the
+  testing instructions.
 
 ### Voice (Amazon Polly)
 
