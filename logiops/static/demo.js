@@ -8,6 +8,7 @@ const state = {
   awaitingExecute: false, pendingApproval: null, incidentId: hashIncident(), inbox: [], conversations: {}, selections: {}, stockFor: null,
   briefingPick: null, prefsShown: undefined, cardTheme: "dark", pendingPurchase: null, alerts: [],
   voice: { engine: "browser", voice: null, fillers: [] }, speechTurn: 0, auth: { enabled: false }, session: null,
+  memoryIncident: null,
 };
 const CAPABILITIES_TEXT = "I'm LogiOps, your operations desk for late or held shipments. I can:\n"
   + "- brief your queue: say “any delays today?”;\n"
@@ -762,9 +763,48 @@ function welcomeText() {
   return `Hi, I'm LogiOps. ${queue}. Ask “any delays today?” for my briefing, or ask what's happening with ${state.incidentId}.`;
 }
 
+function memorySession() {
+  try {
+    let id = sessionStorage.getItem("logiops-memory-session");
+    if (!id) {
+      id = `s-${randomText(12)}`;
+      sessionStorage.setItem("logiops-memory-session", id);
+    }
+    return id;
+  } catch (_) {
+    return null;
+  }
+}
+
+function remember(role, text) {
+  const session = memorySession();
+  if (!session || (state.auth.enabled && !state.session)) return;
+  const headers = { "Content-Type": "application/json" };
+  if (state.token) headers.Authorization = `Bearer ${state.token}`;
+  fetch("/memory/turns", {
+    method: "POST", headers, cache: "no-store",
+    body: JSON.stringify({ session, role, text: String(text).slice(0, 4000), incident: state.incidentId }),
+  }).catch(() => {});
+}
+
+async function recallMemory() {
+  if (state.auth.enabled && !state.session) return;
+  let recalled;
+  try {
+    recalled = await request(`/memory?session=${encodeURIComponent(memorySession() || "")}`);
+  } catch (_) {
+    return;
+  }
+  state.memoryIncident = recalled.last_incident || null;
+  if (recalled.welcome && !state.conversation.some((turn) => turn.role === "user")) {
+    say("assistant", recalled.welcome, "welcome back · from memory", recalled.welcome);
+  }
+}
+
 function say(role, text, meta, spoken, check) {
   state.conversation.push({ role, text, meta, check });
   renderConversation();
+  if (!state.forgetting && !String(meta || "").startsWith("welcome back")) remember(role, role === "assistant" ? (spoken || window.LogiOpsMarkdown.plainText(text)) : text);
   if (role !== "assistant") {
     device("heard", text);
     return;
@@ -1312,6 +1352,7 @@ async function handleUtterance(raw) {
     await selectIncident(mentioned).catch(() => {});
     if (state.incidentId !== mentioned) return;
   }
+  state.forgetting = window.LogiOpsIntent.isForgetMe(text);
   say("user", text);
   const lower = text.toLowerCase();
   if (window.LogiOpsIntent.isStartOver(text)) {
@@ -1394,6 +1435,28 @@ async function handleUtterance(raw) {
         say("assistant", "Okay, nothing was booked or charged.");
       } else {
         say("assistant", pending ? "Okay, nothing was approved." : "Okay. Ask me anything else about the queue or this incident.");
+      }
+    } else if (command === "forget_me") {
+      if (state.auth.enabled && !state.session) {
+        say("assistant", "I don't remember guests, so there's nothing to forget.");
+      } else {
+        let result;
+        await act(async () => { result = await request("/memory", "DELETE"); }, "");
+        state.memoryIncident = null;
+        say("assistant", `Done. I forgot our earlier conversations (${result.forgotten} item${result.forgotten === 1 ? "" : "s"}). `
+          + "Your saved preferences stay until you say “forget my preferences”.", "memory cleared");
+      }
+      state.forgetting = false;
+    } else if (command === "pick_up") {
+      const target = state.memoryIncident;
+      if (!target) {
+        say("assistant", "I don't have an earlier conversation to pick up. Ask about your queue, or about an incident.");
+      } else {
+        if (target !== state.incidentId) {
+          await selectIncident(target);
+          state.conversation.push({ role: "user", text });
+        }
+        say("assistant", `Back on ${target}. Ask what's happening, or say “approve the recommended plan”.`);
       }
     } else if (command === "link") {
       if (state.session) say("assistant", `You're already signed in as ${state.session.username}.`);
@@ -1626,6 +1689,7 @@ loadAuth().then(finishSignIn).catch(() => {}).then(() => act(refresh, "").catch(
   if (state.signInNote) say("assistant", state.signInNote);
   if (state.session) $("approver").value = state.session.username;
   loadVoice();
+  recallMemory();
   checkAlerts().catch(() => {});
   const parked = storedPurchase();
   if (parked) {
