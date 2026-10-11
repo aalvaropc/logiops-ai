@@ -1,6 +1,7 @@
 """The browser demo is reachable without exposing incident data or losing assets on deploy."""
 
 import asyncio
+import re
 import tarfile
 from pathlib import Path
 
@@ -298,4 +299,26 @@ def test_replies_show_whether_they_passed_the_data_check():
     assert "Did not pass the data check: ${issue}" in script and "noteCheck(run);" in script
     assert "check: checkBadge(agentEvent.data)" in script
     assert ".turn .check-badge {" in style and ".turn .check-badge.failed {" in style
+
+
+def test_assets_come_from_one_allowlist_route(tmp_path):
+    from logiops.api import DEMO_ASSETS
+
+    async def run():
+        app = create_app(tmp_path / "assets.sqlite3", access_token="a" * 40)
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
+            served = {name: await client.get(f"/assets/{name}") for name in DEMO_ASSETS}
+            refused = [await client.get(path) for path in (
+                "/assets/demo.html", "/assets/api.py", "/assets/..%2Fapi.py", "/assets/mcp_app_sandbox.html",
+                "/assets/resolution_options.html", "/assets/static/demo.js", "/assets/",
+            )]
+        return served, refused
+
+    served, refused = asyncio.run(run())
+    assert {name: (r.status_code, r.headers["content-type"].split(";")[0]) for name, r in served.items()} == {
+        "demo.css": (200, "text/css"), "demo.js": (200, "text/javascript"),
+        "markdown.js": (200, "text/javascript"), "intent.js": (200, "text/javascript")}
+    assert [response.status_code for response in refused] == [404] * 7
+    page = (Path(__file__).resolve().parents[1] / "logiops" / "static" / "demo.html").read_text()
+    assert set(re.findall(r'/assets/([\w.-]+)', page)) <= set(DEMO_ASSETS)
 
