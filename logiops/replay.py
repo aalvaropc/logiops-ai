@@ -64,7 +64,7 @@ class ReplayConverse:
     """A scripted model: reads the shipment, then its orders and stock, then plans."""
 
     async def converse(
-        self, messages: list[dict[str, Any]], system: str, tools: list[dict[str, Any]]
+        self, messages: list[dict[str, Any]], system: str, tools: list[dict[str, Any]], skill: str | None = None
     ) -> dict[str, Any]:
         from .agent import BRIEFING_PROMPT, FOLLOWUP_PROMPT
 

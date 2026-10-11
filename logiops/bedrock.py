@@ -67,20 +67,25 @@ class BedrockConverse:
             )
         return self._client
 
-    def _call(self, messages: list[dict[str, Any]], system: str, tools: list[dict[str, Any]]) -> dict[str, Any]:
+    def _call(
+        self, messages: list[dict[str, Any]], system: str, tools: list[dict[str, Any]], skill: str | None
+    ) -> dict[str, Any]:
+        blocks = [{"text": skill}, {"text": system}, {"cachePoint": {"type": "default"}}] if skill else [{"text": system}]
         return self._get_client().converse(
             modelId=self.model_id,
             messages=messages,
-            system=[{"text": system}],
+            system=blocks,
             toolConfig={"tools": tools},
             inferenceConfig={"maxTokens": self.max_tokens, "temperature": 0.2},
         )
 
     async def converse(
-        self, messages: list[dict[str, Any]], system: str, tools: list[dict[str, Any]]
+        self, messages: list[dict[str, Any]], system: str, tools: list[dict[str, Any]], skill: str | None = None
     ) -> dict[str, Any]:
+        """One Converse call. With `skill`, the Agent Skill goes first in the system prompt, and a cache
+        point after the prompt lets every later turn of the run reuse the tools, skill and prompt."""
         try:
-            response = await asyncio.to_thread(self._call, messages, system, tools)
+            response = await asyncio.to_thread(self._call, messages, system, tools, skill)
         except NoCredentialsError as exc:
             raise BedrockError(
                 "AWS credentials are not configured; sign in with aws login or attach an instance role"

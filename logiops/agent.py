@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
 import re
 from typing import Any, Callable, Protocol
@@ -10,10 +11,12 @@ from typing import Any, Callable, Protocol
 import httpx
 from mcp import ClientSession
 from mcp.client.streamable_http import streamable_http_client
+from pydantic import AnyUrl
 
 from .bedrock import BedrockError
 from .evaluator import check_facts, check_recommendation
 from .scenario import INCIDENT_IDS
+from .skill import SKILL_NAME, SKILL_URI
 
 
 BASE_URL = "http://127.0.0.1:8000"
@@ -96,7 +99,7 @@ Evaluate = Callable[[str, list[dict[str, Any]]], dict[str, Any]]
 
 class ConverseClient(Protocol):
     async def converse(
-        self, messages: list[dict[str, Any]], system: str, tools: list[dict[str, Any]]
+        self, messages: list[dict[str, Any]], system: str, tools: list[dict[str, Any]], skill: str | None = None
     ) -> dict[str, Any]: ...
 
 
@@ -106,9 +109,10 @@ async def _converse_loop(
     access_token: str | None = None, internal_key: str | None = None, max_turns: int = 8,
     evaluate: Evaluate | None = None, revise_until: float | None = None, closing: str = "",
 ) -> dict[str, Any]:
-    """The tool-use loop. With `evaluate`, the final answer (its spoken line included) is checked;
-    a failed check is sent back once for a revision while a turn is left and the clock is before
-    `revise_until`, and the result carries the evaluations and whether the last one passed."""
+    """The tool-use loop. The Agent Skill is read from the MCP server and sent with the system prompt.
+    With `evaluate`, the final answer (its spoken line included) is checked; a failed check is sent
+    back once for a revision while a turn is left and the clock is before `revise_until`, and the
+    result carries the evaluations and whether the last one passed."""
     messages: list[dict[str, Any]] = [{"role": "user", "content": [{"text": first_message}]}]
     trace: list[dict[str, Any]] = []
     evaluations: list[dict[str, Any]] = []
@@ -122,6 +126,8 @@ async def _converse_loop(
         async with streamable_http_client(f"{BASE_URL}/mcp", http_client=http_client) as (read, write, _):
             async with ClientSession(read, write) as session:
                 await session.initialize()
+                skill = (await session.read_resource(AnyUrl(SKILL_URI))).contents[0].text
+                loaded = {"name": SKILL_NAME, "uri": SKILL_URI, "sha256": hashlib.sha256(skill.encode()).hexdigest()}
                 listed = await session.list_tools()
                 tool_specs = [
                     {
@@ -136,10 +142,13 @@ async def _converse_loop(
                 if {spec["toolSpec"]["name"] for spec in tool_specs} != set(tools):
                     raise BedrockError("The read-only MCP toolset is incomplete")
                 for turn in range(max_turns):
-                    response = await client.converse(messages, system, tool_specs)
+                    response = await client.converse(messages, system, tool_specs, skill=skill)
                     turn_usage = response.get("usage", {})
                     for key in usage:
                         usage[key] += turn_usage.get(key, 0)
+                    for key in ("cacheReadInputTokens", "cacheWriteInputTokens"):
+                        if key in turn_usage:
+                            usage[key] = usage.get(key, 0) + turn_usage[key]
                     assistant_message = response.get("output", {}).get("message")
                     if not isinstance(assistant_message, dict) or assistant_message.get("role") != "assistant":
                         raise BedrockError("Bedrock returned no assistant message")
@@ -169,7 +178,7 @@ async def _converse_loop(
                                 messages.append({"role": "user", "content": [{"text": revision_request(evaluations[-1], closing)}]})
                                 continue
                         answer, spoken = split_spoken(answer)
-                        result = {"answer": answer, "spoken": spoken, "tool_trace": trace, "usage": usage}
+                        result = {"answer": answer, "spoken": spoken, "tool_trace": trace, "usage": usage, "skill": loaded}
                         if evaluations:
                             result.update(evaluations=evaluations, grounded=evaluations[-1]["passed"])
                         if stop_reason == "max_tokens":

@@ -44,7 +44,8 @@ LOGIOPS_AGENT_MODE=replay uv run uvicorn logiops.api:app --host 127.0.0.1 --port
    Listening (voice) to Thinking (with elapsed seconds) to Speaking or Ready; the
    heard and spoken lines update; the map draws the plan's legs (late legs in
    red) with a text legend; the bars compare each order's promise with its
-   projection; and the steps of the recorded tool trace appear one by one with
+   projection; the agent's Agent Skill (`logiops-exception-desk`, read over MCP) is listed
+   first, then the steps of the recorded tool trace appear one by one with
    "Checked against the data". Picking another plan in the operator view
    redraws the map and bars. The MCP App card highlights the same plan as the
    panel ("Agent pick"). "Light card" switches the card's theme through the MCP

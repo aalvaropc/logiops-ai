@@ -16,14 +16,14 @@ class CountingReplay(ReplayConverse):
     def __init__(self):
         self.calls = []
 
-    async def converse(self, messages, system, tools):
+    async def converse(self, messages, system, tools, skill=None):
         self.calls.append({"messages": messages, "system": system,
                            "tools": {spec["toolSpec"]["name"] for spec in tools}})
-        return await super().converse(messages, system, tools)
+        return await super().converse(messages, system, tools, skill)
 
 
 class FailingFollowUp:
-    async def converse(self, messages, system, tools):
+    async def converse(self, messages, system, tools, skill=None):
         raise BedrockError("Bedrock throttled the request")
 
 

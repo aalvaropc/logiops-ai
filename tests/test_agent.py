@@ -16,7 +16,7 @@ class FakeConverse:
     def __init__(self):
         self.calls = []
 
-    async def converse(self, messages, system, tools):
+    async def converse(self, messages, system, tools, skill=None):
         self.calls.append({"messages": deepcopy(messages), "system": system, "tools": deepcopy(tools)})
         if len(self.calls) == 1:
             return {
@@ -80,7 +80,7 @@ def test_agent_uses_mcp_and_persists_trace(tmp_path):
 
 def test_agent_rejects_model_requested_execution(tmp_path):
     class UnsafeConverse:
-        async def converse(self, messages, system, tools):
+        async def converse(self, messages, system, tools, skill=None):
             return {
                 "stopReason": "tool_use",
                 "output": {"message": {"role": "assistant", "content": [
@@ -152,7 +152,7 @@ def test_agent_fails_clearly_when_the_deadline_passes(tmp_path):
     from logiops.bedrock import BedrockError
 
     class SlowConverse:
-        async def converse(self, messages, system, tools):
+        async def converse(self, messages, system, tools, skill=None):
             await asyncio.sleep(5)
 
     async def run():
@@ -169,8 +169,8 @@ def test_agent_fails_clearly_when_the_deadline_passes(tmp_path):
 
 def test_truncated_final_answer_is_kept_but_flagged(tmp_path):
     class TruncatingConverse(FakeConverse):
-        async def converse(self, messages, system, tools):
-            response = await super().converse(messages, system, tools)
+        async def converse(self, messages, system, tools, skill=None):
+            response = await super().converse(messages, system, tools, skill)
             if response["stopReason"] == "end_turn":
                 response["stopReason"] = "max_tokens"
             return response
@@ -242,7 +242,7 @@ def test_the_briefing_cannot_calculate_plans_and_may_read_any_incident(tmp_path)
         def __init__(self):
             self.tools = None
 
-        async def converse(self, messages, system, tools):
+        async def converse(self, messages, system, tools, skill=None):
             self.tools = {tool["toolSpec"]["name"] for tool in tools}
             if len(messages) == 1:
                 return {"stopReason": "tool_use", "usage": {}, "output": {"message": {"role": "assistant", "content": [

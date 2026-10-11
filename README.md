@@ -38,11 +38,11 @@ the replay command in `docs/hackathon/testing-instructions.md`) runs the whole d
  |  FastAPI app: bearer token, rate limits, no-store            |
  |  +-----------------------+   +----------------------------+  |
  |  | MCP server (8 tools,  |   | Workflow core + SQLite     |  |
- |  | no approval tool)     |-->| versioned plans, approvals |  |
- |  +-----------------------+   | bound to plan + version,   |  |
- |        ^                     | idempotent execution,      |  |
- |        | in-process MCP      | audit events; operator     |  |
- |        |                     | preferences (fixed rules)  |  |
+ |  | no approval tool,     |-->| versioned plans, approvals |  |
+ |  | Agent Skill resource) |   | bound to plan + version,   |  |
+ |  +-----------------------+   | idempotent execution,      |  |
+ |        ^                     | audit events; operator     |  |
+ |        | in-process MCP      | preferences (fixed rules)  |  |
  |  +-----------------------+   +----------------------------+  |
  |  | Agent: Bedrock        |                                   |
  |  | Converse tool loop:   |  (replay mode: scripted model)    |
@@ -325,6 +325,29 @@ Run tests with `uv run pytest`, in a shell without `LOGIOPS_ACCESS_TOKEN`,
 interoperability tests use the official Python MCP client against the
 in-process ASGI app, and the Bedrock tests validate request shapes against
 botocore's service model without a paid call.
+
+### Agent Skill
+
+[`skills/logiops-exception-desk/SKILL.md`](skills/logiops-exception-desk/SKILL.md)
+is an [Agent Skill](https://agentskills.io): YAML frontmatter (`name`,
+`description`, `license`, `compatibility`, `metadata`) and a playbook for these
+tools. It covers the workflow, the rules (plans by label, projected delivery,
+Lima time, no tool approves), how to speak on a voice device (at most five
+options, a read-back before anything is approved), and what to do when a tool
+fails. The MCP server serves it as the resource
+`skill://logiops-exception-desk/SKILL.md` (`text/markdown`), and its
+instructions point to it, so any MCP client can load the same playbook.
+
+The agent reads that resource over MCP at the start of every run. It sends the
+skill to Bedrock as the first system block, before the task prompt, followed by
+a `cachePoint`, so later turns of a run read the tools, skill and prompt from
+the prompt cache (`usage` reports `cacheReadInputTokens` and
+`cacheWriteInputTokens`). The run reports which skill it loaded (`skill`: name,
+URI and SHA-256), and the device screen lists it before the tool steps. In
+replay mode the skill is loaded the same way, but the scripted model does not
+read it. Tests check the frontmatter rules, that every tool it names exists,
+and that the file, the MCP resource and the system block are byte-identical.
+The release archive and the Docker image include it.
 
 ## License
 
