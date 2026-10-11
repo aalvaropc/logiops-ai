@@ -16,14 +16,14 @@ call are not counted separately.
 from __future__ import annotations
 
 import os
-from datetime import datetime, timedelta, timezone
+from datetime import datetime
 from pathlib import Path
 from typing import Any, Callable
 
 from .bedrock import BedrockError
+from .scenario import LIMA
 from .storage import connect
 
-LIMA = timezone(timedelta(hours=-5))
 DEFAULT_DAILY_CALLS = 150
 FALLBACK = "daily_budget"
 SCHEMA = "CREATE TABLE IF NOT EXISTS model_budget (day TEXT PRIMARY KEY, calls INTEGER NOT NULL)"
