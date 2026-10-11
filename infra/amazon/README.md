@@ -96,14 +96,28 @@ MCP_URL="$(terraform -chdir=infra/amazon output -raw mcp_url)"
 uv run python scripts/check_mcp.py "$MCP_URL"
 BASE_URL="https://$(terraform -chdir=infra/amazon output -raw cloudfront_domain)"
 uv run python scripts/verify_remote.py "$BASE_URL"
+uv run python scripts/check_oauth.py "$BASE_URL"
 ```
 
 `check_mcp.py` must negotiate protocol 2025-11-25 and call `get_shipment` and
 `list_incidents` (four incidents) from a machine outside EC2.
 `verify_remote.py` resets every incident and the saved preferences, checks
 the inbox, runs real Bedrock on SHIP-421, approves and executes the split
-plan, and checks idempotence and the audit trace. It leaves SHIP-421
-executed, so reset it afterwards. Restart EC2 through AWS, then repeat
+plan, and checks idempotence and the audit trace. It then checks:
+- that the run loaded the Agent Skill (and reports the prompt-cache tokens);
+- a carrier booking paid once, with its receipt;
+- a proactive alert after a stock change;
+- Polly audio, or says it fell back to the browser's voice;
+- that the memory recalls a turn it just wrote, before forgetting the operator
+  token's shared memory.
+
+It resets the demo at the end. `check_oauth.py` walks the OAuth discovery the
+way an MCP client does, using no credentials:
+1. an unauthenticated `execute_approved_plan` answers 401 with
+   `resource_metadata` and `scope`;
+2. RFC 9728 names `<base>/mcp`;
+3. RFC 8414 offers S256;
+4. a PKCE authorization request opens Cognito's sign-in page. Restart EC2 through AWS, then repeat
 `GET /incidents/SHIP-421` with the token; the execution and trace must still
 be present. Record the URL, deployed archive checksum, token usage, and test
 result in the decisions log.
