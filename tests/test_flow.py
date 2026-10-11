@@ -402,19 +402,20 @@ def test_the_api_rejects_oversized_approval_fields(tmp_path):
     assert asyncio.run(scenario()) == (422, 422)
 
 
-def test_an_agent_run_keeps_its_checks_and_model(tmp_path):
+def test_an_agent_run_keeps_its_checks_model_and_fallback(tmp_path):
     service = LogiOpsService(tmp_path / "agent-checks.sqlite3")
     service.investigate("SHIP-421")
     evaluations = [{"attempt": 1, "passed": False, "issues": ["$95 is not a plan cost"]}, {"attempt": 2, "passed": True}]
     service.record_agent_run("SHIP-421", 1, {
         "answer": "ok", "tool_trace": [], "usage": {}, "mode": "replay",
-        "model": "scripted", "evaluations": evaluations, "grounded": True,
+        "model": "scripted", "evaluations": evaluations, "grounded": True, "fallback": "daily_budget",
     })
     service.record_agent_run("SHIP-421", 1, {"answer": "plain", "tool_trace": [], "usage": {}, "mode": "replay"})
     checked, plain = [event["data"] for event in service.get("SHIP-421")["events"]
                       if event["name"] == "agent_investigation_completed"]
     assert (checked["model"], checked["evaluations"], checked["grounded"]) == ("scripted", evaluations, True)
-    assert not {"model", "evaluations", "grounded"} & plain.keys()
+    assert (checked["mode"], checked["fallback"]) == ("replay", "daily_budget")
+    assert not {"model", "evaluations", "grounded", "fallback"} & plain.keys()
 
 
 ISO_LIKE = re.compile(r"\d{4}-\d{2}-\d{2}T")

@@ -103,22 +103,26 @@ def _session(tmp_path, monkeypatch, limit):
             async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as http:
                 first = (await http.post("/incidents/SHIP-421/agent/investigate", json={})).json()
                 briefing = (await http.post("/agent/briefing", json={})).json()
-        return first, briefing
+                events = (await http.get("/incidents/SHIP-421")).json()["events"]
+        recorded = next(event["data"] for event in events if event["name"] == "agent_investigation_completed")
+        return first, briefing, recorded
 
     return asyncio.run(run())
 
 
 def test_live_calls_are_counted_and_the_unused_reservation_released(tmp_path, monkeypatch):
-    first, briefing = _session(tmp_path, monkeypatch, limit=150)
+    first, briefing, recorded = _session(tmp_path, monkeypatch, limit=150)
     assert first["mode"] == briefing["mode"] == "bedrock" and "fallback" not in first
+    assert recorded["mode"] == "bedrock" and "fallback" not in recorded
     assert FakeBedrock.calls >= 4
     assert DailyModelBudget(tmp_path / "live-150.sqlite3", limit=150).used() == FakeBedrock.calls
 
 
 def test_a_used_budget_falls_back_to_the_replay_and_says_so(tmp_path, monkeypatch):
-    first, briefing = _session(tmp_path, monkeypatch, limit=4)
+    first, briefing, recorded = _session(tmp_path, monkeypatch, limit=4)
     assert FakeBedrock.calls == 0
     assert first["mode"] == briefing["mode"] == "replay" and first["fallback"] == briefing["fallback"] == "daily_budget"
+    assert recorded["mode"] == "replay" and recorded["fallback"] == "daily_budget"
     assert first["answer"].rstrip().splitlines()[-1].startswith("Recommended plan: SHIP-421:")
 
 
