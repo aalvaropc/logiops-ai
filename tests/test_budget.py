@@ -9,8 +9,9 @@ import pytest
 import logiops.api as api_module
 from logiops.api import create_app
 from logiops.bedrock import BedrockError
-from logiops.budget import LIMA, BudgetedConverse, DailyModelBudget
+from logiops.budget import BudgetedConverse, DailyModelBudget
 from logiops.replay import ReplayConverse
+from logiops.scenario import LIMA
 
 
 def test_reservations_are_atomic_per_lima_day_and_released(tmp_path):
