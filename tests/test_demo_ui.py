@@ -316,9 +316,28 @@ def test_assets_come_from_one_allowlist_route(tmp_path):
 
     served, refused = asyncio.run(run())
     assert {name: (r.status_code, r.headers["content-type"].split(";")[0]) for name, r in served.items()} == {
-        "demo.css": (200, "text/css"), "demo.js": (200, "text/javascript"),
-        "markdown.js": (200, "text/javascript"), "intent.js": (200, "text/javascript")}
+        "demo.css": (200, "text/css"), "demo.js": (200, "text/javascript"), "markdown.js": (200, "text/javascript"),
+        "intent.js": (200, "text/javascript"), "route.js": (200, "text/javascript"), "device.js": (200, "text/javascript")}
     assert [response.status_code for response in refused] == [404] * 7
     page = (Path(__file__).resolve().parents[1] / "logiops" / "static" / "demo.html").read_text()
     assert set(re.findall(r'/assets/([\w.-]+)', page)) <= set(DEMO_ASSETS)
 
+
+
+def test_the_device_view_sits_above_the_operator_view():
+    root = Path(__file__).resolve().parents[1] / "logiops" / "static"
+    html, script, device, style = ((root / name).read_text() for name in ("demo.html", "demo.js", "device.js", "demo.css"))
+    above, below = html.split("<main>")
+    for marker in ('id="device"', 'id="device-orb"', 'id="device-state" class="orb-label" role="status"', 'id="device-heard"',
+                   'id="device-spoken"', 'id="device-chips"', 'id="device-map" viewBox="0 0 240 300" role="img"', 'id="device-bars"'):
+        assert marker in above, marker
+    assert "SHIP-4" not in above and 'class="operator-label">Operator view' in below
+    order = [html.index(f"/assets/{name}") for name in ("markdown.js", "intent.js", "route.js", "device.js", "demo.js")]
+    assert order == sorted(order)
+    assert "innerHTML" not in device and "insertAdjacentHTML" not in device and "document.createElementNS(SVG" in device
+    for hook in ('device("voice", "request")', 'device("voice", "error")', 'device("voice", "listen-start")',
+                 'device("voice", "listen-end")', 'device("voice", "speech-end")', "state.speechTimer = setTimeout(done, 20000)",
+                 'device("reply", text, spoken, speak)', 'device("heard", text)', "showOnDevice(snapshot);", 'device("mount");'):
+        assert hook in script, hook
+    assert "@media (prefers-reduced-motion: reduce) { .orb { animation: none !important; } }" in style
+    assert "@media (max-width: 650px) { .device-screen" in style
