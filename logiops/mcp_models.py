@@ -159,3 +159,64 @@ class Execution(Output):
     delivery_status: str
     notifications: list[dict]
     fulfillments: list[dict]
+
+
+class BookingLine(Output):
+    service: str = Field(description="Paid carrier or service, such as Express or Air freight.")
+    units: int
+    arrival_eta: str
+
+
+class Quote(Output):
+    """A price for a plan's paid carriers and services. It charges nothing and holds for ten minutes;
+    cost_usd per line is present when the carrier quotes add up to the plan's cost."""
+
+    quote_id: str
+    incident_id: str
+    plan_id: str
+    plan_label: str
+    source_version: int
+    approved: bool = Field(description="Whether a person already approved the plan; booking requires it.")
+    lines: list[BookingLine]
+    base_usd: float = Field(description="Cost of the carriers and services.")
+    service_fee_usd: float
+    igv_rate: float = Field(description="Peru's sales tax (IGV) rate, applied to cost plus fee.")
+    igv_usd: float
+    total_usd: float = Field(description="What book_carrier charges; the person must confirm this exact amount.")
+    currency: str
+    payment_method: str
+    expires_at: str
+    summary: str = Field(description="The read-back for the person: plan, breakdown, payment method and expiry, no ids.")
+
+
+class Payment(Output):
+    id: str
+    status: str
+    amount_usd: float
+    method: str
+    simulated: bool
+
+
+class Booking(Output):
+    """A paid booking with its receipt; replayed is true when the same idempotency key returned it again."""
+
+    number: str = Field(description="Confirmation number, such as LGO-7K2M9Q; safe to say to a person.")
+    status: str
+    incident_id: str
+    plan_id: str
+    plan_label: str
+    source_version: int
+    quote_id: str
+    lines: list[BookingLine]
+    base_usd: float
+    service_fee_usd: float
+    igv_rate: float
+    igv_usd: float
+    total_usd: float
+    currency: str
+    payment: Payment
+    booked_by: str
+    booked_at: str
+    receipt_url: str
+    confirmation: str = Field(description="The written confirmation to show or read to the person.")
+    simulated: bool

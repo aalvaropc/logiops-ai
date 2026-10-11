@@ -37,7 +37,7 @@ the replay command in `docs/hackathon/testing-instructions.md`) runs the whole d
  +--------------------------------------------------------------+
  |  FastAPI app: bearer token, rate limits, no-store            |
  |  +-----------------------+   +----------------------------+  |
- |  | MCP server (8 tools,  |   | Workflow core + SQLite     |  |
+ |  | MCP server (11 tools, |   | Workflow core + SQLite     |  |
  |  | no approval tool,     |-->| versioned plans, approvals |  |
  |  | Agent Skill resource) |   | bound to plan + version,   |  |
  |  +-----------------------+   | idempotent execution,      |  |
@@ -325,6 +325,37 @@ Run tests with `uv run pytest`, in a shell without `LOGIOPS_ACCESS_TOKEN`,
 interoperability tests use the official Python MCP client against the
 in-process ASGI app, and the Bedrock tests validate request shapes against
 botocore's service model without a paid call.
+
+### Carrier booking and payment
+
+A plan that uses paid carriers or services can be booked and paid, with a
+receipt (`logiops/booking.py`):
+
+1. **Quote.** `POST /incidents/{id}/bookings/quote` (or the MCP tool
+   `quote_carrier_booking`) prices one current plan, by default the approved
+   one: the carriers' cost, a $5 service fee and IGV 18 % on both. It holds
+   for ten minutes and charges nothing. Its `summary` is the read-back, for
+   example "carriers and services $120.00, service fee $5.00, IGV 18% $22.50,
+   total $147.50, charged to the corporate card ending 4242".
+2. **Confirm.** `POST /quotes/{quote_id}/confirm` (MCP: `book_carrier`) takes
+   the total the person confirmed and an idempotency key. The payment is
+   simulated. It charges only when every check passes at that moment:
+   - the amount equals the total recalculated now;
+   - the quote has not expired;
+   - the plan is the one a person approved on the current data (or it was
+     already executed).
+
+   Otherwise the answer is a 409 that says "Nothing was charged" and what to
+   do. Over MCP, an unapproved plan returns the URL elicitation described
+   below. The same key returns the same booking, and a plan is booked at most
+   once.
+3. **Receipt.** The booking carries a confirmation number (`LGO-` and six
+   characters) and a written confirmation. `GET /bookings/{number}/receipt` is
+   a printable page, and `receipt://logiops/{number}` is the same receipt in
+   Markdown for MCP clients.
+
+`book_carrier` is destructive, idempotent and model-only. `/demo/reset`
+forgets the bookings, and the follow-up check accepts the booking's amounts.
 
 ### Agent Skill
 

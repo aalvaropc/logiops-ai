@@ -58,6 +58,7 @@ def test_the_skill_names_only_real_tools_and_keeps_approval_human(tmp_path):
 
     tools = {tool.name for tool in asyncio.run(create_mcp_server(LogiOpsService(tmp_path / "tools.sqlite3")).list_tools())}
     named = set(re.findall(r"`([a-z_]+)`", SKILL_TEXT)) - {"operator_preferences", "preferred_plan_id", "default_plan_id"}
+    assert {"quote_carrier_booking", "book_carrier"} <= named
     assert named <= tools, named - tools
     assert "No tool approves" in SKILL_TEXT and "projected" in SKILL_TEXT and "Lima time" in SKILL_TEXT
     assert not re.search(r"SHIP-\d+:[0-9a-f]", SKILL_TEXT), "no internal plan ids"

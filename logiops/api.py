@@ -8,6 +8,7 @@ import os
 import re
 import secrets
 from contextlib import asynccontextmanager
+from decimal import Decimal
 from pathlib import Path
 from typing import Any, AsyncIterator, Literal
 
@@ -21,9 +22,11 @@ from .agent import (
     investigate_with_bedrock, merged_facts,
 )
 from .bedrock import BedrockConverse, BedrockError
+from .booking import BookingStore, receipt_html
 from .evaluator import figures_in
 from .budget import FALLBACK, BudgetedConverse, DailyModelBudget
 from .service import APPROVER_MAX_LENGTH, LogiOpsService, WorkflowError
+from .identity import actor_of
 from .mcp_server import create_mcp_server
 from .preferences import COST_LIMIT, NOTE_LIMIT, RULES, PreferenceStore, preference_for, with_preference_figures
 from .presentation import customer_text, shown_run
@@ -79,6 +82,15 @@ class AgentBriefingRequest(BaseModel):
     question: str = Field(default="Any delays today? What needs my attention first?", min_length=1, max_length=1000)
 
 
+class QuoteRequest(BaseModel):
+    plan_id: str | None = Field(default=None, min_length=1, max_length=200)
+
+
+class BookingConfirmation(BaseModel):
+    confirmed_total_usd: Decimal = Field(ge=0, max_digits=12, decimal_places=2)
+    idempotency_key: str = Field(min_length=8, max_length=100, pattern=r"^[A-Za-z0-9_-]+$")
+
+
 class PreferenceUpdate(BaseModel):
     rule: Literal[tuple(RULES)] = "balanced"  # type: ignore[valid-type]
     max_cost_usd: int | None = Field(default=None, ge=0, le=COST_LIMIT)
@@ -120,9 +132,10 @@ def create_app(
         raise RuntimeError(str(exc)) from exc
     service = LogiOpsService(path, scenario_day=scenario_day)
     preferences = PreferenceStore(path)
+    bookings = BookingStore(path, service)
     budget = DailyModelBudget.from_env(path)
     bedrock = BedrockConverse()
-    mcp = create_mcp_server(service, preferences=preferences, public_host=public_host or None)
+    mcp = create_mcp_server(service, preferences=preferences, bookings=bookings, public_host=public_host or None)
 
     @asynccontextmanager
     async def lifespan(_app: FastAPI):
@@ -208,11 +221,13 @@ def create_app(
 
     @app.post("/demo/reset")
     async def reset(request: ResetRequest | None = None) -> dict[str, Any]:
-        """Restore every synthetic incident and forget the preferences, or reset only the incident named."""
+        """Restore every synthetic incident and forget the preferences and bookings, or reset only the incident named."""
         incident_id = request.incident_id if request else None
         if incident_id is None:
             preferences.clear()
-        return service.reset(incident_id)
+        snapshot = service.reset(incident_id)
+        bookings.clear(incident_id)
+        return snapshot
 
     def visible_plans(snapshot: dict[str, Any]) -> list[dict[str, Any]]:
         executions = snapshot["executions"]
@@ -259,6 +274,7 @@ def create_app(
         return {
             **snapshot, "operator_preferences": saved,
             "preference": preference_for(visible_plans(snapshot), saved),
+            "bookings": bookings.for_incident(incident_id),
         }
 
     @app.post("/incidents/{incident_id}/investigate")
@@ -345,7 +361,8 @@ def create_app(
         asked = " ".join([request.question, *(turn.text for turn in request.history if turn.role == "user")])
         recorded = ["approved"] * bool(context["current_approval"] or executions) + ["executed"] * bool(executions)
         facts = merged_facts(
-            with_preference_figures(known_figures(snapshot["state"]), saved), figures_in(asked), {"recorded_actions": recorded})
+            with_preference_figures(known_figures(snapshot["state"]), saved), figures_in(asked), {"recorded_actions": recorded},
+            bookings.figures(incident_id))
         async with agent_client(followup_client or bedrock_client, FOLLOWUP_TURNS) as (client, run_mode, fallback):
             try:
                 run = await ask_with_bedrock(
@@ -388,6 +405,30 @@ def create_app(
     @app.post("/incidents/{incident_id}/execute")
     async def execute(incident_id: str, request: ExecutionRequest) -> dict[str, Any]:
         return service.execute(incident_id, request.plan_id, request.source_version)
+
+    @app.post("/incidents/{incident_id}/bookings/quote")
+    async def quote_booking(incident_id: str, http_request: Request, request: QuoteRequest | None = None) -> dict[str, Any]:
+        """Price the paid carriers and services of a current plan (the approved one by default):
+        cost, service fee and IGV 18 %, valid for ten minutes. A quote charges nothing."""
+        return bookings.quote(incident_id, request.plan_id if request else None, actor_of(http_request))
+
+    @app.post("/quotes/{quote_id}/confirm")
+    async def confirm_booking(quote_id: str, http_request: Request, request: BookingConfirmation) -> dict[str, Any]:
+        """Book and pay a quote once. The confirmed total must equal the quoted total recalculated now,
+        the quote must be valid, and the plan approved; the same idempotency key returns the same booking."""
+        return bookings.confirm(quote_id, request.confirmed_total_usd, request.idempotency_key, actor_of(http_request))
+
+    @app.get("/bookings/{number}")
+    async def get_booking(number: str) -> dict[str, Any]:
+        return bookings.get(number)
+
+    @app.get("/bookings/{number}/receipt", response_class=HTMLResponse)
+    async def booking_receipt(number: str) -> HTMLResponse:
+        """A printable receipt."""
+        return HTMLResponse(receipt_html(bookings.get(number)), headers={
+            "Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; "
+                                       "form-action 'none'; frame-ancestors 'none'",
+        })
 
     app.mount("/", mcp.streamable_http_app())
     return app

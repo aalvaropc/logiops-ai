@@ -15,7 +15,7 @@ from logiops.mcp_server import normalized_incident
 from logiops.scenario import INCIDENT_IDS
 
 BASE_URL = "http://127.0.0.1:8000"
-READ_ONLY = {"list_incidents", "get_shipment", "get_order", "get_inventory", "find_alternative_carriers", "get_execution_status"}
+READ_ONLY = {"list_incidents", "get_shipment", "get_order", "get_inventory", "find_alternative_carriers", "get_execution_status", "get_booking"}
 
 
 def _session(tmp_path, work):
@@ -39,7 +39,7 @@ def test_every_tool_declares_title_annotations_described_inputs_and_an_output_sc
     assert initialized.serverInfo.name == "LogiOps AI" and initialized.serverInfo.version == __version__
     assert "human-only" in initialized.instructions and "projected" in initialized.instructions
     assert initialized.serverInfo.websiteUrl.startswith("https://") and initialized.serverInfo.icons[0].mimeType == "image/svg+xml"
-    assert len(tools) == 8
+    assert len(tools) == 11
     for tool in tools:
         assert tool.title and tool.annotations is not None, tool.name
         assert tool.outputSchema and tool.outputSchema["type"] == "object", tool.name
@@ -47,8 +47,11 @@ def test_every_tool_declares_title_annotations_described_inputs_and_an_output_sc
             assert schema.get("description") or any(item.get("description") for item in schema.get("anyOf", [])), (tool.name, name)
         assert tool.annotations.readOnlyHint is (tool.name in READ_ONLY), tool.name
         assert tool.annotations.openWorldHint is False and tool.annotations.idempotentHint is True, tool.name
-    execute = next(tool for tool in tools if tool.name == "execute_approved_plan")
-    assert execute.annotations.destructiveHint is True and execute.meta["ui"]["visibility"] == ["model"]
+    for name in ("execute_approved_plan", "book_carrier"):
+        paying = next(tool for tool in tools if tool.name == name)
+        assert paying.annotations.destructiveHint is True and paying.meta["ui"]["visibility"] == ["model"], name
+    quote = next(tool for tool in tools if tool.name == "quote_carrier_booking")
+    assert quote.annotations.destructiveHint is False
     investigate = next(tool for tool in tools if tool.name == "investigate_incident")
     assert investigate.annotations.destructiveHint is False and investigate.meta["ui"]["resourceUri"].startswith("ui://")
 
@@ -84,10 +87,17 @@ def test_structured_content_conforms_to_each_output_schema_on_every_incident(tmp
                                                         "source_version": plan["source_version"]})
         again = await call("execute_approved_plan", {"shipment_id": incident_id, "plan_id": plan["id"],
                                                      "source_version": plan["source_version"]})
+        express = (await call("investigate_incident", {"shipment_id": "SHIP-421"}))["plans"][2]
+        await http.post("/incidents/SHIP-421/approvals", json={
+            "plan_id": express["id"], "source_version": express["source_version"], "approved_by": "operator"})
+        quote = await call("quote_carrier_booking", {"shipment_id": "421"})
+        booking = await call("book_carrier", {"quote_id": quote["quote_id"], "confirmed_total_usd": quote["total_usd"],
+                                              "idempotency_key": "contract-test-1"})
+        await call("get_booking", {"number": booking["number"]})
         return checked, executed, again
 
     checked, executed, again = _session(tmp_path, work)
-    assert set(checked) == READ_ONLY | {"investigate_incident", "execute_approved_plan"}
+    assert set(checked) == READ_ONLY | {"investigate_incident", "execute_approved_plan", "quote_carrier_booking", "book_carrier"}
     assert executed == again and executed["delivery_status"] == "projected"
 
 

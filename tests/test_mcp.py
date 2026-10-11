@@ -192,7 +192,7 @@ def test_tools_serve_every_incident(tmp_path):
                     async with ClientSession(read, write) as session:
                         await session.initialize()
                         names = {tool.name for tool in (await session.list_tools()).tools}
-                        assert "list_incidents" in names and len(names) == 8
+                        assert "list_incidents" in names and len(names) == 11
                         inbox = (await session.call_tool("list_incidents", {})).structuredContent["incidents"]
                         assert [item["incident_id"] for item in inbox][:2] == ["SHIP-433", "SHIP-460"]
                         assert inbox[0]["critical_units_at_risk"] == 12

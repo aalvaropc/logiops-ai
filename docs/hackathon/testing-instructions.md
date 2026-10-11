@@ -27,12 +27,13 @@ LOGIOPS_AGENT_MODE=replay uv run uvicorn logiops.api:app --host 127.0.0.1 --port
 1. **MCP check.** `uv run python scripts/check_mcp.py http://127.0.0.1:8000/mcp`
    performs `initialize`, `tools/list`, `tools/call(get_shipment)` and
    `tools/call(list_incidents)`, and prints the negotiated protocol version
-   (2025-11-25). The server exposes eight tools: `list_incidents`, `get_shipment`,
-   `get_order`, `get_inventory`, `find_alternative_carriers`, `investigate_incident`,
-   `get_execution_status` and `execute_approved_plan`.
+   (2025-11-25). It also lists the prompts, resources and resource templates. The server
+   exposes eleven tools: `list_incidents`, `get_shipment`, `get_order`, `get_inventory`,
+   `find_alternative_carriers`, `investigate_incident`, `get_execution_status`,
+   `execute_approved_plan`, `quote_carrier_booking`, `book_carrier` and `get_booking`.
    There is no approval tool: approval is a REST call made by a person. Every tool
-   has a title, behaviour annotations (six are read-only; `execute_approved_plan` is
-   destructive and idempotent), described inputs that accept the way people say ids
+   has a title, behaviour annotations (seven are read-only; `execute_approved_plan` and
+   `book_carrier` are destructive and idempotent), described inputs that accept the way people say ids
    ("433", "ship 433") and a typed `outputSchema`; `initialize` returns server
    instructions describing the workflow and its human-approval rule.
 2. **Open `/demo` on `127.0.0.1` or `localhost`.** The MCP Apps card is rendered
@@ -94,6 +95,16 @@ LOGIOPS_AGENT_MODE=replay uv run uvicorn logiops.api:app --host 127.0.0.1 --port
    investigation offers only the plans that are still feasible.
 11. **Idempotence.** Repeat `POST /incidents/SHIP-421/execute` with the approved
    `plan_id` and `source_version`: the response is identical and nothing is duplicated.
+12. **Book and pay the carriers.** With a plan approved (for example SHIP-421's split +
+   express), run `POST /incidents/SHIP-421/bookings/quote`. The quote reads "carriers
+   and services $120.00, service fee $5.00, IGV 18% $22.50, total $147.50". Confirm it
+   with `POST /quotes/{quote_id}/confirm` and `{"confirmed_total_usd": 147.50,
+   "idempotency_key": "judge-1"}`:
+   - you get a confirmation number `LGO-…`, and `GET /bookings/{number}/receipt` is the
+     printable receipt;
+   - a different amount, an expired quote or a stock change in between answer 409
+     "Nothing was charged";
+   - the same key returns the same booking, and the payment is simulated.
 
 Or run the whole flow headless: `uv run python scripts/rehearse_api.py` prints PASS or
 FAIL for each step against a replay server it starts itself.
