@@ -261,3 +261,12 @@ def test_each_signed_in_user_keeps_their_own_preferences(tmp_path, monkeypatch):
     assert plans[capped["recommended_plan_id"]]["kind"] == "priority-air"
     assert {plan["id"]: plan for plan in default["plans"]}[default["recommended_plan_id"]]["kind"] == "priority-air-ground"
     assert incident["operator_preferences"]["max_cost_usd"] == 250
+
+
+def test_keys_are_fetched_on_a_freshly_booted_machine(monkeypatch):
+    import logiops.oauth as module
+
+    monkeypatch.setattr(module.time, "monotonic", lambda: 5.0)
+    jwks = Jwks()
+    actor, scopes = settings(fetch_jwks=jwks).verify(token())
+    assert actor.subject == "user-123" and OPERATE in scopes and jwks.calls == 1

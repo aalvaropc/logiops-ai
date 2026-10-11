@@ -62,7 +62,7 @@ class OAuthSettings:
     fetch_jwks: Callable[[], dict[str, Any]] | None = None
     transport: httpx.AsyncBaseTransport | None = None
     _keys: dict[str, Any] = field(default_factory=dict, repr=False)
-    _fetched_at: float = field(default=0.0, repr=False)
+    _fetched_at: float | None = field(default=None, repr=False)
     _lock: threading.Lock = field(default_factory=threading.Lock, repr=False)
 
     def __post_init__(self) -> None:
@@ -91,7 +91,7 @@ class OAuthSettings:
 
     def _key(self, kid: str) -> Any:
         with self._lock:
-            if kid not in self._keys and time.monotonic() - self._fetched_at > 60:
+            if kid not in self._keys and (self._fetched_at is None or time.monotonic() - self._fetched_at > 60):
                 self._fetched_at = time.monotonic()
                 self._keys = {item["kid"]: jwt.PyJWK(item).key for item in self._jwks().get("keys", []) if item.get("kid")}
             key = self._keys.get(kid)
