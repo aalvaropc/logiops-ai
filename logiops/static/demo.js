@@ -852,6 +852,7 @@ async function handleUtterance(raw) {
       state.briefingPick = run.start_with;
       renderInbox();
       say("assistant", run.answer, `briefing · ${traceSummary(run)}`, run.spoken, checkBadge(run));
+      device("trace", run);
       noteFallback(run);
       noteCheck(run);
     } catch (error) {
@@ -934,6 +935,7 @@ async function handleUtterance(raw) {
           : await request(incidentPath("/agent/ask"), "POST", { question: text, history });
       }, "");
       say("assistant", run.answer, `${fresh ? "investigation" : "follow-up"} · ${traceSummary(run)}`, run.spoken, checkBadge(run));
+      device("trace", run);
       noteFallback(run);
       noteCheck(run);
       if (fresh) {

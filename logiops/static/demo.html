@@ -26,10 +26,14 @@
         <div class="device-bar"><span class="device-brand">Alexa+ <span>simulated</span></span><span id="device-clock" class="device-clock">Lima</span></div>
         <div class="device-body">
           <div class="device-voice">
-            <div class="orb-row"><div id="device-orb" class="orb" data-state="ready" aria-hidden="true"><span></span></div><p id="device-state" class="orb-label" role="status" aria-live="polite">Ready</p></div>
+            <div class="orb-row"><div id="device-orb" class="orb" data-state="ready" aria-hidden="true"><span></span></div><p id="device-state" class="orb-label" role="status" aria-live="polite">Ready</p><span id="device-elapsed" class="device-elapsed" aria-hidden="true"></span></div>
             <p class="device-heard"><span class="device-label">You said</span> <span id="device-heard">Try “any delays today?”</span></p>
             <p class="device-spoken-wrap"><span class="device-label">Alexa+</span> <span id="device-spoken" class="device-spoken">Ask about the queue, an incident, or a plan.</span></p>
             <div id="device-chips" class="device-chips" aria-label="Incident on screen"></div>
+            <div id="device-trace" class="device-trace" hidden>
+              <p class="device-label"><span id="device-check" class="device-check"></span> <span id="device-trace-title">From the recorded tool trace</span></p>
+              <ol id="device-steps" class="device-steps" aria-label="Steps the agent took, from the recorded tool trace"></ol>
+            </div>
           </div>
           <figure class="device-map">
             <svg id="device-map" viewBox="0 0 240 300" role="img" aria-labelledby="device-map-title"><title id="device-map-title">Plan route on a map of Peru</title></svg>
