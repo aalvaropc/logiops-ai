@@ -51,7 +51,9 @@ LOGIOPS_AGENT_MODE=replay uv run uvicorn logiops.api:app --host 127.0.0.1 --port
    redraws the map and bars. The MCP App card highlights the same plan as the
    panel ("Agent pick"). "Light card" switches the card's theme through the MCP
    Apps host context, without reloading it.
-4. **Ask.** Type, or speak in Chrome or Edge: "What's happening with SHIP-421?". The
+4. **Ask.** Type, or speak in Chrome or Edge: "What's happening with SHIP-421?". With
+   "Read replies aloud" on, the deployed demo speaks with Amazon Polly (the local replay
+   uses the browser's voice), and typing or the microphone cuts it off. The
    agent calls the MCP tools and the reply lists three plans: wait ($0, 12 h late),
    reroute ($80, 3 h late), split + express ($120, on time). An **MCP App** card with
    the three plans appears under the reply. What you read and hear names plans by their

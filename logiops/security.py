@@ -70,6 +70,7 @@ def install_security(
 ) -> None:
     mcp_limiter = _SlidingWindow(limit_per_minute, 60)
     agent_limiter = _SlidingWindow(agent_limit_per_minute, 60)
+    speech_limiter = _SlidingWindow(agent_limit_per_minute * 3, 60)
 
     @app.middleware("http")
     async def guard(request: Request, call_next: Any) -> Any:
@@ -93,6 +94,8 @@ def install_security(
         key = client_key(request, trust_cloudfront=trust_cloudfront)
         if path.startswith("/mcp") and not internal and not mcp_limiter.allow(key):
             return JSONResponse(status_code=429, content={"detail": "MCP rate limit exceeded"})
+        if path == "/voice/speech" and not speech_limiter.allow(key):
+            return JSONResponse(status_code=429, content={"detail": "Speech rate limit exceeded", "fallback": "browser"})
         if "/agent/" in path and not agent_limiter.allow(key):
             return JSONResponse(
                 status_code=429,

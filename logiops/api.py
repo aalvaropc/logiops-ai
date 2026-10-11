@@ -35,6 +35,7 @@ from .presentation import customer_text, shown_run
 from .replay import ReplayConverse
 from .scenario import INCIDENT_ID, INCIDENT_IDS, known_figures, scenario_clock
 from .security import SANDBOX_PATH, install_security
+from .voice import PollyVoice
 
 logger = logging.getLogger(__name__)
 
@@ -84,6 +85,10 @@ class AgentBriefingRequest(BaseModel):
     question: str = Field(default="Any delays today? What needs my attention first?", min_length=1, max_length=1000)
 
 
+class SpeechRequest(BaseModel):
+    text: str = Field(min_length=1, max_length=4000)
+
+
 class QuoteRequest(BaseModel):
     plan_id: str | None = Field(default=None, min_length=1, max_length=200)
 
@@ -113,6 +118,7 @@ def create_app(
     access_token: str | None = None,
     mcp_limit_per_minute: int = 60,
     agent_limit_per_minute: int | None = None,
+    voice: PollyVoice | None = None,
 ) -> FastAPI:
     access_token = access_token or os.environ.get("LOGIOPS_ACCESS_TOKEN")
     public_host = os.environ.get("LOGIOPS_PUBLIC_HOST", "").strip().lower()
@@ -136,6 +142,7 @@ def create_app(
     preferences = PreferenceStore(path)
     bookings = BookingStore(path, service)
     alerts = AlertWatcher(path, service, preferences)
+    voice = voice or PollyVoice(path)
     budget = DailyModelBudget.from_env(path)
     bedrock = BedrockConverse()
     mcp = create_mcp_server(
@@ -280,6 +287,20 @@ def create_app(
         if alerts.check(change.incident_id):
             snapshot = service.get(change.incident_id)
         return snapshot
+
+    @app.get("/voice/config")
+    async def voice_config() -> dict[str, Any]:
+        """How the page should speak: Amazon Polly (with its voice) or the browser's own voice."""
+        return voice.config()
+
+    @app.post("/voice/speech")
+    async def speech(request: SpeechRequest) -> Response:
+        """MP3 of the reply read by Amazon Polly, cached per text and capped per day. A 503 with
+        fallback "browser" means the page reads it with the browser's voice instead."""
+        audio = await asyncio.to_thread(voice.speak, request.text)
+        if audio is None:
+            return JSONResponse(status_code=503, content={"detail": "Polly is not available; use the browser's voice", "fallback": "browser"})
+        return Response(audio, media_type="audio/mpeg")
 
     @app.get("/alerts")
     async def list_alerts() -> dict[str, Any]:
