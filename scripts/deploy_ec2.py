@@ -26,6 +26,7 @@ def package() -> tuple[Path, str]:
         ROOT / "uv.lock",
         *sorted((ROOT / "logiops").glob("*.py")),
         *sorted((ROOT / "logiops" / "static").glob("*")),
+        *sorted(path for path in (ROOT / "skills").rglob("*") if path.is_file()),
     ]
     if not all(path.is_file() for path in files):
         raise RuntimeError("The app, pyproject.toml, or uv.lock is missing")
@@ -49,7 +50,7 @@ def git(*args: str) -> str:
     return subprocess.run(["git", "-C", str(ROOT), *args], check=True, capture_output=True, text=True).stdout.strip()
 
 
-RELEASE_PATHS = ("pyproject.toml", "uv.lock", "logiops")
+RELEASE_PATHS = ("pyproject.toml", "uv.lock", "logiops", "skills")
 
 
 def release_dirty() -> bool:

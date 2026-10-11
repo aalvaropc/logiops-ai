@@ -85,10 +85,12 @@ class BudgetedConverse:
         self.reserved = reserved
         self.calls = 0
 
-    async def converse(self, messages: list[dict[str, Any]], system: str, tools: list[dict[str, Any]]) -> dict[str, Any]:
+    async def converse(
+        self, messages: list[dict[str, Any]], system: str, tools: list[dict[str, Any]], skill: str | None = None
+    ) -> dict[str, Any]:
         if self.calls >= self.reserved:
             raise BedrockError("The run used all the model calls reserved for it")
-        response = await self.client.converse(messages, system, tools)
+        response = await self.client.converse(messages, system, tools, skill=skill)
         self.calls += 1
         return response
 

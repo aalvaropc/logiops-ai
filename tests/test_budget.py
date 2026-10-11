@@ -42,7 +42,7 @@ def test_concurrent_runs_never_exceed_the_cap_together(tmp_path):
     budget = DailyModelBudget(tmp_path / "race.sqlite3", limit=20)
 
     class Answers:
-        async def converse(self, messages, system, tools):
+        async def converse(self, messages, system, tools, skill=None):
             await asyncio.sleep(0)
             return {"stopReason": "end_turn"}
 
@@ -69,7 +69,7 @@ def test_failed_calls_are_released_so_an_outage_never_looks_like_a_used_budget(t
     budget = DailyModelBudget(tmp_path / "outage.sqlite3", limit=8)
 
     class Down:
-        async def converse(self, messages, system, tools):
+        async def converse(self, messages, system, tools, skill=None):
             raise BedrockError("Bedrock Converse failed (AccessDeniedException)")
 
     for _ in range(5):
@@ -86,9 +86,9 @@ class FakeBedrock(ReplayConverse):
 
     calls = 0
 
-    async def converse(self, messages, system, tools):
+    async def converse(self, messages, system, tools, skill=None):
         FakeBedrock.calls += 1
-        return await super().converse(messages, system, tools)
+        return await super().converse(messages, system, tools, skill)
 
 
 def _session(tmp_path, monkeypatch, limit):

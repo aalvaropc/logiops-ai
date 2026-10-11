@@ -22,6 +22,7 @@ from .mcp_models import (
 from .preferences import PreferenceStore, preference_for
 from .scenario import INCIDENT_IDS
 from .service import LogiOpsService, WorkflowError
+from .skill import SKILL_MIME_TYPE, SKILL_NAME, SKILL_TEXT, SKILL_URI
 from .tools import inventory_hint, inventory_view, order_view, orders_hint, shipment_view
 
 
@@ -43,7 +44,7 @@ data -> recommend one plan, quoting its exact figures and calling it by its labe
 Rules: plans and their numbers are calculated by code; never estimate new ones. Approval is human-only and bound to one
 exact plan and data version; no tool approves. execute_approved_plan runs only an approved plan, is idempotent, and
 sends simulated notifications. Delivery is projected, not physically confirmed. Times are Lima time (UTC-05:00).
-All data is synthetic."""
+All data is synthetic. The Agent Skill at skill://logiops-exception-desk/SKILL.md is the full playbook."""
 
 OPEN_INCIDENTS = "Incidents: " + ", ".join(INCIDENT_IDS) + "."
 SHIPMENT_NUMBER = re.compile(r"^(?:ship(?:ment)?|case|incident)?[\s#_-]*(\d+)$", re.I)
@@ -195,5 +196,13 @@ def create_mcp_server(
     )
     def resolution_options() -> str:
         return UI_HTML
+
+    @server.resource(
+        SKILL_URI, name=SKILL_NAME, title="LogiOps exception desk (Agent Skill)",
+        description="Agent Skill for these tools: the workflow, the rules, how to speak, and what to do when a tool fails.",
+        mime_type=SKILL_MIME_TYPE,
+    )
+    def exception_desk_skill() -> str:
+        return SKILL_TEXT
 
     return server

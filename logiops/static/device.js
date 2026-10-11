@@ -210,6 +210,7 @@
       badge.hidden = !check;
     }
     const still = root.matchMedia && root.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (run?.skill?.name) list.append(el("li", "skill", `Agent Skill · ${run.skill.name}`));
     steps.forEach((step, index) => {
       const item = el("li", step.is_error ? "error" : "", stepLabel(step));
       if (still) list.append(item);

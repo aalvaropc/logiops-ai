@@ -28,7 +28,7 @@ class Scripted:
         self.answers = list(answers)
         self.calls = []
 
-    async def converse(self, messages, system, tools):
+    async def converse(self, messages, system, tools, skill=None):
         self.calls.append(messages[-1])
         return TOOLS if len(self.calls) == 1 else answer(self.answers.pop(0) if len(self.answers) > 1 else self.answers[0])
 
@@ -102,7 +102,7 @@ class Replies:
     def __init__(self, *answers, briefing=False):
         self.answers, self.briefing, self.calls = list(answers), briefing, []
 
-    async def converse(self, messages, system, tools):
+    async def converse(self, messages, system, tools, skill=None):
         self.calls.append(messages[-1])
         if self.briefing and len(self.calls) == 1:
             return {"stopReason": "tool_use", "usage": {}, "output": {"message": {"role": "assistant", "content": [
