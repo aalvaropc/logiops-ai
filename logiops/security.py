@@ -11,6 +11,7 @@ from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
 from .agent import INTERNAL_HEADER
+from .identity import OPERATOR
 
 
 SANDBOX_PATH = "/mcp-app/sandbox.html"
@@ -87,6 +88,7 @@ def install_security(
                     content={"detail": "Bearer token required"},
                     headers={"WWW-Authenticate": "Bearer"},
                 )
+        request.state.actor = OPERATOR
         internal = _constant_time_equal(request.headers.get(INTERNAL_HEADER, ""), internal_key)
         key = client_key(request, trust_cloudfront=trust_cloudfront)
         if path.startswith("/mcp") and not internal and not mcp_limiter.allow(key):

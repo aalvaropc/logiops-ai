@@ -35,6 +35,21 @@ recommend. A person approves.
    version. No tool approves. `execute_approved_plan` only runs a plan a person already
    approved, and repeating it never runs the plan twice.
 
+## Booking and paying
+
+When the person wants a plan's carriers booked:
+
+1. `quote_carrier_booking` prices the plan's paid carriers and services: their cost, a service
+   fee and IGV 18 %, held for ten minutes. It charges nothing.
+2. Read its summary back: the plan, each amount, the total and the card it goes to.
+3. Only after an explicit "yes", call `book_carrier` with the quote's exact total and a new
+   idempotency key. Retrying with the same key never pays twice.
+4. Give the confirmation number (LGO-…) and say the receipt is ready. Delivery is still
+   projected.
+
+A booking needs a plan a person approved. If the price changed, the quote expired or the data
+moved on, nothing is charged: ask for a new quote and read it back again.
+
 ## Rules
 
 - Call plans by their label ("Fly the hospital order; rebook the store order on ground").

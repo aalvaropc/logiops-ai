@@ -97,6 +97,19 @@ def walk(client: httpx.Client) -> None:
     post("/incidents/SHIP-433/approvals", approved_by="rehearsal", **body)
     done = post("/incidents/SHIP-433/execute", **body)
     check("executing it accounts for both orders (30 units)", done.status_code == 200 and done.json()["accounted_units"] == 30)
+    quoted = post("/incidents/SHIP-433/bookings/quote")
+    quote = quoted.json() if quoted.status_code == 200 else {}
+    check("booking its carriers is quoted with IGV: $390 + $5 fee + $71.10 = $466.10",
+          quote.get("total_usd") == 466.1 and "IGV 18% $71.10" in quote.get("summary", ""), quoted.text[:120])
+    wrong = post(f"/quotes/{quote.get('quote_id')}/confirm", confirmed_total_usd=400, idempotency_key="rehearsal-booking")
+    check("a different amount is refused and nothing is charged", wrong.status_code == 409, str(wrong.status_code))
+    paid = post(f"/quotes/{quote.get('quote_id')}/confirm", confirmed_total_usd=466.1, idempotency_key="rehearsal-booking")
+    retried = post(f"/quotes/{quote.get('quote_id')}/confirm", confirmed_total_usd=466.1, idempotency_key="rehearsal-booking")
+    number = paid.json().get("number", "") if paid.status_code == 200 else ""
+    check("paying the quoted total books it once, with a confirmation number",
+          number.startswith("LGO-") and retried.status_code == 200 and retried.json()["number"] == number, paid.text[:120])
+    receipt = client.get(f"/bookings/{number}/receipt")
+    check("the receipt shows the total charged", receipt.status_code == 200 and "$466.10" in receipt.text)
     untouched = client.get(f"/incidents/{INCIDENT}").json()
     check("SHIP-421 is untouched by another incident", [e["name"] for e in untouched["events"]] == ["scenario_reset"])
     post("/demo/reset")

@@ -21,8 +21,11 @@ from mcp.types import (
 from pydantic import Field
 
 from . import __version__
+from .booking import BookingStore, receipt_text
+from .identity import OPERATOR, Actor, actor_of
 from .mcp_models import (
-    CarrierQuote, Execution, ExecutionStatus, IncidentList, Investigation, Order, OrderId, Shipment, ShipmentId, Stock,
+    Booking, CarrierQuote, Execution, ExecutionStatus, IncidentList, Investigation, Order, OrderId, Quote, Shipment,
+    ShipmentId, Stock,
 )
 from .preferences import PreferenceStore, preference_for
 from .scenario import INCIDENT_IDS
@@ -48,7 +51,9 @@ get_inventory and find_alternative_carriers -> investigate_incident calculates e
 data -> recommend one plan, quoting its exact figures and calling it by its label.
 Rules: plans and their numbers are calculated by code; never estimate new ones. Approval is human-only and bound to one
 exact plan and data version; no tool approves. execute_approved_plan runs only an approved plan, is idempotent, and
-sends simulated notifications. Delivery is projected, not physically confirmed. Times are Lima time (UTC-05:00).
+sends simulated notifications. To book a plan's paid carriers: quote_carrier_booking, read its summary to the person,
+and call book_carrier with the exact total only after an explicit yes; payment is simulated and never charged twice.
+Delivery is projected, not physically confirmed. Times are Lima time (UTC-05:00).
 All data is synthetic. The Agent Skill at skill://logiops-exception-desk/SKILL.md is the full playbook."""
 
 OPEN_INCIDENTS = "Incidents: " + ", ".join(INCIDENT_IDS) + "."
@@ -64,8 +69,10 @@ def normalized_incident(shipment_id: str) -> str:
 
 
 def create_mcp_server(
-    service: LogiOpsService, *, preferences: PreferenceStore | None = None, public_host: str | None = None
+    service: LogiOpsService, *, preferences: PreferenceStore | None = None, bookings: BookingStore | None = None,
+    public_host: str | None = None,
 ) -> FastMCP:
+    bookings = bookings or BookingStore(service.db_path, service)
     allowed_hosts = ["127.0.0.1:*", "localhost:*", "[::1]:*"]
     allowed_origins = ["http://127.0.0.1:*", "http://localhost:*", "http://[::1]:*"]
     if public_host:
@@ -113,6 +120,20 @@ def create_mcp_server(
                      if item["id"] == plan_id and item["source_version"] == source_version), None)
         approved = any(item["plan_id"] == plan_id and item["is_current"] for item in snapshot["approvals"])
         return None if approved else plan
+
+    def actor(ctx: Context) -> Actor:
+        try:
+            return actor_of(ctx.request_context.request)
+        except (AttributeError, ValueError):
+            return OPERATOR
+
+    def approval_elicitation(ctx: Context, incident: str, plan: dict[str, Any], version: int, action: str, tail: str) -> UrlElicitationRequiredError:
+        url = panel_url(ctx, incident)
+        text = (f"A person must approve “{plan['label']}” for {incident} in the LogiOps operator panel before it can "
+                f"{action}. Open {url}, approve the plan there, then ask again. {tail}")
+        return UrlElicitationRequiredError([ElicitRequestURLParams(
+            mode="url", message=text, url=url, elicitationId=f"approve-{incident}-v{version}",
+        )], message=text)
 
     def skill_message() -> UserMessage:
         return UserMessage(EmbeddedResource(type="resource", resource=TextResourceContents(
@@ -221,12 +242,61 @@ def create_mcp_server(
             plan = awaiting_approval(incident, plan_id, source_version) if incident in INCIDENT_IDS else None
             if plan is None:
                 raise fail(exc, "a person approves the exact plan and version in the operator panel; no tool can approve") from exc
-            url = panel_url(ctx, incident)
-            text = (f"A person must approve “{plan['label']}” for {incident} in the LogiOps operator panel before it can "
-                    f"run. Open {url}, approve the plan there, then ask again. No tool can approve.")
-            raise UrlElicitationRequiredError([ElicitRequestURLParams(
-                mode="url", message=text, url=url, elicitationId=f"approve-{incident}-v{source_version}",
-            )], message=text) from exc
+            raise approval_elicitation(ctx, incident, plan, source_version, "run", "No tool can approve.") from exc
+
+    @server.tool(
+        title="Quote a carrier booking",
+        annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, idempotentHint=True, openWorldHint=False),
+    )
+    async def quote_carrier_booking(
+        shipment_id: ShipmentId,
+        ctx: Context,
+        plan_id: Annotated[str | None, Field(
+            description="Exact plan id from investigate_incident. Default: the plan a person approved.")] = None,
+    ) -> Quote:
+        """Price booking a plan's paid carriers and services: their cost, a service fee and IGV 18%, held for ten
+        minutes. It charges nothing. Read the summary back to the person and get an explicit yes before book_carrier."""
+        try:
+            return bookings.quote(normalized_incident(shipment_id), plan_id, actor(ctx))
+        except WorkflowError as exc:
+            raise fail(exc, "investigate the incident and price one of its current plans") from exc
+
+    @server.tool(
+        title="Book and pay a carrier quote",
+        annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=True, idempotentHint=True, openWorldHint=False),
+        meta={"ui": {"visibility": ["model"]}},
+    )
+    async def book_carrier(
+        quote_id: Annotated[str, Field(description="quote_id from quote_carrier_booking.", min_length=3, max_length=40)],
+        confirmed_total_usd: Annotated[float, Field(
+            description="The total the person confirmed; it must equal the quote's total_usd.", ge=0)],
+        idempotency_key: Annotated[str, Field(
+            description="A key you choose for this purchase (8-100 letters, digits, - or _). The same key never pays twice.",
+            min_length=8, max_length=100, pattern=r"^[A-Za-z0-9_-]+$")],
+        ctx: Context,
+    ) -> Booking:
+        """Book and pay a quote, only after the person heard its price breakdown and said yes. It charges the quoted
+        total once (simulated payment) and returns the confirmation number and receipt. A person must have approved
+        the plan; otherwise the error is a URL elicitation (-32042) that opens the operator panel."""
+        try:
+            return bookings.confirm(quote_id, confirmed_total_usd, idempotency_key, actor(ctx))
+        except WorkflowError as exc:
+            quote = bookings.quote_of(quote_id)
+            plan = awaiting_approval(quote["incident_id"], quote["plan_id"], quote["source_version"]) if quote else None
+            if plan is not None and "approve" in str(exc):
+                raise approval_elicitation(ctx, quote["incident_id"], plan, quote["source_version"], "be booked",
+                                           "Nothing was charged.") from exc
+            raise fail(exc, "ask for a new quote with quote_carrier_booking, read it back, and confirm its exact total") from exc
+
+    @server.tool(title="Get booking", annotations=READ)
+    async def get_booking(
+        number: Annotated[str, Field(description="Confirmation number, such as LGO-7K2M9Q.", min_length=3, max_length=20)],
+    ) -> Booking:
+        """Read a booking and its receipt by confirmation number."""
+        try:
+            return bookings.get(number)
+        except WorkflowError as exc:
+            raise fail(exc, "use the confirmation number book_carrier returned") from exc
 
     @server.resource(
         UI_URI, name="resolution_options", title="Resolution options",
@@ -263,6 +333,17 @@ def create_mcp_server(
             "approval": next((item for item in snapshot["approvals"] if item["is_current"]), None),
             "executions": snapshot["executions"],
         }, indent=2)
+
+    @server.resource(
+        "receipt://logiops/{number}", name="receipt", title="Booking receipt",
+        description="A booking's receipt as Markdown: the price breakdown, payment and confirmation number.",
+        mime_type="text/markdown",
+    )
+    def booking_receipt(number: str) -> str:
+        try:
+            return receipt_text(bookings.get(number))
+        except WorkflowError as exc:
+            raise ValueError(str(exc)) from exc
 
     @server.prompt(
         name="morning_briefing", title="Morning briefing",
