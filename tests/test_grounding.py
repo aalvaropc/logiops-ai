@@ -39,7 +39,7 @@ def test_the_grounding_check_follows_the_shared_cases(case):
 @pytest.mark.parametrize("case", CASES["facts"], ids=lambda case: case["name"])
 def test_the_facts_check_follows_the_shared_cases(case):
     state, plans, answer, _expected = fill(case)
-    result = check_facts(answer, plans, known_figures(state))
+    result = check_facts(answer, plans, {**known_figures(state), "recorded_actions": case.get("recorded_actions", [])})
     assert result["passed"] is case["passed"], result["issues"]
     if "issue" in case:
         assert case["issue"] in " ".join(result["issues"])
