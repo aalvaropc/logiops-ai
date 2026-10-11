@@ -268,3 +268,6 @@ main > .operator-label + .hero { padding-top: 26px; }
 .device-receipt strong { display: block; color: #9ff0dc; font-size: 13px; letter-spacing: .02em; }
 .device-receipt p { margin: 4px 0 0; color: #cfe8ef; font-size: 12px; }
 .device-receipt .receipt-total { color: #fff; font-size: 18px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.alerts-bell { white-space: nowrap; padding: 5px 12px; border: 1px solid #b8862f; border-radius: 99px; background: #2a2217; color: #f0d9a6; font-size: 12px; font-weight: 800; }
+.alerts-bell[hidden] { display: none; }
+.alerts-bell:hover { background: #3a2f1d; }

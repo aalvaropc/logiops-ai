@@ -37,7 +37,7 @@ the replay command in `docs/hackathon/testing-instructions.md`) runs the whole d
  +--------------------------------------------------------------+
  |  FastAPI app: bearer token, rate limits, no-store            |
  |  +-----------------------+   +----------------------------+  |
- |  | MCP server (11 tools, |   | Workflow core + SQLite     |  |
+ |  | MCP server (12 tools, |   | Workflow core + SQLite     |  |
  |  | no approval tool,     |-->| versioned plans, approvals |  |
  |  | Agent Skill resource) |   | bound to plan + version,   |  |
  |  +-----------------------+   | idempotent execution,      |  |
@@ -368,6 +368,34 @@ receipt shows in the execute panel and on the device screen. Other commands:
   cannot pay twice;
 - the pending quote survives a reload in `sessionStorage`, and "resume" reads
   it back again.
+
+### Proactive alerts
+
+The agent does not wait to be asked when the data moves under a decision
+(`logiops/alerts.py`). An incident qualifies when it was investigated, its
+data changed afterwards (for example a stock change), and it was not executed.
+The watcher then does four things:
+1. recalculates the plans, which is deterministic and costs nothing;
+2. applies the saved preferences;
+3. compares the new pick with the plan that was approved, or picked, before;
+4. stores one alert per data version and records an `autopilot_decision`
+   event.
+
+It never approves or books: the alert proposes, and a person decides. For
+example: "Heads up on SHIP-421: Arequipa stock is now 3 units, so your
+approved plan “Fulfill local stock and send the rest express” no longer
+applies. I recalculated the plans. The new pick is “Move the full order to an
+alternative carrier”: $80, 3 h late. Nothing was approved." If no plan works
+any more, the alert says so.
+
+It scans right after `POST /demo/inventory`, and in the background every
+`LOGIOPS_ALERT_SCAN_SECONDS` (30 by default; 0 turns it off). The endpoints
+are `GET /alerts` and `POST /alerts/{id}/dismiss`, and MCP clients read the
+alerts with `list_alerts`. The demo checks every five seconds:
+- an alert for the open incident is spoken and written in the conversation,
+  with the new pick preselected for approval;
+- an alert for another incident lights up a bell in the top bar that opens
+  it.
 
 ### Agent Skill
 

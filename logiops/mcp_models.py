@@ -220,3 +220,30 @@ class Booking(Output):
     receipt_url: str
     confirmation: str = Field(description="The written confirmation to show or read to the person.")
     simulated: bool
+
+
+class AlertPlan(Output):
+    plan_id: str
+    label: str
+
+
+class Alert(Output):
+    """A proposal after the data changed; new_plan is null when no plan works any more."""
+
+    id: str
+    incident_id: str
+    source_version: int
+    kind: str
+    change: str = Field(description="What changed, such as Arequipa stock is now 3 units.")
+    approval_invalidated: bool = Field(description="Whether a person's approval stopped applying.")
+    previous_plan: AlertPlan
+    new_plan: dict | None = Field(description="The recalculated pick (label, cost, delay), or null.")
+    message: str = Field(description="What to tell the person; it names plans by label and approves nothing.")
+    spoken: str
+    created_at: str
+
+
+class AlertList(Output):
+    """Open alerts, newest first."""
+
+    alerts: list[Alert]

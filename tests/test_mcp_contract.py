@@ -15,7 +15,7 @@ from logiops.mcp_server import normalized_incident
 from logiops.scenario import INCIDENT_IDS
 
 BASE_URL = "http://127.0.0.1:8000"
-READ_ONLY = {"list_incidents", "get_shipment", "get_order", "get_inventory", "find_alternative_carriers", "get_execution_status", "get_booking"}
+READ_ONLY = {"list_incidents", "get_shipment", "get_order", "get_inventory", "find_alternative_carriers", "get_execution_status", "get_booking", "list_alerts"}
 
 
 def _session(tmp_path, work):
@@ -39,7 +39,7 @@ def test_every_tool_declares_title_annotations_described_inputs_and_an_output_sc
     assert initialized.serverInfo.name == "LogiOps AI" and initialized.serverInfo.version == __version__
     assert "human-only" in initialized.instructions and "projected" in initialized.instructions
     assert initialized.serverInfo.websiteUrl.startswith("https://") and initialized.serverInfo.icons[0].mimeType == "image/svg+xml"
-    assert len(tools) == 11
+    assert len(tools) == 12
     for tool in tools:
         assert tool.title and tool.annotations is not None, tool.name
         assert tool.outputSchema and tool.outputSchema["type"] == "object", tool.name
@@ -69,6 +69,7 @@ def test_structured_content_conforms_to_each_output_schema_on_every_incident(tmp
             return result.structuredContent
 
         await call("list_incidents", {})
+        await call("list_alerts", {})
         for incident_id in INCIDENT_IDS:
             shipment = await call("get_shipment", {"shipment_id": incident_id})
             for order_id in shipment["order_ids"]:

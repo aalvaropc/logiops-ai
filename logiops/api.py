@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import html
 import logging
 import os
@@ -17,6 +18,7 @@ from fastapi.responses import HTMLResponse, JSONResponse, Response
 from pydantic import BaseModel, Field
 
 from . import __version__
+from .alerts import AlertWatcher
 from .agent import (
     BRIEFING_TURNS, FOLLOWUP_TURNS, INVESTIGATE_TURNS, ConverseClient, ask_with_bedrock, brief_with_bedrock,
     investigate_with_bedrock, merged_facts,
@@ -133,14 +135,30 @@ def create_app(
     service = LogiOpsService(path, scenario_day=scenario_day)
     preferences = PreferenceStore(path)
     bookings = BookingStore(path, service)
+    alerts = AlertWatcher(path, service, preferences)
     budget = DailyModelBudget.from_env(path)
     bedrock = BedrockConverse()
-    mcp = create_mcp_server(service, preferences=preferences, bookings=bookings, public_host=public_host or None)
+    mcp = create_mcp_server(
+        service, preferences=preferences, bookings=bookings, alerts=alerts, public_host=public_host or None)
+    scan_seconds = float(os.environ.get("LOGIOPS_ALERT_SCAN_SECONDS", "30"))
+
+    async def watch() -> None:
+        while True:
+            await asyncio.sleep(scan_seconds)
+            try:
+                await asyncio.to_thread(alerts.scan)
+            except Exception:
+                logger.exception("The alert scan failed")
 
     @asynccontextmanager
     async def lifespan(_app: FastAPI):
-        async with mcp.session_manager.run():
-            yield
+        watcher = asyncio.create_task(watch()) if scan_seconds > 0 else None
+        try:
+            async with mcp.session_manager.run():
+                yield
+        finally:
+            if watcher:
+                watcher.cancel()
 
     app = FastAPI(title="LogiOps AI", version=__version__, lifespan=lifespan)
     internal_key = secrets.token_hex(32)
@@ -227,6 +245,7 @@ def create_app(
             preferences.clear()
         snapshot = service.reset(incident_id)
         bookings.clear(incident_id)
+        alerts.clear(incident_id)
         return snapshot
 
     def visible_plans(snapshot: dict[str, Any]) -> list[dict[str, Any]]:
@@ -255,8 +274,21 @@ def create_app(
 
     @app.post("/demo/inventory")
     async def change_inventory(change: InventoryChange) -> dict[str, Any]:
-        """Inject a stock change at an incident's warehouse to demonstrate stale-plan protection."""
-        return service.set_local_inventory(change.incident_id, change.available)
+        """Inject a stock change at an incident's warehouse to demonstrate stale-plan protection; an
+        incident that was already investigated is re-planned at once and gets an alert."""
+        snapshot = service.set_local_inventory(change.incident_id, change.available)
+        if alerts.check(change.incident_id):
+            snapshot = service.get(change.incident_id)
+        return snapshot
+
+    @app.get("/alerts")
+    async def list_alerts() -> dict[str, Any]:
+        """Open proactive alerts, newest first: what changed, the plan it affects and the new pick. They never approve."""
+        return {"alerts": alerts.open_alerts()}
+
+    @app.post("/alerts/{alert_id}/dismiss")
+    async def dismiss_alert(alert_id: str) -> dict[str, Any]:
+        return alerts.dismiss(alert_id)
 
     @app.get("/incidents")
     async def list_incidents() -> dict[str, Any]:

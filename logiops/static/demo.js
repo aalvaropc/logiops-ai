@@ -6,7 +6,7 @@ const hashIncident = () => decodeURIComponent(location.hash.slice(1)).trim().toU
 const state = {
   token: "", snapshot: null, selectedPlanId: null, busy: false, conversation: [], speaking: false, app: null,
   awaitingExecute: false, pendingApproval: null, incidentId: hashIncident(), inbox: [], conversations: {}, selections: {}, stockFor: null,
-  briefingPick: null, prefsShown: undefined, cardTheme: "dark", pendingPurchase: null,
+  briefingPick: null, prefsShown: undefined, cardTheme: "dark", pendingPurchase: null, alerts: [],
 };
 const CAPABILITIES_TEXT = "I'm LogiOps, your operations desk for late or held shipments. I can:\n"
   + "- brief your queue: say “any delays today?”;\n"
@@ -827,6 +827,7 @@ async function selectIncident(id) {
   history.replaceState(null, "", `#${encodeURIComponent(id)}`);
   hideMcpApp("incident changed");
   await act(refresh, "");
+  renderAlertBell();
 }
 
 async function act(work, success) {
@@ -959,6 +960,42 @@ async function openReceipt(number) {
   const url = URL.createObjectURL(new Blob([await response.text()], { type: "text/html" }));
   window.open(url, "_blank");
   setTimeout(() => URL.revokeObjectURL(url), 60000);
+}
+
+function renderAlertBell() {
+  const elsewhere = state.alerts.filter((alert) => alert.incident_id !== state.incidentId);
+  const bell = $("alerts-bell");
+  bell.hidden = !elsewhere.length;
+  bell.textContent = `${elsewhere.length} alert${elsewhere.length === 1 ? "" : "s"} · ${elsewhere[0]?.incident_id || ""}`;
+  bell.setAttribute("aria-label", `${elsewhere.length} proactive alert${elsewhere.length === 1 ? "" : "s"}; open ${elsewhere[0]?.incident_id || ""}`);
+}
+
+async function announceAlert(alert) {
+  try {
+    await request(`/alerts/${encodeURIComponent(alert.id)}/dismiss`, "POST");
+  } catch (_) {
+    return;
+  }
+  state.alerts = state.alerts.filter((item) => item.id !== alert.id);
+  renderAlertBell();
+  state.pendingApproval = null;
+  state.awaitingExecute = false;
+  if (state.pendingPurchase?.incidentId === alert.incident_id || storedPurchase()?.incidentId === alert.incident_id) forgetPurchase();
+  state.selectedPlanId = alert.new_plan?.plan_id || null;
+  await refresh().catch(() => {});
+  say("assistant", alert.message, "proactive alert · nothing approved", alert.spoken);
+}
+
+async function checkAlerts() {
+  if (!state.snapshot || state.busy || document.hidden) return;
+  try {
+    state.alerts = (await request("/alerts")).alerts;
+  } catch (_) {
+    return;
+  }
+  renderAlertBell();
+  const here = state.alerts.find((alert) => alert.incident_id === state.incidentId);
+  if (here && !state.busy) await announceAlert(here);
 }
 
 async function startPurchase(lower) {
@@ -1317,7 +1354,13 @@ $("set-stock").addEventListener("click", () => act(async () => {
   if (!raw || !Number.isInteger(available) || available < 0) throw new Error("Enter a whole number of units.");
   await request("/demo/inventory", "POST", { incident_id: state.incidentId, available });
   state.selectedPlanId = null;
-}, "Stock changed. Earlier plans and approvals no longer apply; ask the agent again.").catch(() => {}));
+}, "Stock changed. Earlier plans and approvals no longer apply.").then(checkAlerts).catch(() => {}));
+$("alerts-bell").addEventListener("click", async () => {
+  const alert = state.alerts.find((item) => item.incident_id !== state.incidentId);
+  if (!alert || state.busy) return;
+  await selectIncident(alert.incident_id).catch(() => {});
+  if (state.incidentId === alert.incident_id) await announceAlert(alert);
+});
 $("ask-form").addEventListener("submit", (event) => {
   event.preventDefault();
   const input = $("ask-input");
@@ -1338,7 +1381,9 @@ device("mount");
 setUpVoice();
 renderConversation();
 state.token = storedToken();
+setInterval(() => { checkAlerts().catch(() => {}); }, 5000);
 act(refresh, "").then(() => {
+  checkAlerts().catch(() => {});
   const parked = storedPurchase();
   if (parked) {
     say("assistant", `A booking is waiting for “${parked.quote.plan_label}” on ${parked.incidentId} (${dollars(parked.quote.total_usd)}). `
