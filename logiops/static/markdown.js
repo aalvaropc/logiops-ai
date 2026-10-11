@@ -1,7 +1,4 @@
 "use strict";
-// A small, safe Markdown subset for the model's replies: headings, rules, quotes, lists,
-// tables, **bold**, *italic* and `code`. It only parses; demo.js builds DOM nodes from the
-// result with textContent, so nothing the model writes is ever treated as HTML.
 (function (root) {
   const INLINE = /(\*\*[^*]+\*\*|`[^`]+`|\*[^*\s][^*]*\*)/;
 
@@ -63,7 +60,6 @@
     return blocks;
   }
 
-  // What a screen reader or the speech synthesis should say: the words without the markup.
   function plainText(source) {
     const flat = (inline) => inline.map((part) => part.v).join("");
     return parseBlocks(source).map((block) => {

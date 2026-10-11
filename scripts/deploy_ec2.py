@@ -49,7 +49,6 @@ def git(*args: str) -> str:
     return subprocess.run(["git", "-C", str(ROOT), *args], check=True, capture_output=True, text=True).stdout.strip()
 
 
-# Everything package() reads. An untracked file here would ship without being in any commit.
 RELEASE_PATHS = ("pyproject.toml", "uv.lock", "logiops")
 
 

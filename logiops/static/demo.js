@@ -2,7 +2,6 @@
 
 const $ = (id) => document.getElementById(id);
 const DEFAULT_INCIDENT = "SHIP-421";
-// Deep links: /demo#SHIP-433 opens that incident.
 const hashIncident = () => decodeURIComponent(location.hash.slice(1)).trim().toUpperCase() || DEFAULT_INCIDENT;
 const state = {
   token: "", snapshot: null, selectedPlanId: null, busy: false, conversation: [], speaking: false, app: null,
@@ -10,17 +9,13 @@ const state = {
   briefingPick: null, prefsShown: undefined,
 };
 const incidentPath = (suffix = "") => `/incidents/${encodeURIComponent(state.incidentId)}${suffix}`;
-// MCP Apps host (protocol 2026-01-26). As the spec requires for web hosts, the view runs
-// behind a sandbox proxy served from a different origin (127.0.0.1 <-> localhost locally,
-// a second hostname in public mode). The view has no network and never sees the token;
-// it can only ask the host to select a plan.
 const MCP_APP = { uri: "ui://logiops/resolution-options.html", mime: "text/html;profile=mcp-app", protocol: "2026-01-26", proxyPath: "/mcp-app/sandbox.html" };
 const SANDBOX_ORIGIN = (() => {
   const value = document.querySelector('meta[name="logiops-sandbox-origin"]')?.content || "";
   try {
     const url = new URL(value);
     return /^https?:$/.test(url.protocol) && url.origin !== location.origin ? url.origin : null;
-  } catch (_) { return null; }  // no separate origin configured: fail closed, no MCP App
+  } catch (_) { return null; }
 })();
 const app = { generation: 0, resource: null, nextId: 1 };
 const eventLabels = {
@@ -34,7 +29,6 @@ const eventLabels = {
   inventory_changed: "Local inventory changed",
   schema_migrated: "Data rebuilt for a new version",
 };
-// The plan kinds a phrase can name, most specific first; the first one on screen wins.
 const planKeywords = [
   [["express-transfer"], /\btransfer\b/],
   [["priority-air-ground"], /\b(air|fly|flight)\b.*\bground\b|\bground\b.*\b(air|fly|flight)\b/],
@@ -54,7 +48,6 @@ function message(text, success = false) {
   const box = $("message");
   box.textContent = text;
   box.className = text ? `message visible${success ? " success" : ""}` : "message";
-  // Problems interrupt the screen reader; confirmations wait politely.
   box.setAttribute("role", success || !text ? "status" : "alert");
   box.setAttribute("aria-live", success || !text ? "polite" : "assertive");
 }
@@ -64,7 +57,6 @@ function setBusy(busy) {
   renderControls();
 }
 
-// Say what to do next, not just what the server said.
 function explainError(status, detail) {
   if (status === 401) {
     return state.token
@@ -83,7 +75,7 @@ function storedToken() {
   try { return sessionStorage.getItem(TOKEN_KEY) || ""; } catch (_) { return ""; }
 }
 function storeToken(token) {
-  try { if (token) sessionStorage.setItem(TOKEN_KEY, token); else sessionStorage.removeItem(TOKEN_KEY); } catch (_) { /* Storage blocked: the token lasts until reload. */ }
+  try { if (token) sessionStorage.setItem(TOKEN_KEY, token); else sessionStorage.removeItem(TOKEN_KEY); } catch (_) { }
 }
 
 async function request(path, method = "GET", body) {
@@ -98,7 +90,7 @@ async function request(path, method = "GET", body) {
   });
   if (!response.ok) {
     let detail = `HTTP ${response.status}`;
-    try { detail = (await response.json()).detail || detail; } catch (_) { /* HTTP error without JSON. */ }
+    try { detail = (await response.json()).detail || detail; } catch (_) { }
     const error = new Error(explainError(response.status, detail));
     error.status = response.status;
     throw error;
@@ -120,7 +112,6 @@ async function mcpRequest(method, params) {
 }
 
 function loadAppResource() {
-  // The view is static: read it once per page, not on every investigation (MCP budget).
   app.resource ??= (async () => {
     const listed = await mcpRequest("tools/list", {});
     const tool = listed.tools.find((item) => item.name === "investigate_incident");
@@ -146,7 +137,6 @@ async function showMcpApp(run) {
   }
   const generation = ++app.generation;
   const resource = await loadAppResource();
-  // A reset, stock change or newer investigation may have happened while loading.
   if (!resource || generation !== app.generation || !state.snapshot
       || String(step.input?.shipment_id || "").trim().toUpperCase() !== state.incidentId
       || step.output.source_version !== visibleVersion(state.snapshot)) return;
@@ -163,7 +153,6 @@ async function showMcpApp(run) {
   const frame = document.createElement("iframe");
   frame.id = "mcp-app-frame";
   frame.title = "Resolution options (MCP App)";
-  // The proxy needs both tokens (spec); its different origin is what isolates it from this page.
   frame.setAttribute("sandbox", "allow-scripts allow-same-origin");
   frame.setAttribute("referrerpolicy", "no-referrer");
   frame.src = `${SANDBOX_ORIGIN}${MCP_APP.proxyPath}?host=${encodeURIComponent(location.origin)}`;
@@ -172,12 +161,11 @@ async function showMcpApp(run) {
   $("mcp-app").hidden = false;
 }
 
-// The spec requires ui/resource-teardown before the view goes away; wait briefly for its answer.
 function teardownMcpApp(reason, { invalidate = true } = {}) {
   const current = state.app;
   const frame = $("mcp-app-frame");
   state.app = null;
-  if (invalidate) app.generation += 1;  // also cancels a view that is still loading
+  if (invalidate) app.generation += 1;
   $("mcp-app").hidden = true;
   if (!frame) return Promise.resolve();
   return new Promise((resolve) => {
@@ -204,7 +192,6 @@ function hideMcpApp(reason = "hidden") {
   teardownMcpApp(reason);
 }
 
-// When the card cannot be shown, say so (and why) instead of failing silently.
 function showMcpAppNote(text) {
   const frame = $("mcp-app-frame");
   if (frame) frame.remove();
@@ -215,12 +202,9 @@ function showMcpAppNote(text) {
   $("mcp-app").hidden = false;
 }
 
-// Selection from the view is resolved against the host's own snapshot; labels, prices or
-// versions sent by the iframe are never trusted, and nothing here can approve a plan.
 function selectFromApp(params) {
   const text = params?.content?.type === "text" ? String(params.content.text) : "";
   const match = text.match(/^Select plan (\S+)$/);
-  // Never change the selection under the operator while an action is running.
   if (!match || !state.snapshot || state.busy) return false;
   const plan = visiblePlans(state.snapshot).find((item) => item.id === match[1]);
   if (!plan || visibleApproval(state.snapshot) || state.snapshot.executions.length) return false;
@@ -284,7 +268,6 @@ function latestAgentEvent(snapshot) {
     event.name === "agent_investigation_completed" && event.data.source_version === visibleVersion(snapshot));
 }
 
-// Critical orders first, then the worst delay, late units and cost (the server's default pick).
 function rankKey(plan) {
   const critical = (plan.orders || []).filter((order) => order.priority === "critical").map((order) => order.delay_hours);
   return [Math.max(0, ...critical), plan.projected_customer_delay_hours, plan.late_units || 0, plan.incremental_cost_usd];
@@ -294,8 +277,6 @@ function byRank(a, b) {
   return left.reduce((found, value, index) => found || value - right[index], 0);
 }
 
-// The plan the agent recommended: an exact plan ID in its answer, then a label,
-// then the default ranking as a deterministic fallback.
 function recommendedPlan(snapshot) {
   const plans = visiblePlans(snapshot);
   if (!plans.length) return null;
@@ -306,7 +287,6 @@ function recommendedPlan(snapshot) {
     || [...plans].sort(byRank)[0];
 }
 
-// Units per source across orders: "30 via delayed shipment", not one entry per order.
 function allocationSummary(plan) {
   const units = new Map();
   for (const item of plan.allocations) units.set(item.source, (units.get(item.source) || 0) + item.units);
@@ -365,7 +345,6 @@ function renderPlans(snapshot) {
     allocation.textContent = allocationSummary(plan);
     description.append(title, allocation);
     if ((plan.orders || []).length > 1) {
-      // With two orders, say who is late and by how much.
       const lines = document.createElement("div");
       lines.className = "order-lines";
       for (const order of plan.orders) {
@@ -403,7 +382,6 @@ function describePreferences(prefs) {
   return parts.join(" · ");
 }
 
-// What the saved preferences point to, next to the agent's pick. Fixed rules, never an approval.
 function renderPreferenceLine(snapshot) {
   const line = $("preference-line");
   const preference = snapshot.preference;
@@ -418,7 +396,6 @@ function renderPreferenceLine(snapshot) {
 function renderPreferences(snapshot) {
   const prefs = snapshot.operator_preferences;
   $("pref-saved").textContent = prefs ? `Saved ${formatDate(prefs.updated_at)}` : "None saved";
-  // Refill the form only when the saved values change, never while someone is typing.
   const shown = prefs?.updated_at || null;
   if (state.prefsShown === shown) return;
   state.prefsShown = shown;
@@ -459,7 +436,6 @@ function renderTimeline(events) {
   $("event-count").textContent = `${events.length} event${events.length === 1 ? "" : "s"}`;
 }
 
-// Build the model's Markdown as DOM nodes; text always goes through textContent.
 function inlineNodes(parts) {
   return parts.map((part) => {
     if (part.t === "text") return document.createTextNode(part.v);
@@ -473,7 +449,6 @@ function renderMarkdown(source) {
   const box = document.createElement("div");
   box.className = "markdown";
   const blocks = window.LogiOpsMarkdown.parseBlocks(source);
-  // Answers sit under the panel's h2: their headings start at h3 and never skip a level.
   const top = Math.min(...blocks.filter((block) => block.type === "h").map((block) => block.level));
   let previous = 2;
   for (const block of blocks) {
@@ -490,7 +465,6 @@ function renderMarkdown(source) {
       node = document.createElement(block.type);
       for (const item of block.items) { const li = document.createElement("li"); li.append(...inlineNodes(item)); node.append(li); }
     } else if (block.type === "table") {
-      // Wide tables scroll inside a focusable region, so keyboard users can scroll them too.
       node = document.createElement("div");
       node.className = "table-scroll";
       node.tabIndex = 0;
@@ -500,7 +474,6 @@ function renderMarkdown(source) {
       node.append(table);
       const head = table.createTHead().insertRow();
       for (const cell of block.head) {
-        // An empty corner cell is not a column header.
         const empty = cell.every((part) => !part.v.trim());
         const th = document.createElement(empty ? "td" : "th");
         if (!empty) th.scope = "col";
@@ -528,7 +501,6 @@ function renderConversation() {
     const who = document.createElement("span");
     who.className = "turn-role";
     who.textContent = entry.role === "user" ? "You" : "LogiOps";
-    // Replies are Markdown; what the person typed stays literal text.
     const text = entry.role === "assistant" ? renderMarkdown(entry.text) : document.createElement("p");
     if (entry.role !== "assistant") text.textContent = entry.text;
     item.append(who, text);
@@ -542,7 +514,6 @@ function renderConversation() {
   list.scrollTop = list.scrollHeight;
 }
 
-// Proactive, and free: the first thing on screen is the state of the queue, from the inbox itself.
 function welcomeText() {
   const open = state.inbox.filter((item) => item.status !== "verified");
   if (!state.inbox.length) {
@@ -556,7 +527,6 @@ function welcomeText() {
   return `Hi, I'm LogiOps. ${queue}. Ask “any delays today?” for my briefing, or ask what's happening with ${state.incidentId}.`;
 }
 
-// Read aloud the short spoken line when there is one, as a voice assistant would.
 function say(role, text, meta, spoken) {
   state.conversation.push({ role, text, meta });
   renderConversation();
@@ -578,7 +548,6 @@ function renderControls() {
   $("mic").disabled = state.busy || !snapshot;
   for (const chip of document.querySelectorAll(".chip")) chip.disabled = state.busy || !snapshot;
   $("approve").disabled = state.busy || !hasCurrentPlan || !state.selectedPlanId || approved || executed;
-  // Name the plan on the button, so a selection made elsewhere (the MCP App) is visible.
   const selected = snapshot && !approved && !executed && visiblePlans(snapshot).find((plan) => plan.id === state.selectedPlanId);
   $("approve").textContent = selected ? `Approve “${selected.label}”` : "Approve selected plan";
   $("execute").disabled = state.busy || !approved || executed;
@@ -625,7 +594,6 @@ function renderInbox() {
 
 function render(snapshot) {
   state.snapshot = snapshot;
-  // The view shows the plans of one incident and data version; hide it once they are gone.
   if (state.app && (state.app.incidentId !== snapshot.state.incident_id || state.app.version !== visibleVersion(snapshot))) hideMcpApp();
   $("connection").textContent = "Connected";
   $("connection").className = "connection ready";
@@ -645,7 +613,6 @@ function render(snapshot) {
   $("stock-label").textContent = warehouse ? `${warehouse[0].toUpperCase()}${warehouse.slice(1)} warehouse` : "No local warehouse";
   $("stock-scope").textContent = warehouse ? `(${warehouse[0].toUpperCase()}${warehouse.slice(1)} warehouse; invalidates approvals)` : "(this incident has no local warehouse)";
   if (state.stockFor !== incident.incident_id) {
-    // A useful default per incident: one unit less than on hand.
     state.stockFor = incident.incident_id;
     $("stock-input").max = String(units);
     $("stock-input").value = warehouse ? String(Math.max(0, incident.inventory[warehouse].available - 1)) : "";
@@ -669,7 +636,6 @@ function render(snapshot) {
   const execution = snapshot.executions[0];
   $("execution-state").textContent = execution ? "Operationally verified" : visibleApproval(snapshot) ? "Approved · ready" : "Waiting for approval";
   $("execution-result").hidden = !execution;
-  // Whoever executed last, the next visitor sees why there is nothing left to approve.
   $("state-banner").hidden = !execution;
   if (execution) {
     const plan = snapshot.plans.find((item) => item.id === execution.plan_id);
@@ -681,7 +647,6 @@ function render(snapshot) {
   renderControls();
 }
 
-// A reply from the scripted replay because today's live budget is used says so where people look.
 function noteFallback(run) {
   if (run.fallback === "daily_budget") {
     message("Today's live model budget is used, so answers come from the scripted replay until midnight, Lima time.", true);
@@ -709,7 +674,6 @@ async function refresh() {
   render(await request(incidentPath()));
 }
 
-// Each incident keeps its own conversation and selection while you look at another.
 async function selectIncident(id) {
   if (state.busy || id === state.incidentId) return;
   state.conversations[state.incidentId] = state.conversation;
@@ -760,7 +724,6 @@ async function executeApproved() {
   });
 }
 
-// The plan kinds a sentence names ("the split plan"), or null when it names none.
 function namedPlanKinds(text) {
   const found = planKeywords.find(([, pattern]) => pattern.test(text));
   return found ? found[0] : null;
@@ -770,7 +733,6 @@ function planFromUtterance(text) {
   const plans = visiblePlans(state.snapshot);
   const preferred = state.snapshot.preference && plans.find((plan) => plan.id === state.snapshot.preference.preferred_plan_id);
   if (preferred && /\b(?:preferred|my preference)\b/.test(text)) return preferred;
-  // "The cheapest plan" and "the $240 plan" name a plan by its price.
   const selector = window.LogiOpsIntent.planSelector(text);
   if (selector.cheapest) {
     return [...plans].sort((a, b) => a.incremental_cost_usd - b.incremental_cost_usd || byRank(a, b))[0] || null;
@@ -780,12 +742,10 @@ function planFromUtterance(text) {
     return priced.length === 1 ? priced[0] : null;
   }
   const kinds = namedPlanKinds(text);
-  // A named plan that the current data does not offer is not silently replaced.
   if (kinds) return kinds.map((kind) => plans.find((plan) => plan.kind === kind)).find(Boolean) || null;
   return recommendedPlan(state.snapshot);
 }
 
-// What an approval commits to, read back before it acts: price, delay, and any critical order left late.
 function approvalReadback(plan) {
   const delay = plan.projected_customer_delay_hours ? `${plan.projected_customer_delay_hours} hours of delay` : "no delay";
   const late = (plan.orders || []).filter((order) => order.priority === "critical" && order.delay_hours > 0);
@@ -793,15 +753,9 @@ function approvalReadback(plan) {
   return `Approve “${plan.label}” for $${plan.incremental_cost_usd} extra, ${delay}${warning}?`;
 }
 
-// A thin intent layer, like an Alexa+ action: approval and execution go through the
-// same REST endpoints as the buttons; anything else is a question for the agent.
-// Commands must be the whole utterance (intent.js): "Should we approve the split plan?"
-// asks, and "Please do not execute it yet" never executes.
-
 async function handleUtterance(raw) {
   const text = raw.trim();
   if (!text || state.busy) return;
-  // "What about SHIP-452?" moves to that incident first; the question then goes there.
   const mentioned = window.LogiOpsIntent.mentionedIncident(text, state.inbox.map((item) => item.incident_id));
   if (mentioned && mentioned !== state.incidentId) {
     await selectIncident(mentioned).catch(() => {});
@@ -809,10 +763,8 @@ async function handleUtterance(raw) {
   }
   say("user", text);
   const lower = text.toLowerCase();
-  // A read-back approval waits for the very next utterance; anything else cancels it.
   const pending = state.pendingApproval;
   state.pendingApproval = null;
-  // Preferences and briefings first: "reset my preferences" must not reset the incident.
   const preference = window.LogiOpsIntent.parsePreference(text);
   if (preference) {
     state.awaitingExecute = false;
@@ -851,9 +803,8 @@ async function handleUtterance(raw) {
       say("assistant", `Opened ${mentioned}: ${item?.title || "incident"}. Ask me what's happening, or say “investigate”.`);
       return;
     }
-    command = null;  // "show me the options" is a question for the agent
+    command = null;
   }
-  // A bare "yes" only confirms the execution offered in the previous reply.
   const awaitingExecute = state.awaitingExecute;
   state.awaitingExecute = false;
   try {
@@ -875,7 +826,6 @@ async function handleUtterance(raw) {
         say("assistant", `That plan isn't available for the current data. The options are ${options}.`);
         return;
       }
-      // Speech can mishear a plan, so a spoken approval is read back and waits for a yes.
       state.pendingApproval = { planId: plan.id, sourceVersion: plan.source_version };
       say("assistant", `${approvalReadback(plan)} Say “yes” to approve it, or ask me anything else.`);
     } else if (command === "confirm" && pending) {
@@ -889,7 +839,6 @@ async function handleUtterance(raw) {
       say("assistant", `Approved “${plan.label}” for version ${plan.source_version}. Say “execute it” when you're ready.`);
       state.awaitingExecute = true;
     } else if (command === "execute" || (command === "confirm" && awaitingExecute && visibleApproval(state.snapshot))) {
-      // "Execute the reroute" while another plan is approved must not run the approved one.
       const approval = visibleApproval(state.snapshot);
       const approved = approval && state.snapshot.plans.find((plan) => plan.id === approval.plan_id);
       const named = namedPlanKinds(lower);
@@ -906,9 +855,6 @@ async function handleUtterance(raw) {
       const execution = state.snapshot.executions[0];
       say("assistant", `The plan was executed. ${executionSummary(state.snapshot, execution)} Delivery is projected, not physically confirmed.`);
     } else {
-      // Follow-ups reuse the latest investigation of the data on screen; anything that
-      // asks to (re)investigate, or arrives after the data changed, runs a fresh one.
-      // An executed incident cannot be re-planned, so its questions are always follow-ups.
       const current = latestAgentEvent(state.snapshot);
       const stale = !current || current.data.source_version !== visibleVersion(state.snapshot);
       const executed = Boolean(state.snapshot?.executions.length);
@@ -973,7 +919,6 @@ function setUpVoice() {
 
 $("connect").addEventListener("click", () => {
   state.token = $("access-token").value.trim();
-  // Kept for this tab only, so a reload does not ask again; closing the tab forgets it.
   act(async () => { await refresh(); storeToken(state.token); }, "Connected to the incident.").catch(() => {});
 });
 $("access-token").addEventListener("keydown", (event) => {
@@ -1012,7 +957,6 @@ window.addEventListener("hashchange", () => {
 $("set-stock").addEventListener("click", () => act(async () => {
   const raw = $("stock-input").value.trim();
   const available = Number(raw);
-  // Number("2.5") is not an integer; parseInt would have quietly sent 2.
   if (!raw || !Number.isInteger(available) || available < 0) throw new Error("Enter a whole number of units.");
   await request("/demo/inventory", "POST", { incident_id: state.incidentId, available });
   state.selectedPlanId = null;

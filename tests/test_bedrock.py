@@ -14,7 +14,6 @@ MESSAGES = [
     {"role": "assistant", "content": [
         {"toolUse": {"toolUseId": "1", "name": "get_shipment", "input": {"shipment_id": "SHIP-421"}}}
     ]},
-    # Tool results can contain nulls and nested lists; botocore must accept them as documents.
     {"role": "user", "content": [
         {"toolResult": {"toolUseId": "1", "status": "success", "content": [
             {"json": {"id": "SHIP-421", "selected_plan_id": None, "fulfillments": [], "units": 20}}

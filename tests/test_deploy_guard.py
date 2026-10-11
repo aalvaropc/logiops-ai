@@ -23,7 +23,6 @@ def test_ci_fails_a_pull_request_that_does_not_target_main():
 
 
 def test_an_untracked_file_in_the_release_counts_as_dirty(monkeypatch):
-    # package() ships every file under logiops/, tracked or not (review, 2026-10-07).
     calls = []
 
     def fake_git(*args):

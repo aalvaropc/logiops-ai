@@ -31,7 +31,6 @@ class _SlidingWindow:
         while bucket and bucket[0] <= now - self.window:
             bucket.popleft()
         if not bucket:
-            # Drop idle keys so the table cannot grow without bound.
             self.hits.pop(key, None)
             bucket = self.hits[key]
         if len(bucket) >= self.limit:
@@ -41,7 +40,6 @@ class _SlidingWindow:
 
 
 def _constant_time_equal(supplied: str, expected: str) -> bool:
-    # compare_digest rejects non-ASCII str; compare bytes so odd headers get a 401, not a 500.
     return hmac.compare_digest(supplied.encode("utf-8", "surrogateescape"), expected.encode("utf-8"))
 
 
@@ -75,12 +73,10 @@ def install_security(
     @app.middleware("http")
     async def guard(request: Request, call_next: Any) -> Any:
         path = request.url.path
-        # The MCP Apps sandbox origin serves its proxy page and nothing else.
         if sandbox_host and request.headers.get("host", "").split(":")[0].lower() == sandbox_host and path != SANDBOX_PATH:
             return JSONResponse(status_code=404, content={"detail": "Not found"})
         if path in PUBLIC_PATHS or path.startswith("/assets/"):
             response = await call_next(request)
-            # Revalidate every time, so a redeploy never pairs a new page with an old script.
             response.headers.setdefault("Cache-Control", "no-cache")
             return response
         if access_token:
@@ -93,8 +89,6 @@ def install_security(
                 )
         internal = _constant_time_equal(request.headers.get(INTERNAL_HEADER, ""), internal_key)
         key = client_key(request, trust_cloudfront=trust_cloudfront)
-        # The agent's own MCP calls run in-process; they must not consume, or be
-        # cut off by, the viewer's MCP budget halfway through an investigation.
         if path.startswith("/mcp") and not internal and not mcp_limiter.allow(key):
             return JSONResponse(status_code=429, content={"detail": "MCP rate limit exceeded"})
         if "/agent/" in path and not agent_limiter.allow(key):
@@ -103,6 +97,5 @@ def install_security(
                 content={"detail": "Agent rate limit exceeded; each run calls a paid model"},
             )
         response = await call_next(request)
-        # Responses depend on the bearer token; keep CloudFront and browsers from caching them.
         response.headers.setdefault("Cache-Control", "no-store")
         return response

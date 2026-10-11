@@ -29,8 +29,6 @@
 <script>
 "use strict";
 (() => {
-  // MCP Apps view (protocol 2026-01-26). It renders the plans from the tool result and can only
-  // ask the host to select one; approval stays with the operator in the host interface.
   const PROTOCOL = "2026-01-26";
   let nextId = 1;
   const pending = new Map();
@@ -42,7 +40,6 @@
   });
   const notify = (method, params) => send({ jsonrpc: "2.0", method, params });
   let incident = "";
-  // Same order as the host's default pick: critical orders, worst delay, late units, cost.
   const rankKey = (plan) => [
     Math.max(0, ...(plan.orders || []).filter((o) => o.priority === "critical").map((o) => o.delay_hours)),
     plan.projected_customer_delay_hours, plan.late_units || 0, plan.incremental_cost_usd,
@@ -68,7 +65,6 @@
     root.replaceChildren();
     root.append(el("h1", "", incident ? `Resolution options · ${incident}` : "Resolution options"),
       el("p", "note", "Projections from synthetic carrier quotes. Selecting a plan does not approve it."));
-    // The operator's saved preferences, applied by the server's fixed rules.
     const preference = result?.structuredContent?.operator_preferences;
     if (preference?.changes_pick) root.append(el("p", "preference", `Your preference: ${preference.reason}`));
     const list = el("div", "plans");
@@ -115,15 +111,12 @@
     if (message.method === "ui/notifications/tool-input") incident = String(message.params?.arguments?.shipment_id || "").toUpperCase();
     else if (message.method === "ui/notifications/tool-result") render(message.params);
     else if (message.method === "ui/resource-teardown" && message.id !== undefined) {
-      // Nothing to save: the selection already lives in the host.
       send({ jsonrpc: "2.0", id: message.id, result: {} });
     } else if (typeof message.method === "string" && message.id !== undefined) {
       send({ jsonrpc: "2.0", id: message.id, error: { code: -32601, message: "Method not supported by this view" } });
     }
   });
 
-  // Measure the body, not the document: the document is never shorter than the iframe, so its
-  // scroll height would let the frame grow but never shrink.
   new ResizeObserver(() => {
     const box = document.body.getBoundingClientRect();
     notify("ui/notifications/size-changed", { width: Math.ceil(box.width), height: Math.ceil(box.height) });

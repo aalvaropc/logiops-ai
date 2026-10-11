@@ -15,8 +15,6 @@ from .service import LogiOpsService, WorkflowError
 from .tools import inventory_hint, inventory_view, order_view, orders_hint, shipment_view
 
 
-# MCP Apps (SEP-1865, 2026-01-26): investigate_incident declares an interactive
-# view; hosts that support the extension render it, others just use the JSON.
 UI_URI = "ui://logiops/resolution-options.html"
 UI_MIME_TYPE = "text/html;profile=mcp-app"
 UI_HTML = (Path(__file__).resolve().parent / "static" / "resolution_options.html").read_text(encoding="utf-8")
@@ -45,7 +43,6 @@ def create_mcp_server(
     )
 
     def incident(shipment_id: str) -> str:
-        # Models write "ship-421" or " SHIP-421"; every tool resolves the same incident.
         return str(shipment_id).strip().upper()
 
     def state_of(shipment_id: str) -> dict[str, Any]:
@@ -72,7 +69,6 @@ def create_mcp_server(
             order = order_view(state, order_id)
             if order is not None:
                 return order
-        # A shipment id passed by mistake: point to that shipment's orders.
         linked = next((state for state in states if state["incident_id"] == incident(order_id)), None)
         hint = orders_hint(linked) if linked else "Read the shipment first; it lists its order ids."
         raise ToolError(f"Unknown order: {order_id}. {hint}")
@@ -83,7 +79,6 @@ def create_mcp_server(
         if shipment_id is not None:
             candidates = [state_of(shipment_id)]
         else:
-            # Warehouse ids are unique across incidents, so the warehouse alone finds the incident.
             candidates = [service.get(item)["state"] for item in INCIDENT_IDS]
         for state in candidates:
             stock = inventory_view(state, warehouse_id, sku)
@@ -120,8 +115,6 @@ def create_mcp_server(
             snapshot = service.get(incident(shipment_id))
         except WorkflowError as exc:
             raise ToolError(str(exc)) from exc
-        # Agent traces are stored as events; returning them here would feed every
-        # previous trace back into the next model run, so only summarize events.
         return {
             "status": snapshot["state"]["status"],
             "source_version": snapshot["source_version"],
@@ -133,8 +126,6 @@ def create_mcp_server(
             ],
         }
 
-    # The only state-changing tool. MCP Apps lets views call server tools unless
-    # visibility says otherwise, so keep it model-only: no view can execute.
     @server.tool(meta={"ui": {"visibility": ["model"]}})
     async def execute_approved_plan(shipment_id: str, plan_id: str, source_version: int) -> dict[str, Any]:
         """Execute only a plan already approved by a human through the local API."""

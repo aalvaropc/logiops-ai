@@ -31,8 +31,6 @@ def test_tool_declares_ui_and_resource_serves_a_self_contained_view(tmp_path):
                         assert with_view == {"investigate_incident"}
                         assert meta["investigate_incident"]["ui"]["resourceUri"] == UI_URI
                         assert meta["investigate_incident"]["ui/resourceUri"] == UI_URI
-                        # Views may call server tools unless visibility says otherwise:
-                        # the only state-changing tool is model-only.
                         assert meta["execute_approved_plan"]["ui"]["visibility"] == ["model"]
                         assert not {"approve_plan", "approve"} & set(meta)
 
@@ -47,7 +45,6 @@ def test_tool_declares_ui_and_resource_serves_a_self_contained_view(tmp_path):
                         assert not re.search(r"\blocation\b", html), "the view must not navigate"
                         assert "ui/resource-teardown" in html
 
-                        # The tool result the agent relies on is unchanged.
                         result = await session.call_tool("investigate_incident", {"shipment_id": "SHIP-421"})
                         assert len(result.structuredContent["plans"]) == 3
 
@@ -68,7 +65,6 @@ def test_local_demo_uses_the_other_loopback_name_as_sandbox_origin(tmp_path):
     app = create_app(tmp_path / "local.sqlite3")
     assert SANDBOX_META.search(get(app, "/demo", "127.0.0.1:8000").text).group(1) == "http://localhost:8000"
     assert SANDBOX_META.search(get(app, "/demo", "localhost:8000").text).group(1) == "http://127.0.0.1:8000"
-    # Anything else has no safe second origin, so the host shows no MCP App.
     assert SANDBOX_META.search(get(app, "/demo", "10.0.0.5:8000").text).group(1) == ""
     proxy = get(app, "/mcp-app/sandbox.html", "localhost:8000")
     assert proxy.status_code == 200
@@ -115,20 +111,16 @@ def test_proxy_and_host_follow_the_sandbox_contract(tmp_path):
     app = create_app(tmp_path / "contract.sqlite3")
     proxy = get(app, "/mcp-app/sandbox.html", "localhost:8000").text
     script = get(app, "/assets/demo.js", "127.0.0.1:8000").text
-    # Proxy: announces itself, loads the raw HTML with the CSP placed before any markup,
-    # never grants same-origin or top navigation, and keeps sandbox-* messages to itself.
     assert "ui/notifications/sandbox-proxy-ready" in proxy and "ui/notifications/sandbox-resource-ready" in proxy
     assert "`<!doctype html>${meta}${body}`" in proxy
     grantable = re.search(r"const GRANTABLE = new Set\(\[([^\]]*)\]\)", proxy).group(1)
     assert "allow-same-origin" not in grantable and "allow-top-navigation" not in grantable
     assert 'const SANDBOX_PREFIX = "ui/notifications/sandbox-"' in proxy and "isProxyMethod(message)" in proxy
     assert "event.origin === hostOrigin" in proxy and "connect-src ${list(connect, \"'none'\")}" in proxy
-    # Host: proxy on another origin with the spec's tokens, origin-checked messages,
-    # teardown before removal, no capabilities offered to the view.
     assert 'frame.setAttribute("sandbox", "allow-scripts allow-same-origin")' in script
     assert "event.origin !== SANDBOX_ORIGIN" in script and "srcdoc" not in script
     assert "ui/resource-teardown" in script and "hostCapabilities: {}" in script
-    assert "url.origin !== location.origin" in script  # fail closed on a same-origin "sandbox"
+    assert "url.origin !== location.origin" in script
 
 
 def test_release_archive_includes_the_view():
