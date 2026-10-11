@@ -226,3 +226,12 @@ def test_the_token_endpoint_forwards_only_allowed_pkce_and_refresh_grants(tmp_pa
 def test_settings_are_validated(issuer, domain, clients):
     with pytest.raises(RuntimeError):
         OAuthSettings(issuer, domain, clients)
+
+
+def test_keys_are_fetched_on_a_freshly_booted_machine(monkeypatch):
+    import logiops.oauth as module
+
+    monkeypatch.setattr(module.time, "monotonic", lambda: 5.0)
+    jwks = Jwks()
+    actor, scopes = settings(fetch_jwks=jwks).verify(token())
+    assert actor.subject == "user-123" and OPERATE in scopes and jwks.calls == 1
