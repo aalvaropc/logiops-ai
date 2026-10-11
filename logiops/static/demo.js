@@ -7,6 +7,7 @@ const state = {
   token: "", snapshot: null, selectedPlanId: null, busy: false, conversation: [], speaking: false, app: null,
   awaitingExecute: false, pendingApproval: null, incidentId: hashIncident(), inbox: [], conversations: {}, selections: {}, stockFor: null,
   briefingPick: null, prefsShown: undefined, cardTheme: "dark", pendingPurchase: null, alerts: [],
+  voice: { engine: "browser", voice: null, fillers: [] }, speechTurn: 0,
 };
 const CAPABILITIES_TEXT = "I'm LogiOps, your operations desk for late or held shipments. I can:\n"
   + "- brief your queue: say “any delays today?”;\n"
@@ -118,7 +119,10 @@ async function request(path, method = "GET", body) {
   if (state.token) headers.Authorization = `Bearer ${state.token}`;
   if (body !== undefined) headers["Content-Type"] = "application/json";
   const agentCall = method === "POST" && /\/agent\//.test(path);
-  if (agentCall) device("voice", "request");
+  if (agentCall) {
+    device("voice", "request");
+    startFiller();
+  }
   let response;
   try {
     response = await fetch(path, {
@@ -128,9 +132,13 @@ async function request(path, method = "GET", body) {
       cache: "no-store",
     });
   } catch (error) {
-    if (agentCall) device("voice", "error");
+    if (agentCall) {
+      clearTimeout(state.fillerTimer);
+      device("voice", "error");
+    }
     throw error;
   }
+  if (agentCall) clearTimeout(state.fillerTimer);
   if (!response.ok) {
     if (agentCall) device("voice", "error");
     let detail = `HTTP ${response.status}`;
@@ -637,21 +645,103 @@ function say(role, text, meta, spoken, check) {
     device("heard", text);
     return;
   }
-  const speak = $("speak-replies").checked && "speechSynthesis" in window;
-  device("reply", text, spoken, speak);
-  if (speak) {
+  const speaking = speechOn();
+  device("reply", text, spoken, speaking);
+  if (speaking) speak(spoken || window.LogiOpsMarkdown.plainText(text));
+}
+
+function speechOn() {
+  return $("speak-replies").checked && (state.voice.engine === "polly" || "speechSynthesis" in window);
+}
+
+function stopSpeaking({ quiet = false } = {}) {
+  state.speechTurn += 1;
+  clearTimeout(state.fillerTimer);
+  clearTimeout(state.speechTimer);
+  let stopped = false;
+  if (state.audio) {
+    state.audio.pause();
+    state.audio = null;
+    stopped = true;
+  }
+  if ("speechSynthesis" in window && (window.speechSynthesis.speaking || window.speechSynthesis.pending)) {
     window.speechSynthesis.cancel();
-    const utterance = new SpeechSynthesisUtterance(spoken || window.LogiOpsMarkdown.plainText(text));
-    utterance.lang = "en-US";
-    const done = () => {
-      clearTimeout(state.speechTimer);
-      device("voice", "speech-end");
-    };
-    utterance.addEventListener("end", done);
-    utterance.addEventListener("error", done);
+    stopped = true;
+  }
+  if (stopped && !quiet) device("voice", "speech-end");
+}
+
+function browserSpeak(line, done) {
+  if (!("speechSynthesis" in window)) {
+    done();
+    return;
+  }
+  const utterance = new SpeechSynthesisUtterance(line);
+  utterance.lang = "en-US";
+  utterance.addEventListener("end", done);
+  utterance.addEventListener("error", done);
+  window.speechSynthesis.speak(utterance);
+}
+
+async function speak(line, { filler = false } = {}) {
+  stopSpeaking({ quiet: true });
+  const turn = state.speechTurn;
+  const done = () => {
+    if (turn !== state.speechTurn) return;
     clearTimeout(state.speechTimer);
-    state.speechTimer = setTimeout(done, 20000);
-    window.speechSynthesis.speak(utterance);
+    if (!filler) device("voice", "speech-end");
+  };
+  state.speechTimer = setTimeout(done, 30000);
+  if (state.voice.engine === "polly") {
+    try {
+      const headers = { "Content-Type": "application/json" };
+      if (state.token) headers.Authorization = `Bearer ${state.token}`;
+      const response = await fetch("/voice/speech", { method: "POST", headers, body: JSON.stringify({ text: line }), cache: "no-store" });
+      if (turn !== state.speechTurn) return;
+      if (response.ok) {
+        const url = URL.createObjectURL(await response.blob());
+        if (turn !== state.speechTurn) {
+          URL.revokeObjectURL(url);
+          return;
+        }
+        const audio = new Audio(url);
+        state.audio = audio;
+        const finish = () => {
+          URL.revokeObjectURL(url);
+          if (state.audio === audio) state.audio = null;
+          done();
+        };
+        audio.addEventListener("ended", finish);
+        audio.addEventListener("error", finish);
+        await audio.play();
+        return;
+      }
+    } catch (_) {
+      if (turn !== state.speechTurn) return;
+    }
+  }
+  browserSpeak(line, done);
+}
+
+function startFiller() {
+  clearTimeout(state.fillerTimer);
+  if (!speechOn()) return;
+  state.fillerTimer = setTimeout(() => {
+    const fillers = state.voice.fillers.length ? state.voice.fillers : ["One moment, I'm still working on it."];
+    speak(fillers[Math.floor(Math.random() * fillers.length)], { filler: true });
+  }, 2500);
+}
+
+async function loadVoice() {
+  try {
+    state.voice = await request("/voice/config");
+  } catch (_) {
+    return;
+  }
+  if (state.voice.engine === "polly") {
+    $("speak-toggle").hidden = false;
+    $("speak-replies").checked = true;
+    $("speak-engine").textContent = ` (Amazon Polly · ${state.voice.voice})`;
   }
 }
 
@@ -1089,6 +1179,7 @@ function approvalReadback(plan) {
 async function handleUtterance(raw) {
   const text = raw.trim();
   if (!text || state.busy) return;
+  stopSpeaking();
   const mentioned = window.LogiOpsIntent.mentionedIncident(text, state.inbox.map((item) => item.incident_id));
   if (mentioned && mentioned !== state.incidentId) {
     await selectIncident(mentioned).catch(() => {});
@@ -1302,6 +1393,7 @@ function setUpVoice() {
       recognition.stop();
       return;
     }
+    stopSpeaking();
     mic.textContent = "Listening…";
     mic.setAttribute("aria-pressed", "true");
     device("voice", "listen-start");
@@ -1361,6 +1453,7 @@ $("alerts-bell").addEventListener("click", async () => {
   await selectIncident(alert.incident_id).catch(() => {});
   if (state.incidentId === alert.incident_id) await announceAlert(alert);
 });
+$("ask-input").addEventListener("input", () => stopSpeaking());
 $("ask-form").addEventListener("submit", (event) => {
   event.preventDefault();
   const input = $("ask-input");
@@ -1383,6 +1476,7 @@ renderConversation();
 state.token = storedToken();
 setInterval(() => { checkAlerts().catch(() => {}); }, 5000);
 act(refresh, "").then(() => {
+  loadVoice();
   checkAlerts().catch(() => {});
   const parked = storedPurchase();
   if (parked) {

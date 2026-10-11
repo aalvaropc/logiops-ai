@@ -317,7 +317,8 @@ def test_the_demo_shows_preferences_briefings_and_speaks_the_short_line():
     assert script.index("LogiOpsIntent.parsePreference(text)") < script.index("LogiOpsIntent.parseCommand(text)")
     assert 'request("/agent/briefing", "POST"' in script and 'tag("start-here", "Start here")' in script
     assert '"Your preference", "badge preference"' in script and "never approve" in script
-    assert "new SpeechSynthesisUtterance(spoken || window.LogiOpsMarkdown.plainText(text))" in script
+    assert "if (speaking) speak(spoken || window.LogiOpsMarkdown.plainText(text));" in script
+    assert "const utterance = new SpeechSynthesisUtterance(line);" in script
     assert "run.spoken, checkBadge(run));" in script
     assert "operator_preferences" in view and '"Your preference"' in view
 
@@ -366,8 +367,8 @@ def test_the_device_view_sits_above_the_operator_view():
     assert order == sorted(order)
     assert "innerHTML" not in device and "insertAdjacentHTML" not in device and "document.createElementNS(SVG" in device
     for hook in ('device("voice", "request")', 'device("voice", "error")', 'device("voice", "listen-start")',
-                 'device("voice", "listen-end")', 'device("voice", "speech-end")', "state.speechTimer = setTimeout(done, 20000)",
-                 'device("reply", text, spoken, speak)', 'device("heard", text)', "showOnDevice(snapshot);", 'device("mount");'):
+                 'device("voice", "listen-end")', 'device("voice", "speech-end")', "state.speechTimer = setTimeout(done, 30000)",
+                 'device("reply", text, spoken, speaking)', 'device("heard", text)', "showOnDevice(snapshot);", 'device("mount");'):
         assert hook in script, hook
     assert "@media (prefers-reduced-motion: reduce) { .orb { animation: none !important; } }" in style
     assert "@media (max-width: 650px) { .device-screen" in style
@@ -401,3 +402,14 @@ def test_help_and_start_over_follow_the_alexa_guidelines():
     assert "Nothing was changed or approved." in script and "const CAPABILITIES_SPOKEN" in script
     assert "agentEvent.data.display_answer || agentEvent.data.answer" in script
     assert "if (status >= 500) return" in script and "state.pendingApproval = pending;" in script
+
+
+def test_replies_speak_with_polly_and_stop_when_the_person_talks():
+    script = (Path(__file__).resolve().parents[1] / "logiops" / "static" / "demo.js").read_text()
+    assert 'fetch("/voice/speech", { method: "POST", headers, body: JSON.stringify({ text: line }), cache: "no-store" })' in script
+    assert "browserSpeak(line, done);" in script and "if (turn !== state.speechTurn) return;" in script
+    assert script.index("if (!text || state.busy) return;\n  stopSpeaking();") > 0
+    assert '$("ask-input").addEventListener("input", () => stopSpeaking());' in script
+    assert "stopSpeaking();\n    mic.textContent = \"Listening…\";" in script
+    assert "startFiller();" in script and "}, 2500);" in script and "stopSpeaking({ quiet: true });" in script
+    assert 'state.voice = await request("/voice/config");' in script and '$("speak-replies").checked = true;' in script

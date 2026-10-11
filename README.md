@@ -68,6 +68,10 @@ More detail in `docs/architecture.md`.
 | `LOGIOPS_AGENT_LIMIT_PER_MINUTE` | paid agent calls per viewer per minute | `10` |
 | `LOGIOPS_DAILY_MODEL_CALLS` | live model calls per day (Lima time) for the whole demo; each request reserves its run's maximum and releases what it did not use, and a run that no longer fits answers from replay with `fallback: "daily_budget"` | `150` |
 | `AWS_REGION`, `BEDROCK_MODEL_ID` | Bedrock region and model profile | `us-east-1`, `global.anthropic.claude-sonnet-4-6` |
+| `LOGIOPS_VOICE` | `polly` (Amazon Polly) or `browser` (the browser's own voice) | `polly` with `bedrock`, `browser` with `replay` |
+| `LOGIOPS_POLLY_VOICE`, `LOGIOPS_POLLY_ENGINE` | Polly voice and engine | `Ruth`, `generative` |
+| `LOGIOPS_DAILY_SPEECH_CHARS` | characters Polly may synthesize per day (Lima time) for the whole demo; repeated lines come from the cache and cost nothing | `30000` |
+| `LOGIOPS_ALERT_SCAN_SECONDS` | how often the proactive alert watcher scans; `0` turns the background scan off (a stock change is still scanned at once) | `30` |
 
 ## Status
 
@@ -368,6 +372,27 @@ receipt shows in the execute panel and on the device screen. Other commands:
   cannot pay twice;
 - the pending quote survives a reload in `sessionStorage`, and "resume" reads
   it back again.
+
+### Voice (Amazon Polly)
+
+On a voice device every reply is heard, so the demo speaks with Amazon Polly
+(`logiops/voice.py`, `POST /voice/speech`). The voice is `Ruth` on the
+generative engine, on by default in Bedrock mode. Each reply's spoken line is
+cleaned for speech (no Markdown, links or internal ids) and cut at a sentence
+end under 600 characters. It is synthesized once and cached in SQLite by the
+hash of the text, so repeated lines are free.
+
+A daily character budget (`LOGIOPS_DAILY_SPEECH_CHARS`) bounds the cost for
+everyone, and speech has its own per-minute limit. When Polly is off, over
+budget or failing, the endpoint answers 503 with `fallback: "browser"` and the
+page reads the line with the browser's voice. After a failure, such as a
+missing permission, Polly rests for five minutes.
+
+The person can always talk over it: the microphone, typing or a chip stops the
+audio (barge-in). If the agent takes longer than 2.5 seconds, a short filler
+("One moment, I'm checking the shipment and the carriers") is spoken while it
+works. In replay mode the demo uses the browser's voice, so judges need no AWS
+account.
 
 ### Proactive alerts
 
