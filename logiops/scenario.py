@@ -335,6 +335,24 @@ def known_figures(state: dict[str, Any]) -> dict[str, list[int]]:
     }
 
 
+def critical_units_at_risk(state: dict[str, Any]) -> int:
+    """Units of critical orders that nothing already on hand delivers by their due time: local
+    stock ready in time, then the delayed shipment, critical orders served first. Carrier options
+    do not count, since they need a decision and cost money."""
+    remaining = {f"{warehouse}-stock": [stock["available"], stock["ready_at"]] for warehouse, stock in state["inventory"].items()}
+    remaining[SHIPMENT_SOURCE] = [state["shipment"]["units_on_delayed_route"], state["shipment"]["delayed_eta"]]
+    at_risk = 0
+    for order in _served_in([order for order in state["orders"] if order["priority"] == "critical"], "priority"):
+        need = order["quantity"]
+        for source in remaining.values():
+            if need and _at(source[1]) <= _at(order["due_eta"]):
+                take = min(need, source[0])
+                source[0] -= take
+                need -= take
+        at_risk += need
+    return at_risk
+
+
 def incident_summary(state: dict[str, Any], version: int) -> dict[str, Any]:
     shipment = state["shipment"]
     orders = state["orders"]
@@ -352,6 +370,7 @@ def incident_summary(state: dict[str, Any], version: int) -> dict[str, Any]:
         "disruption": shipment["disruption"],
         "units": sum(order["quantity"] for order in orders),
         "delay_hours": delay_hours(shipment["delayed_eta"], shipment["original_eta"]),
+        "critical_units_at_risk": 0 if state["status"] == "verified" else critical_units_at_risk(state),
         "orders": [
             {key: order[key] for key in ("id", "customer", "priority", "quantity", "due_eta")} for order in orders
         ],
@@ -360,7 +379,7 @@ def incident_summary(state: dict[str, Any], version: int) -> dict[str, Any]:
     }
 
 
-def inbox_key(summary: dict[str, Any]) -> tuple[bool, datetime, int, str]:
-    """Open incidents first, then the earliest due, then critical first."""
-    return (summary["status"] == "verified", _at(summary["due_eta"]),
-            PRIORITY_RANK[summary["priority"]], summary["incident_id"])
+def inbox_key(summary: dict[str, Any]) -> tuple[bool, int, int, datetime, str]:
+    """Open incidents first, then the most critical units at risk, then critical first, then the earliest due."""
+    return (summary["status"] == "verified", -summary["critical_units_at_risk"],
+            PRIORITY_RANK[summary["priority"]], _at(summary["due_eta"]), summary["incident_id"])

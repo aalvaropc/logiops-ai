@@ -192,7 +192,8 @@ def test_tools_serve_every_incident(tmp_path):
                         names = {tool.name for tool in (await session.list_tools()).tools}
                         assert "list_incidents" in names and len(names) == 8
                         inbox = (await session.call_tool("list_incidents", {})).structuredContent["incidents"]
-                        assert [item["incident_id"] for item in inbox][:2] == ["SHIP-421", "SHIP-452"]
+                        assert [item["incident_id"] for item in inbox][:2] == ["SHIP-433", "SHIP-460"]
+                        assert inbox[0]["critical_units_at_risk"] == 12
                         shipment = (await session.call_tool("get_shipment", {"shipment_id": "SHIP-433"})).structuredContent
                         assert shipment["order_ids"] == ["ORD-433A", "ORD-433B"] and "order_id" not in shipment
                         assert shipment["warehouse_id"] is None

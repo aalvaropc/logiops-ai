@@ -254,7 +254,7 @@ def create_app(
 
     @app.get("/incidents")
     async def list_incidents() -> dict[str, Any]:
-        """The incident inbox: open first, then by due time and priority."""
+        """The incident inbox: open first, then by critical units at risk, priority and due time."""
         return {"incidents": service.list_incidents()}
 
     @app.get("/incidents/{incident_id}")

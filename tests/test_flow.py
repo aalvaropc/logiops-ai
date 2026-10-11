@@ -14,7 +14,7 @@ import pytest
 
 from logiops.api import create_app
 from logiops.scenario import (
-    INCIDENT_IDS, SEED_DAY, best_plan, build_plans, known_figures, scenario_clock, seed_state,
+    INCIDENT_IDS, SEED_DAY, best_plan, build_plans, critical_units_at_risk, known_figures, scenario_clock, seed_state,
 )
 from logiops.service import LogiOpsService, WorkflowError
 
@@ -229,11 +229,13 @@ def test_each_incident_offers_its_own_plans_and_a_defensible_best(incident_id):
         assert sum(order["quantity"] for order in plan["orders"]) == sum(a["units"] for a in plan["allocations"])
 
 
-def test_the_inbox_lists_every_incident_open_first_by_due_time(tmp_path):
+def test_the_inbox_lists_open_incidents_first_by_critical_units_at_risk(tmp_path):
     async def run():
         async with client_for(tmp_path / "inbox.sqlite3") as client:
             inbox = (await client.get("/incidents")).json()["incidents"]
-            assert [item["incident_id"] for item in inbox] == ["SHIP-421", "SHIP-452", "SHIP-433", "SHIP-460"]
+            assert [item["incident_id"] for item in inbox] == ["SHIP-433", "SHIP-460", "SHIP-421", "SHIP-452"]
+            assert {item["incident_id"]: item["critical_units_at_risk"] for item in inbox} == {
+                "SHIP-433": 12, "SHIP-460": 0, "SHIP-421": 0, "SHIP-452": 0}
             assert {item["kind"] for item in inbox} == {"delay", "carrier_outage", "customs_hold", "stock_conflict"}
             assert all(item["simulated"] and item["status"] == "detected" for item in inbox)
             assert {item["incident_id"]: item["priority"] for item in inbox} == {
@@ -241,6 +243,33 @@ def test_the_inbox_lists_every_incident_open_first_by_due_time(tmp_path):
             assert next(item for item in inbox if item["incident_id"] == "SHIP-433")["warehouse_id"] is None
 
     asyncio.run(run())
+
+
+def test_the_inbox_follows_the_stock_and_drops_a_resolved_risk(tmp_path):
+    service = LogiOpsService(tmp_path / "risk.sqlite3")
+    service.set_local_inventory("SHIP-460", 5)
+    inbox = service.list_incidents()
+    assert [(item["incident_id"], item["critical_units_at_risk"]) for item in inbox[:2]] == [("SHIP-460", 15), ("SHIP-433", 12)]
+    plans = service.investigate("SHIP-433")
+    plan = next(item for item in plans if item["kind"] == "priority-air-ground")
+    service.approve("SHIP-433", plan["id"], plan["source_version"], "operator")
+    service.execute("SHIP-433", plan["id"], plan["source_version"])
+    inbox = service.list_incidents()
+    assert inbox[-1]["incident_id"] == "SHIP-433" and inbox[-1]["critical_units_at_risk"] == 0
+
+
+def test_critical_units_at_risk_count_only_what_arrives_too_late(tmp_path):
+    assert {incident_id: critical_units_at_risk(seed_state(incident_id)) for incident_id in INCIDENT_IDS} == {
+        "SHIP-421": 0, "SHIP-433": 12, "SHIP-452": 0, "SHIP-460": 0}
+    state = seed_state("SHIP-460")
+    state["inventory"]["trujillo"]["available"] = 19
+    assert critical_units_at_risk(state) == 1
+    state["inventory"]["trujillo"]["ready_at"] = state["orders"][0]["due_eta"]
+    state["inventory"]["trujillo"]["available"] = 20
+    assert critical_units_at_risk(state) == 0
+    state["shipment"]["delayed_eta"] = state["orders"][0]["due_eta"]
+    state["inventory"]["trujillo"]["available"] = 0
+    assert critical_units_at_risk(state) == 0
 
 
 def test_incidents_are_isolated_from_each_other(tmp_path):
@@ -341,7 +370,7 @@ def test_an_older_single_incident_database_is_rebuilt_once(tmp_path):
             "INSERT INTO snapshot VALUES ('SHIP-421', 7, '{}');"
         )
     service = LogiOpsService(path)
-    assert [item["incident_id"] for item in service.list_incidents()] == ["SHIP-421", "SHIP-452", "SHIP-433", "SHIP-460"]
+    assert [item["incident_id"] for item in service.list_incidents()] == ["SHIP-433", "SHIP-460", "SHIP-421", "SHIP-452"]
     assert [e["name"] for e in service.get("SHIP-433")["events"]] == ["scenario_reset", "schema_migrated"]
     plans = service.investigate("SHIP-421")
     reopened = LogiOpsService(path)

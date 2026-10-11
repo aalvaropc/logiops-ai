@@ -223,7 +223,7 @@ class LogiOpsService:
         }
 
     def list_incidents(self) -> list[dict[str, Any]]:
-        """Every incident as an inbox entry: open first, then by due time and priority.
+        """Every incident as an inbox entry: open first, then by critical units at risk, priority and due time.
         Reading the inbox first moves stale dates forward (see _refresh_stale_dates)."""
         self._refresh_stale_dates()
         with self._connection() as connection:
