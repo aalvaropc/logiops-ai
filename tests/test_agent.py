@@ -120,7 +120,8 @@ def test_explicit_replay_produces_three_live_plans_without_aws(tmp_path, monkeyp
                 assert body["mode"] == "replay"
                 assert len(body["plans"]) == 3
                 assert body["usage"] == {"inputTokens": 0, "outputTokens": 0}
-                assert body["plans"][2]["id"] in body["answer"]
+                assert body["recommended_plan_id"] == body["plans"][2]["id"] and body["plans"][2]["label"] in body["answer"]
+                assert "Recommended plan" not in body["answer"] and body["plans"][2]["id"] not in body["answer"]
                 assert len(body["tool_trace"]) == 5
 
     asyncio.run(run())
@@ -202,7 +203,11 @@ def test_replay_investigates_every_incident_through_mcp(tmp_path, monkeypatch, i
                 assert tools.count("get_order") == orders and ("get_inventory" in tools) is inventory
                 assert not any(step["is_error"] for step in body["tool_trace"])
                 pick = next(plan for plan in body["plans"] if plan["kind"] == best)
-                assert body["answer"].rstrip().endswith(f"Recommended plan: {pick['id']}")
+                assert body["recommended_plan_id"] == pick["id"] and pick["label"] in body["answer"]
+                recorded = [event for event in (await http.get(f"/incidents/{incident_id}")).json()["events"]
+                            if event["name"] == "agent_investigation_completed"][-1]["data"]
+                assert recorded["answer"].rstrip().endswith(f"Recommended plan: {pick['id']}")
+                assert recorded["display_answer"] == body["answer"]
                 other = (await http.get("/incidents/SHIP-421")).json()
                 assert [event["name"] for event in other["events"]] == ["scenario_reset"]
 

@@ -10,7 +10,7 @@
   ).split(" "));
   const AMOUNT = /^\$?(?:\d{1,3}(?:,\d{3})+|\d{1,6})$/;
   const GRAMMAR = [
-    ["reset", /^(?:reset|start over)(?: (?:this|the) incident| it| this)?$/],
+    ["reset", /^(?:reset(?: (?:this|the) incident| it| this)?|start (?:this|the) incident over)$/],
     ["approve", /^approve(?: (?<rest>.+))?$/],
     ["execute", /^(?:(?:execute|run|do) it|go ahead|execute(?: (?<rest>.+))?)$/],
     ["open", /^(?:open|show|switch to|go to) ship-\d+$/],
@@ -25,6 +25,8 @@
   const CHEAPEST = /\bcheap(?:est|er)?\b|\blowest cost\b|\bleast expensive\b|\bsave money\b/;
   const BALANCED = /\b(?:balanced|default (?:ranking|pick|rule))\b/;
   const BRIEFING = /\b(?:any (?:delays?|incidents?|problems?|issues?|exceptions?)(?: today)?|brief(?:ing)? me|(?:daily|morning|queue) briefing|what needs (?:my )?attention|what should i (?:look at|work on|handle) first|which incident (?:first|should i)|summari[sz]e (?:the |my )?(?:queue|inbox|incidents))\b/;
+  const CAPABILITIES = new RegExp(`${OPENER}(?:what can (?:you|i) (?:do|say|ask)(?: here)?|what do you do|how does this work|help(?: me)?)[\\s?.!]*$`);
+  const START_OVER = new RegExp(`${OPENER}(?:let'?s )?(?:start over|clear (?:the |this )?conversation|new conversation|forget this conversation)[\\s.!]*$`);
   const RECOMMEND = /\b(recommend\w*|choose|select|go with|suggest\w*)\b/gi;
   const RECOMMENDED_LINE = /recommended plan(?: id)?\s*[:：][\s`*_"']*([A-Za-z0-9][A-Za-z0-9:._-]*)/gi;
   const NEGATED = /\b(not|never|no|instead of|rather than|avoid)\b|n't\b/i;
@@ -79,6 +81,14 @@
 
   function isBriefing(text) {
     return BRIEFING.test(String(text).trim().toLowerCase());
+  }
+
+  function isCapabilities(text) {
+    return CAPABILITIES.test(String(text).trim().toLowerCase());
+  }
+
+  function isStartOver(text) {
+    return START_OVER.test(String(text).trim().toLowerCase());
   }
 
   function resolvePlan(reference, plans) {
@@ -141,7 +151,9 @@
     return named.length === 1 ? named[0] : null;
   }
 
-  const api = { isQuestion, parseCommand, planSelector, parsePreference, isBriefing, recommendedPlanId, mentionedIncident };
+  const api = {
+    isQuestion, parseCommand, planSelector, parsePreference, isBriefing, isCapabilities, isStartOver, recommendedPlanId, mentionedIncident,
+  };
   if (typeof module === "object" && module.exports) module.exports = api;
   else root.LogiOpsIntent = api;
 })(typeof window === "undefined" ? globalThis : window);

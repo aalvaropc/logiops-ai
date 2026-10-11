@@ -47,7 +47,10 @@ LOGIOPS_AGENT_MODE=replay uv run uvicorn logiops.api:app --host 127.0.0.1 --port
 4. **Ask.** Type, or speak in Chrome or Edge: "What's happening with SHIP-421?". The
    agent calls the MCP tools and the reply lists three plans: wait ($0, 12 h late),
    reroute ($80, 3 h late), split + express ($120, on time). An **MCP App** card with
-   the three plans appears under the reply.
+   the three plans appears under the reply. What you read and hear names plans by their
+   label and times in Lima time; the exact plan ids stay in the audit trail. Say "what
+   can you do?" for a summary of the commands, and "start over" to clear the
+   conversation (it changes no data; "reset this incident" restores the incident).
 5. **Select, then approve.** "Select for approval" on the card only *selects* the plan;
    the Approve button then names it. Approval is bound to that plan and data version.
    Saying "approve the recommended plan" reads the plan back (price, delay, and any

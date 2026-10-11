@@ -112,7 +112,7 @@ class ReplayConverse:
         warnings = " ".join(preference["warnings"]) + " " if preference and preference["warnings"] else ""
         answer = (
             f"{shipment['id']}: {shipment['disruption']} Options: {summary}. "
-            f"{because}{warnings}Recommend {selected['label']} ({selected['id']}). "
+            f"{because}{warnings}Recommend {selected['label']}. "
             "Delivery is projected, not physically confirmed. A human must approve before execution.\n"
             f"Spoken: {shipment['id']} needs a decision. I recommend: {selected['label']}.\n"
             f"Recommended plan: {selected['id']}"
@@ -134,7 +134,7 @@ class ReplayConverse:
             cheapest if CHEAPEST.search(question) else executed or best,
         )
         answer = (
-            f"{plan['label']} ({plan['id']}): {plan['projected_customer_delay_hours']} h projected delay, "
+            f"{plan['label']}: {plan['projected_customer_delay_hours']} h projected delay, "
             f"${plan['incremental_cost_usd']} extra, projected completion {plan['projected_completion_eta']}. "
             "Delivery is projected, not physically confirmed; a person approves before execution.\n"
             f"Spoken: {plan['label']}: {plan['projected_customer_delay_hours']} hours of delay, "

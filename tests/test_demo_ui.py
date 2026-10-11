@@ -48,7 +48,8 @@ def test_only_a_whole_command_acts():
         "approve the recommended plan": "approve", "Approve the split plan.": "approve",
         "ok, approve the wait plan": "approve", "Alexa approve the reroute": "approve",
         "execute it": "execute", "Execute the approved plan": "execute", "please go ahead": "execute",
-        "reset": "reset", "start over": "reset", "yes": "confirm", "yes, do it": "confirm",
+        "reset": "reset", "reset this incident": "reset", "start this incident over": "reset", "start over": None,
+        "yes": "confirm", "yes, do it": "confirm",
         "should we approve the split plan?": None, "what happens if i execute it": None,
         "how do i reset?": None, "is the reroute approved?": None, "can we do it tomorrow": None,
         "Please do not execute it yet.": None, "Don't approve the wait plan.": None,
@@ -352,3 +353,22 @@ def test_the_device_replays_the_recorded_tool_trace_and_the_check():
     assert "From the recorded tool trace · ${steps.length} MCP call" in device
     assert 'matchMedia("(prefers-reduced-motion: reduce)")' in device and "answered in ${" in device
     assert '"Checked against the data after one revision"' in device and '"Did not pass the data check"' in device
+
+
+def test_help_and_start_over_follow_the_alexa_guidelines():
+    import json
+
+    phrases = ["What can you do?", "help", "Alexa, what can I say?", "how does this work", "start over", "Let's start over.",
+               "clear the conversation", "help me approve the split plan", "start over with SHIP-421"]
+    got = json.loads(_intent(f"console.log(JSON.stringify({json.dumps(phrases)}.map((t) => [m.isCapabilities(t), m.isStartOver(t)])))"))
+    assert dict(zip(phrases, map(tuple, got))) == {
+        "What can you do?": (True, False), "help": (True, False), "Alexa, what can I say?": (True, False),
+        "how does this work": (True, False), "start over": (False, True), "Let's start over.": (False, True),
+        "clear the conversation": (False, True), "help me approve the split plan": (False, False),
+        "start over with SHIP-421": (False, False),
+    }
+    script = (Path(__file__).resolve().parents[1] / "logiops" / "static" / "demo.js").read_text()
+    assert script.index("isStartOver(text)") < script.index("const pending = state.pendingApproval;")
+    assert "Nothing was changed or approved." in script and "const CAPABILITIES_SPOKEN" in script
+    assert "agentEvent.data.display_answer || agentEvent.data.answer" in script
+    assert "if (status >= 500) return" in script and "state.pendingApproval = pending;" in script

@@ -46,7 +46,7 @@ def test_follow_up_answers_from_context_with_read_tools_only(tmp_path, monkeypat
                 })
                 assert response.status_code == 200, response.text
                 body = response.json()
-                assert "$80" in body["answer"] and "reroute" in body["answer"]
+                assert "$80" in body["answer"] and "Move the full order to an alternative carrier" in body["answer"]
                 assert body["tool_trace"] == [] and body["source_version"] == 1
                 assert len(followups.calls) == 1
                 assert "investigate_incident" not in followups.calls[0]["tools"]
@@ -181,7 +181,8 @@ def test_follow_up_context_keeps_the_approval_of_the_executed_plans(tmp_path, mo
                 await http.post("/incidents/SHIP-421/approvals", json={**body, "approved_by": "op"})
                 await http.post("/incidents/SHIP-421/execute", json=body)
                 answer = await http.post("/incidents/SHIP-421/agent/ask", json={"question": "What's happening now?"})
-                assert answer.status_code == 200 and plan["id"] in answer.json()["answer"]
+                assert answer.status_code == 200 and plan["label"] in answer.json()["answer"]
+                assert plan["id"] not in answer.json()["answer"]
                 text = followups.calls[0]["messages"][0]["content"][0]["text"]
                 context = json.loads(text.split("<context>")[1].split("</context>")[0])
                 assert context["current_approval"]["plan_id"] == plan["id"]
