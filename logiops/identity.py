@@ -20,6 +20,11 @@ class Actor:
 OPERATOR = Actor("operator", "demo-operator", "Demo operator")
 
 
+def profile_of(actor: Actor) -> str | None:
+    """Whose preferences apply: a signed-in user's own, or the shared profile (None)."""
+    return actor.subject if actor.kind == "user" else None
+
+
 def actor_of(request: Any) -> Actor:
     """The actor the security middleware attached to the request; the demo operator by default."""
     state = getattr(request, "state", None)

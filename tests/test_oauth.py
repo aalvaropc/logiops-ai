@@ -218,6 +218,17 @@ def test_the_token_endpoint_forwards_only_allowed_pkce_and_refresh_grants(tmp_pa
     assert len(forwarded) == 2
 
 
+def test_without_cognito_the_page_learns_sign_in_is_off(tmp_path):
+    async def run():
+        app = create_app(tmp_path / "off.sqlite3", access_token="t" * 40)
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url=BASE_URL) as http:
+            return await http.get("/auth/config"), await http.get("/.well-known/oauth-protected-resource/mcp")
+
+    config, metadata = asyncio.run(run())
+    assert config.status_code == 200 and config.json() == {"enabled": False}
+    assert metadata.status_code == 401
+
+
 @pytest.mark.parametrize("issuer, domain, clients", [
     ("https://evil.example.com/pool", DOMAIN, (CLIENT,)),
     (ISSUER, "http://plain.example.com", (CLIENT,)),
@@ -226,6 +237,30 @@ def test_the_token_endpoint_forwards_only_allowed_pkce_and_refresh_grants(tmp_pa
 def test_settings_are_validated(issuer, domain, clients):
     with pytest.raises(RuntimeError):
         OAuthSettings(issuer, domain, clients)
+
+
+def test_each_signed_in_user_keeps_their_own_preferences(tmp_path, monkeypatch):
+    monkeypatch.setenv("LOGIOPS_AGENT_MODE", "replay")
+    alice, bob = bearer(token(sub="alice", username="alice")), bearer(token(sub="bob", username="bob"))
+
+    async def work(http, _app):
+        await http.put("/operator/preferences", headers=alice, json={"rule": "balanced", "max_cost_usd": 250})
+        mine = (await http.get("/operator/preferences", headers=alice)).json()["preferences"]
+        theirs = (await http.get("/operator/preferences", headers=bob)).json()["preferences"]
+        shared = (await http.get("/operator/preferences")).json()["preferences"]
+        capped = (await http.post("/incidents/SHIP-433/agent/investigate", headers=alice, json={})).json()
+        default = (await http.post("/incidents/SHIP-433/agent/investigate", headers=bob, json={})).json()
+        incident = (await http.get("/incidents/SHIP-433", headers=alice)).json()
+        await http.delete("/operator/preferences", headers=alice)
+        cleared = (await http.get("/operator/preferences", headers=alice)).json()["preferences"]
+        return mine, theirs, shared, capped, default, incident, cleared
+
+    mine, theirs, shared, capped, default, incident, cleared = run_app(tmp_path, work)
+    assert mine["max_cost_usd"] == 250 and theirs is None and shared is None and cleared is None
+    plans = {plan["id"]: plan for plan in capped["plans"]}
+    assert plans[capped["recommended_plan_id"]]["kind"] == "priority-air"
+    assert {plan["id"]: plan for plan in default["plans"]}[default["recommended_plan_id"]]["kind"] == "priority-air-ground"
+    assert incident["operator_preferences"]["max_cost_usd"] == 250
 
 
 def test_keys_are_fetched_on_a_freshly_booted_machine(monkeypatch):

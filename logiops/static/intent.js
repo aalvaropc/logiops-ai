@@ -19,6 +19,8 @@
     ["confirm", /^(?:yes|yeah|yep|confirm(?:ed)?)(?:[,\s]+(?:please|do it|go ahead|confirm|approve it|execute it|book it|pay(?: for it)?|approve and pay))?$/],
     ["decline", /^(?:(?:no|nope)(?:[,\s]+(?:thanks|thank you))?|(?:no[,\s]+)?(?:cancel(?: it)?|never mind|don'?t (?:book|pay for) it|don'?t))$/],
     ["resume", /^(?:resume|continue (?:the|my) (?:booking|purchase)|resume (?:the|my) (?:booking|purchase))$/],
+    ["link", /^(?:link|connect)(?: (?:my|the))? account$|^(?:sign|log) ?in(?: to (?:my|the) account)?$/],
+    ["unlink", /^(?:sign|log) ?out$|^(?:unlink|disconnect)(?: (?:my|the))? account$/],
   ];
 
   const REMEMBER = new RegExp(`${OPENER}(?:remember|from now on)\\b[,:]?\\s*(?:that\\s+)?`);

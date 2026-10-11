@@ -114,7 +114,16 @@ LOGIOPS_AGENT_MODE=replay uv run uvicorn logiops.api:app --host 127.0.0.1 --port
    approval. Nothing was approved. Do the same on another incident from a second tab:
    a bell in the top bar opens it. `GET /alerts` and the MCP tool `list_alerts` show
    the same alerts.
-14. **Book and pay the carriers (API).** With a plan approved (for example SHIP-421's split +
+14. **Sign in (deployed demo).** On the deployed demo without the token you are a guest.
+   You can read, ask the agent (on the replay model) and use the read tools. "Approve"
+   or "book it" asks you to sign in. Press "Link account" (or say "link my account"):
+   - sign in with the demo user from the private testing instructions;
+   - you come back signed in, with your name as the approver;
+   - a spend cap you save now is yours alone, and approving, executing and booking work.
+
+   Over MCP, `/.well-known/oauth-protected-resource/mcp` starts the same flow in any
+   OAuth-capable client (PKCE S256).
+15. **Book and pay the carriers (API).** With a plan approved (for example SHIP-421's split +
    express), run `POST /incidents/SHIP-421/bookings/quote`. The quote reads "carriers
    and services $120.00, service fee $5.00, IGV 18% $22.50, total $147.50". Confirm it
    with `POST /quotes/{quote_id}/confirm` and `{"confirmed_total_usd": 147.50,

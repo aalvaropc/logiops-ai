@@ -25,6 +25,8 @@ NOTE_LIMIT = 200
 COST_LIMIT = 100_000
 SCHEMA = """CREATE TABLE IF NOT EXISTS operator_preferences (
     id INTEGER PRIMARY KEY CHECK (id = 1), preferences_json TEXT NOT NULL, updated_at TEXT NOT NULL)"""
+USER_SCHEMA = """CREATE TABLE IF NOT EXISTS user_preferences (
+    subject TEXT PRIMARY KEY, preferences_json TEXT NOT NULL, updated_at TEXT NOT NULL)"""
 
 
 def normalized(rule: str, max_cost_usd: int | None, note: str) -> dict[str, Any]:
@@ -41,39 +43,59 @@ def normalized(rule: str, max_cost_usd: int | None, note: str) -> dict[str, Any]
 
 
 class PreferenceStore:
-    """The demo operator's single profile, kept in the same SQLite file as the incidents."""
+    """Preferences kept in the same SQLite file as the incidents: one profile per signed-in user
+    (by the token's subject), and one shared profile for the demo operator and guests."""
 
     def __init__(self, db_path: str | Path) -> None:
         self.db_path = Path(db_path)
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         with self._connection() as connection:
             connection.execute(SCHEMA)
+            connection.execute(USER_SCHEMA)
 
     def _connection(self) -> ContextManager[sqlite3.Connection]:
         return connect(self.db_path)
 
-    def get(self) -> dict[str, Any] | None:
+    def get(self, subject: str | None = None) -> dict[str, Any] | None:
         with self._connection() as connection:
             row = connection.execute(
+                "SELECT preferences_json, updated_at FROM user_preferences WHERE subject = ?", (subject,)
+            ).fetchone() if subject else connection.execute(
                 "SELECT preferences_json, updated_at FROM operator_preferences WHERE id = 1"
             ).fetchone()
         return None if row is None else {**json.loads(row[0]), "updated_at": row[1]}
 
-    def put(self, rule: str, max_cost_usd: int | None, note: str = "") -> dict[str, Any]:
+    def put(self, rule: str, max_cost_usd: int | None, note: str = "", subject: str | None = None) -> dict[str, Any]:
         value = normalized(rule, max_cost_usd, note)
         now = datetime.now(timezone.utc).isoformat()
         with self._connection() as connection:
-            connection.execute(
-                "INSERT INTO operator_preferences (id, preferences_json, updated_at) VALUES (1, ?, ?) "
-                "ON CONFLICT(id) DO UPDATE SET preferences_json = excluded.preferences_json, "
-                "updated_at = excluded.updated_at",
-                (json.dumps(value, sort_keys=True), now),
-            )
+            if subject:
+                connection.execute(
+                    "INSERT INTO user_preferences (subject, preferences_json, updated_at) VALUES (?, ?, ?) "
+                    "ON CONFLICT(subject) DO UPDATE SET preferences_json = excluded.preferences_json, "
+                    "updated_at = excluded.updated_at",
+                    (subject, json.dumps(value, sort_keys=True), now),
+                )
+            else:
+                connection.execute(
+                    "INSERT INTO operator_preferences (id, preferences_json, updated_at) VALUES (1, ?, ?) "
+                    "ON CONFLICT(id) DO UPDATE SET preferences_json = excluded.preferences_json, "
+                    "updated_at = excluded.updated_at",
+                    (json.dumps(value, sort_keys=True), now),
+                )
         return {**value, "updated_at": now}
 
-    def clear(self) -> None:
+    def clear(self, subject: str | None = None) -> None:
+        with self._connection() as connection:
+            if subject:
+                connection.execute("DELETE FROM user_preferences WHERE subject = ?", (subject,))
+            else:
+                connection.execute("DELETE FROM operator_preferences")
+
+    def clear_all(self) -> None:
         with self._connection() as connection:
             connection.execute("DELETE FROM operator_preferences")
+            connection.execute("DELETE FROM user_preferences")
 
 
 def with_preference_figures(facts: dict[str, list[Any]], saved: dict[str, Any] | None) -> dict[str, list[Any]]:
