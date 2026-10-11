@@ -7,6 +7,7 @@ import jsonschema
 import pytest
 from mcp import ClientSession
 from mcp.client.streamable_http import streamable_http_client
+from mcp.shared.exceptions import McpError
 
 from logiops import __version__
 from logiops.api import create_app
@@ -102,16 +103,45 @@ def test_every_failure_says_what_to_do_next(tmp_path):
             "unknown incident": await session.call_tool("get_shipment", {"shipment_id": "SHIP-999"}),
             "unknown order": await session.call_tool("get_order", {"order_id": "ORD-999"}),
             "unknown warehouse": await session.call_tool("get_inventory", {"warehouse_id": "cusco", "sku": "X"}),
-            "not approved": await session.call_tool("execute_approved_plan", {
-                "shipment_id": "SHIP-433", "plan_id": plans[0]["id"], "source_version": plans[0]["source_version"]}),
+            "stale version": await session.call_tool("execute_approved_plan", {
+                "shipment_id": "SHIP-433", "plan_id": plans[0]["id"], "source_version": plans[0]["source_version"] + 1}),
+            "unknown plan": await session.call_tool("execute_approved_plan", {
+                "shipment_id": "SHIP-433", "plan_id": "SHIP-433:nope", "source_version": plans[0]["source_version"]}),
         }
         invalid = await session.call_tool("execute_approved_plan", {
             "shipment_id": "SHIP-433", "plan_id": plans[0]["id"], "source_version": 0})
-        return failures, invalid
+        with pytest.raises(McpError) as elicited:
+            await session.call_tool("execute_approved_plan", {
+                "shipment_id": "433", "plan_id": plans[0]["id"], "source_version": plans[0]["source_version"]})
+        return failures, invalid, elicited.value.error, plans[0]
 
-    failures, invalid = _session(tmp_path, work)
+    failures, invalid, elicitation, plan = _session(tmp_path, work)
     for case, result in failures.items():
         assert result.isError is True and "Next step:" in result.content[0].text, case
     assert "SHIP-433" in failures["unknown incident"].content[0].text
-    assert "no tool can approve" in failures["not approved"].content[0].text
+    assert "no tool can approve" in failures["stale version"].content[0].text
+    assert elicitation.code == -32042
+    [request] = elicitation.data["elicitations"]
+    assert request["mode"] == "url" and request["url"] == "http://127.0.0.1:8000/demo#SHIP-433"
+    assert request["elicitationId"] == f"approve-SHIP-433-v{plan['source_version']}"
+    assert f"“{plan['label']}”" in request["message"] and "No tool can approve" in request["message"]
+    assert plan["id"] not in request["message"] and elicitation.message == request["message"]
     assert invalid.isError is True and "source_version" in invalid.content[0].text
+
+
+def test_the_approval_link_uses_the_public_host_when_one_is_set(tmp_path):
+    from mcp.shared.exceptions import UrlElicitationRequiredError
+
+    from logiops.mcp_server import create_mcp_server
+    from logiops.service import LogiOpsService
+
+    async def run():
+        server = create_mcp_server(LogiOpsService(tmp_path / "public.sqlite3"), public_host="demo.example.com")
+        plan = (await server.call_tool("investigate_incident", {"shipment_id": "SHIP-421"})).structuredContent["plans"][0]
+        with pytest.raises(UrlElicitationRequiredError) as raised:
+            await server.call_tool("execute_approved_plan", {
+                "shipment_id": "SHIP-421", "plan_id": plan["id"], "source_version": plan["source_version"]})
+        return raised.value.elicitations
+
+    [request] = asyncio.run(run())
+    assert request.url == "https://demo.example.com/demo#SHIP-421" and request.mode == "url"
