@@ -54,7 +54,8 @@ def test_a_failed_check_gets_one_revision_with_the_reasons(tmp_path):
     assert "$99" in body["evaluations"][0]["issues"][0]
     revision = model.calls[2]["content"][0]["text"]
     assert revision.startswith("Your answer failed an automatic check") and "$99" in revision
-    assert body["answer"].endswith("Recommended plan: split-express") and body["spoken"].startswith("Split the order")
+    assert body["recommended_plan_id"].endswith(":split-express:v1") and "Recommended plan" not in body["answer"]
+    assert body["spoken"].startswith("Split the order") and recorded["data"]["answer"].endswith("Recommended plan: split-express")
     assert recorded["name"] == "agent_investigation_completed" and recorded["data"]["grounded"] is True
     assert body["usage"] == {"inputTokens": 500, "outputTokens": 110}
 

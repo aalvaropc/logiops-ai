@@ -8,6 +8,15 @@ const state = {
   awaitingExecute: false, pendingApproval: null, incidentId: hashIncident(), inbox: [], conversations: {}, selections: {}, stockFor: null,
   briefingPick: null, prefsShown: undefined,
 };
+const CAPABILITIES_TEXT = "I'm LogiOps, your operations desk for late or held shipments. I can:\n"
+  + "- brief your queue: say “any delays today?”;\n"
+  + "- investigate an incident and compare its plans: “what's happening with SHIP-433?”;\n"
+  + "- answer follow-ups from that investigation: “why not the cheaper one?”;\n"
+  + "- remember preferences for every incident: “remember my spend cap is $250”;\n"
+  + "- approve a plan after reading it back, then execute it: “approve the recommended plan”, “yes”, “execute it”;\n"
+  + "- start over at any time: “start over”.\n"
+  + "Every answer is checked against the incident's data, and only you can approve.";
+const CAPABILITIES_SPOKEN = "I can brief your queue, investigate an incident and compare plans, remember your preferences, and approve and execute a plan after reading it back to you. Try: any delays today?";
 const incidentPath = (suffix = "") => `/incidents/${encodeURIComponent(state.incidentId)}${suffix}`;
 const device = (method, ...args) => {
   const api = window.LogiOpsDevice;
@@ -71,6 +80,7 @@ function explainError(status, detail) {
     return "That's the agent's per-minute question limit (each answer calls a paid model). Wait a minute and ask again; the plan panel and buttons still work.";
   }
   if (status === 429) return "Too many requests in the last minute. Wait a moment and try again.";
+  if (status >= 500) return "I couldn't reach the planning service just now. Try again in a moment; the plans and buttons still work.";
   return detail;
 }
 
@@ -672,7 +682,7 @@ function render(snapshot) {
   const agentEvent = latestAgentEvent(snapshot);
   $("agent-mode").textContent = agentEvent ? agentEvent.data.mode : "Agent";
   if (!state.conversation.length && agentEvent) {
-    state.conversation.push({ role: "assistant", text: agentEvent.data.answer, meta: traceSummary(agentEvent.data), check: checkBadge(agentEvent.data) });
+    state.conversation.push({ role: "assistant", text: agentEvent.data.display_answer || agentEvent.data.answer, meta: traceSummary(agentEvent.data), check: checkBadge(agentEvent.data) });
   }
   renderConversation();
   renderPreferenceLine(snapshot);
@@ -825,6 +835,18 @@ async function handleUtterance(raw) {
   }
   say("user", text);
   const lower = text.toLowerCase();
+  if (window.LogiOpsIntent.isStartOver(text)) {
+    Object.assign(state, { pendingApproval: null, awaitingExecute: false, selectedPlanId: null, conversation: state.conversation.slice(-1) });
+    state.selections[state.incidentId] = null;
+    hideMcpApp();
+    say("assistant", "Okay, starting over. Nothing was changed or approved. Ask about your queue, or about an incident.",
+      undefined, "Okay, starting over. Nothing was changed.");
+    return;
+  }
+  if (window.LogiOpsIntent.isCapabilities(text)) {
+    say("assistant", CAPABILITIES_TEXT, "help", CAPABILITIES_SPOKEN);
+    return;
+  }
   const pending = state.pendingApproval;
   state.pendingApproval = null;
   const preference = window.LogiOpsIntent.parsePreference(text);
@@ -899,7 +921,12 @@ async function handleUtterance(raw) {
         say("assistant", "The data changed after I read that plan back, so nothing was approved. Ask me again.");
         return;
       }
-      await act(() => approvePlan(plan), "");
+      try {
+        await act(() => approvePlan(plan), "");
+      } catch (error) {
+        state.pendingApproval = pending;
+        throw error;
+      }
       say("assistant", `Approved “${plan.label}” for version ${plan.source_version}. Say “execute it” when you're ready.`);
       state.awaitingExecute = true;
     } else if (command === "execute" || (command === "confirm" && awaitingExecute && visibleApproval(state.snapshot))) {

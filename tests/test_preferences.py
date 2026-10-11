@@ -107,7 +107,7 @@ def test_the_api_saves_applies_and_forgets_preferences(tmp_path, monkeypatch):
 
                 run = (await http.post("/incidents/SHIP-433/agent/investigate", json={})).json()
                 preferred = next(plan for plan in run["plans"] if plan["kind"] == "priority-air")
-                assert run["answer"].rstrip().endswith(f"Recommended plan: {preferred['id']}")
+                assert run["recommended_plan_id"] == preferred["id"] and "Recommended plan" not in run["answer"]
                 step = next(item for item in run["tool_trace"] if item["tool"] == "investigate_incident")
                 assert step["output"]["operator_preferences"]["preferred_plan_id"] == preferred["id"]
                 incident = (await http.get("/incidents/SHIP-433")).json()
@@ -115,7 +115,7 @@ def test_the_api_saves_applies_and_forgets_preferences(tmp_path, monkeypatch):
                 assert incident["approvals"] == [] and incident["state"]["status"] == "investigated"
 
                 ask = (await http.post("/incidents/SHIP-433/agent/ask", json={"question": "Which plan now?"})).json()
-                assert preferred["id"] in ask["answer"]
+                assert preferred["label"] in ask["answer"] and preferred["id"] not in ask["answer"]
 
                 await http.post("/demo/reset", json={"incident_id": "SHIP-433"})
                 assert (await http.get("/operator/preferences")).json()["preferences"] is not None

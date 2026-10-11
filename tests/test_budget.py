@@ -123,7 +123,7 @@ def test_a_used_budget_falls_back_to_the_replay_and_says_so(tmp_path, monkeypatc
     assert FakeBedrock.calls == 0
     assert first["mode"] == briefing["mode"] == "replay" and first["fallback"] == briefing["fallback"] == "daily_budget"
     assert recorded["mode"] == "replay" and recorded["fallback"] == "daily_budget"
-    assert first["answer"].rstrip().splitlines()[-1].startswith("Recommended plan: SHIP-421:")
+    assert first["recommended_plan_id"].startswith("SHIP-421:") and "Recommended plan" not in first["answer"]
 
 
 def test_an_invalid_mode_is_rejected_even_with_a_custom_client(tmp_path, monkeypatch):

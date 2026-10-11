@@ -26,6 +26,7 @@ from .budget import FALLBACK, BudgetedConverse, DailyModelBudget
 from .service import APPROVER_MAX_LENGTH, LogiOpsService, WorkflowError
 from .mcp_server import create_mcp_server
 from .preferences import COST_LIMIT, NOTE_LIMIT, RULES, PreferenceStore, preference_for, with_preference_figures
+from .presentation import customer_text, shown_run
 from .replay import ReplayConverse
 from .scenario import INCIDENT_ID, INCIDENT_IDS, known_figures, scenario_clock
 from .security import SANDBOX_PATH, install_security
@@ -251,6 +252,10 @@ def create_app(
     async def get_incident(incident_id: str) -> dict[str, Any]:
         snapshot = service.get(incident_id)
         saved = preferences.get()
+        for event in snapshot["events"]:
+            if event["name"] == "agent_investigation_completed":
+                version_plans = [plan for plan in snapshot["plans"] if plan["source_version"] == event["data"]["source_version"]]
+                event["data"]["display_answer"] = customer_text(event["data"]["answer"], version_plans)
         return {
             **snapshot, "operator_preferences": saved,
             "preference": preference_for(visible_plans(snapshot), saved),
@@ -305,7 +310,8 @@ def create_app(
                 raise
         run = labelled(run, run_mode, fallback)
         recorded = service.record_agent_run(incident_id, source_version, run)
-        return {**run, **recorded}
+        picked = run["evaluations"][-1].get("recommended_plan_id") if run.get("evaluations") else None
+        return {**shown_run(run, recorded["plans"]), **recorded, "recommended_plan_id": picked}
 
     @app.post("/incidents/{incident_id}/agent/ask")
     async def agent_ask(incident_id: str, request: AgentAskRequest) -> dict[str, Any]:
@@ -353,7 +359,7 @@ def create_app(
                     incident_id, "agent_run_failed", {"job": "ask", "mode": run_mode, "error": str(exc)}
                 )
                 raise
-        return {**labelled(run, run_mode, fallback), "source_version": version}
+        return {**shown_run(labelled(run, run_mode, fallback), context["plans"]), "source_version": version}
 
     @app.post("/agent/briefing")
     async def agent_briefing(request: AgentBriefingRequest) -> dict[str, Any]:
@@ -373,7 +379,7 @@ def create_app(
                 raise
         found = START_WITH.search(run["answer"])
         start_with = found.group(1).upper() if found and found.group(1).upper() in INCIDENT_IDS else None
-        return {**labelled(run, run_mode, fallback), "start_with": start_with}
+        return {**shown_run(labelled(run, run_mode, fallback), []), "start_with": start_with}
 
     @app.post("/incidents/{incident_id}/approvals")
     async def approve(incident_id: str, request: ApprovalRequest) -> dict[str, Any]:
