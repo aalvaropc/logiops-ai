@@ -35,6 +35,8 @@ HOSTNAME = re.compile(r"[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?")
 LOOPBACK_PAIRS = {"127.0.0.1": "localhost", "localhost": "127.0.0.1"}
 START_WITH = re.compile(r"start with[*_`]*\s*[:：]\s*[*_`]*\s*(SHIP-\d+)", re.I)
 SANDBOX_META = '<meta name="logiops-sandbox-origin" content="">'
+DEMO_ASSETS = ("demo.css", "demo.js", "markdown.js", "intent.js")
+ASSET_TYPES = {".css": "text/css", ".js": "text/javascript"}
 
 
 class ApprovalRequest(BaseModel):
@@ -138,13 +140,8 @@ def create_app(
         sandbox_host=sandbox_host or None,
     )
     static_dir = Path(__file__).resolve().parent / "static"
-    demo_assets = {
-        "demo.html": (static_dir / "demo.html").read_bytes(),
-        "demo.css": (static_dir / "demo.css").read_bytes(),
-        "demo.js": (static_dir / "demo.js").read_bytes(),
-        "markdown.js": (static_dir / "markdown.js").read_bytes(),
-        "intent.js": (static_dir / "intent.js").read_bytes(),
-    }
+    demo_page_html = (static_dir / "demo.html").read_text(encoding="utf-8")
+    demo_assets = {name: (static_dir / name).read_bytes() for name in DEMO_ASSETS}
     sandbox_page = (static_dir / "mcp_app_sandbox.html").read_text(encoding="utf-8")
 
     def origins(request: Request) -> tuple[str | None, str | None]:
@@ -166,8 +163,7 @@ def create_app(
     @app.get("/demo", include_in_schema=False)
     async def demo_page(request: Request) -> HTMLResponse:
         _page, sandbox = origins(request)
-        page = demo_assets["demo.html"].decode("utf-8")
-        return HTMLResponse(page.replace(SANDBOX_META, SANDBOX_META.replace('content=""', f'content="{html.escape(sandbox or "")}"')))
+        return HTMLResponse(demo_page_html.replace(SANDBOX_META, SANDBOX_META.replace('content=""', f'content="{html.escape(sandbox or "")}"')))
 
     @app.get(SANDBOX_PATH, include_in_schema=False)
     async def mcp_app_sandbox(request: Request) -> Response:
@@ -188,21 +184,13 @@ def create_app(
             "Content-Security-Policy": policy, "Referrer-Policy": "no-referrer", "Cache-Control": "no-store",
         })
 
-    @app.get("/assets/demo.css", include_in_schema=False)
-    async def demo_style() -> Response:
-        return Response(demo_assets["demo.css"], media_type="text/css")
-
-    @app.get("/assets/markdown.js", include_in_schema=False)
-    async def markdown_script() -> Response:
-        return Response(demo_assets["markdown.js"], media_type="text/javascript")
-
-    @app.get("/assets/intent.js", include_in_schema=False)
-    async def intent_script() -> Response:
-        return Response(demo_assets["intent.js"], media_type="text/javascript")
-
-    @app.get("/assets/demo.js", include_in_schema=False)
-    async def demo_script() -> Response:
-        return Response(demo_assets["demo.js"], media_type="text/javascript")
+    @app.get("/assets/{name}", include_in_schema=False)
+    async def demo_asset(name: str) -> Response:
+        """The demo's stylesheet and scripts: only the names in DEMO_ASSETS, read once at start-up."""
+        body = demo_assets.get(name)
+        if body is None:
+            return JSONResponse(status_code=404, content={"detail": "Not found"})
+        return Response(body, media_type=ASSET_TYPES[Path(name).suffix])
 
     @app.exception_handler(WorkflowError)
     async def workflow_error_handler(_request: Any, exc: WorkflowError) -> JSONResponse:
