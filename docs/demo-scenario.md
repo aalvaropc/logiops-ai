@@ -136,7 +136,10 @@ and warns that the hospital order is 8 h late.
 8. get_execution_status(SHIP-433)        -> verify allocations, notifications, audit
 ```
 
-`list_incidents` (MCP) and `GET /incidents` return the inbox; the briefing
+`list_incidents` (MCP) and `GET /incidents` return the inbox, open incidents
+first and then by critical units at risk (units of critical orders that neither
+local stock nor the delayed shipment delivers on time), priority and due time;
+with the seed that is SHIP-433 (12 units), SHIP-460, SHIP-421 and SHIP-452. The briefing
 (`POST /agent/briefing`) reads it and ranks the open incidents without
 calculating plans. No MCP tool can
 approve a plan. A person approves one exact plan (`plan_id` +

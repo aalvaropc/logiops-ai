@@ -120,7 +120,9 @@ any other credentials in its default chain) and ensure
 same server without `LOGIOPS_AGENT_MODE=replay`.
 
 Open the browser demo at <http://127.0.0.1:8000/demo>. The inbox at the top
-lists the four incidents, open ones first; pick one (or link to it, as in
+lists the four incidents, open ones first, then by critical units at risk
+(units of critical orders that nothing on hand delivers on time), priority and
+due time; pick one (or link to it, as in
 `/demo#SHIP-433`, or just name it: "what about SHIP-452?"). Each incident keeps
 its own conversation. The demo simulates the Alexa+ experience as a
 conversation: ask "What's happening with SHIP-421?" by text, or by voice in browsers with speech recognition (Chrome, Edge), and
