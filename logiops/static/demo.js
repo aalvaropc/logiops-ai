@@ -159,7 +159,10 @@ async function showMcpApp(run) {
     incidentId: state.incidentId,
     version: step.output.source_version,
     input: step.input,
-    result: { content: [{ type: "text", text: JSON.stringify(step.output) }], structuredContent: step.output },
+    result: {
+      content: [{ type: "text", text: JSON.stringify(step.output) }], structuredContent: step.output,
+      _meta: { "logiops/recommended_plan_id": recommendedPlan(state.snapshot)?.id || null },
+    },
     resource,
     ready: false,
   };
