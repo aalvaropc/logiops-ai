@@ -45,6 +45,49 @@ Converse; no static AWS key is stored on disk. The SSM command fetches the beare
 into `/etc/logiops.env` with mode 0640. The data file is
 `/var/lib/logiops/logiops.sqlite3` on the separate volume.
 
+## Polly, AgentCore Memory and Cognito
+
+The app's voice, memory and sign-in need four more pieces, all in this
+directory:
+- `memory.tf`: the AgentCore Memory `logiops_ai_memory` (events kept 30 days)
+  with a USER_PREFERENCE strategy in `/users/{actorId}/preferences` and a
+  SEMANTIC one in `/users/{actorId}/facts`.
+- `identity.tf`: the Cognito user pool `logiops-ai-operators`. It has
+  self-registration off, the managed login (v2) domain `logiops-ai-<hash>`, a
+  resource server `https://<cloudfront>/mcp` with the scopes
+  `incidents.operate` and `bookings.write`, and the public PKCE client
+  `demo-web` (no secret). Its callbacks are `/demo`, `http://localhost:8000/demo`
+  and MCP Inspector's.
+- `config.tf`: the app settings as SSM parameters under `/logiops-ai/config/`
+  (issuer, domain, client id, memory id, daily model calls).
+- `main.tf`: the instance role gains `polly:SynthesizeSpeech`, the memory's
+  event and record actions on that one memory ARN, and
+  `ssm:GetParametersByPath` on the config path.
+
+`logiops-deploy` copies only the allowed `LOGIOPS_*` settings whose values
+match `^[A-Za-z0-9:/._-]+$` into `/etc/logiops.env`. The instance ignores
+`user_data` changes, so the new deploy script needs a replaced instance. The
+data stays on the EBS volume.
+
+```sh
+aws login --region us-east-1
+terraform -chdir=infra/amazon plan -out=phase2.tfplan        # review it
+terraform -chdir=infra/amazon apply phase2.tfplan
+terraform -chdir=infra/amazon apply -replace=aws_instance.app
+uv run python scripts/create_demo_user.py                    # writes .secrets/demo-user, prints no password
+python3 scripts/deploy_ec2.py
+```
+
+Changing a setting later, such as `LOGIOPS_DAILY_MODEL_CALLS`, is a Terraform
+variable or SSM change plus a redeploy. It needs no new instance.
+
+Costs at demo scale:
+- Cognito Essentials includes 10,000 monthly active users.
+- Polly's generative voice is about US$30 per million characters, and the app
+  caches every line and caps characters per day.
+- AgentCore Memory bills events stored, records extracted and retrievals,
+  which come to cents for a demo.
+
 ## Verify G3 and G4
 
 ```sh

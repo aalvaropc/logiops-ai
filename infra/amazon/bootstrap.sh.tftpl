@@ -86,6 +86,7 @@ fi
 
 token=$(aws ssm get-parameter --region '${aws_region}' --name '${token_param}' --with-decryption --query Parameter.Value --output text)
 [[ "$token" =~ ^[a-f0-9]{64}$ ]] || { echo 'Access token must be 64 lowercase hex characters' >&2; exit 1; }
+config=$(aws ssm get-parameters-by-path --region '${aws_region}' --path '${config_path}/' --query 'Parameters[].[Name,Value]' --output text)
 umask 027
 {
   printf 'AWS_REGION=${aws_region}\n'
@@ -98,6 +99,14 @@ umask 027
   printf 'LOGIOPS_PUBLIC_HOST=%s\n' "$public_host"
   printf 'LOGIOPS_SANDBOX_HOST=%s\n' "$sandbox_host"
   printf 'LOGIOPS_ACCESS_TOKEN=%s\n' "$token"
+  while IFS=$'\t' read -r name value; do
+    key="$${name##*/}"
+    case "$key" in
+      LOGIOPS_COGNITO_ISSUER|LOGIOPS_COGNITO_DOMAIN|LOGIOPS_COGNITO_CLIENT_ID|LOGIOPS_MEMORY_ID|LOGIOPS_POLLY_VOICE|LOGIOPS_POLLY_ENGINE|LOGIOPS_DAILY_SPEECH_CHARS|LOGIOPS_DAILY_MODEL_CALLS)
+        if [[ "$value" =~ ^[A-Za-z0-9:/._-]+$ ]]; then printf '%s=%s\n' "$key" "$value"; fi
+        ;;
+    esac
+  done <<< "$config"
 } > /etc/logiops.env
 chown root:logiops /etc/logiops.env
 chmod 0640 /etc/logiops.env
