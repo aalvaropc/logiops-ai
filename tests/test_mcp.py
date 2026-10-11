@@ -68,9 +68,7 @@ def test_mcp_protocol_and_human_approval_boundary(tmp_path):
                             "get_execution_status", {"shipment_id": "SHIP-421"}
                         )).structuredContent
                         assert status["status"] == "verified"
-                        # Execution bumped the version, so the version-1 approval is no longer current.
                         assert status["source_version"] == 2 and status["approvals"] == []
-                        # Event payloads (including old agent traces) stay out of the model context.
                         assert status["events"] and all(set(e) == {"sequence", "name", "recorded_at"} for e in status["events"])
 
     asyncio.run(run())
@@ -176,7 +174,6 @@ def test_tool_errors_carry_hints_so_the_model_can_correct_itself(tmp_path):
                         assert wrong.isError and "ORD-421" in wrong.content[0].text
                         stock = await session.call_tool("get_inventory", {"warehouse_id": "Arequipa", "sku": "laptop-01"})
                         assert stock.isError is False and stock.structuredContent["available"] == 12
-                        # Every tool that takes a shipment id accepts the same spellings (review, 2026-10-07).
                         for name in ("find_alternative_carriers", "investigate_incident", "get_execution_status"):
                             result = await session.call_tool(name, {"shipment_id": " ship-421 "})
                             assert result.isError is False, (name, result.content)
@@ -230,6 +227,6 @@ def test_investigate_incident_reports_the_saved_preference(tmp_path):
         result = (await server.call_tool("investigate_incident", {"shipment_id": "SHIP-460"}))[1]
         preference = result["operator_preferences"]
         assert preference["preferred_plan_id"].split(":")[2] == "priority-first" and preference["changes_pick"]
-        assert json.dumps(preference)  # plain JSON for any MCP host
+        assert json.dumps(preference)
 
     asyncio.run(run())

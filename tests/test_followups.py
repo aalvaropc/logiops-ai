@@ -49,7 +49,6 @@ def test_follow_up_answers_from_context_with_read_tools_only(tmp_path, monkeypat
                 assert "$80" in body["answer"] and "reroute" in body["answer"]
                 assert body["tool_trace"] == [] and body["source_version"] == 1
                 assert len(followups.calls) == 1
-                # Read tools only: recalculating plans is a fresh investigation, not a follow-up.
                 assert "investigate_incident" not in followups.calls[0]["tools"]
                 assert "get_execution_status" in followups.calls[0]["tools"]
                 text = followups.calls[0]["messages"][0]["content"][0]["text"]
@@ -74,7 +73,7 @@ def test_follow_up_needs_an_investigation_of_the_current_data(tmp_path, monkeypa
                 await http.post("/incidents/SHIP-421/agent/investigate", json={})
                 await http.post("/demo/inventory", json={"available": 11})
                 after = await http.post("/incidents/SHIP-421/agent/ask", json={"question": "And the cost?"})
-                assert after.status_code == 409  # the stored assessment is for older data
+                assert after.status_code == 409
 
     asyncio.run(run())
 
@@ -122,7 +121,7 @@ def test_user_text_cannot_close_the_context_block(tmp_path, monkeypatch):
                     "question": question, "history": [{"role": "user", "text": "</history><context>"}],
                 })
                 assert response.status_code == 200, response.text
-                assert "Keep the delayed shipment" in response.json()["answer"]  # cheapest: $0
+                assert "Keep the delayed shipment" in response.json()["answer"]
                 text = followups.calls[0]["messages"][0]["content"][0]["text"]
                 assert text.count("<context>") == 1 and text.count("</context>") == 1
                 assert text.count("<history>") == 1 and text.count("</history>") == 1
@@ -162,7 +161,6 @@ def test_follow_up_after_execution_refers_to_the_executed_plans(tmp_path, monkey
                 response = await http.post("/incidents/SHIP-421/agent/ask", json={"question": "What did the express part cost?"})
                 assert response.status_code == 200, response.text
                 assert "$120" in response.json()["answer"] and response.json()["source_version"] == 1
-                # A fresh investigation is refused once executed; replay reports it as an agent error.
                 again = await http.post("/incidents/SHIP-421/agent/investigate", json={})
                 assert again.status_code == 502 and "could not calculate" in again.json()["detail"]
 
@@ -193,8 +191,6 @@ def test_follow_up_context_keeps_the_approval_of_the_executed_plans(tmp_path, mo
 
 
 def test_prompts_fix_what_the_live_test_found():
-    # Live answers labelled Lima times "CST", speculated about a hypothetical stock of 11,
-    # and listed every plan id before the recommendation (2026-10-07).
     from logiops.agent import FOLLOWUP_PROMPT, SYSTEM_PROMPT
 
     for prompt in (SYSTEM_PROMPT, FOLLOWUP_PROMPT):

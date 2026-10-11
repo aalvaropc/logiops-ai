@@ -22,7 +22,6 @@ RULES = {
 }
 NOTE_LIMIT = 200
 COST_LIMIT = 100_000
-# The incident migration rebuilds only its own tables, so this one survives it.
 SCHEMA = """CREATE TABLE IF NOT EXISTS operator_preferences (
     id INTEGER PRIMARY KEY CHECK (id = 1), preferences_json TEXT NOT NULL, updated_at TEXT NOT NULL)"""
 

@@ -103,7 +103,6 @@ def create_app(
         raise RuntimeError("Public mode requires LOGIOPS_ACCESS_TOKEN with at least 32 characters")
     if os.environ.get("LOGIOPS_PUBLIC") == "1" and not public_host:
         raise RuntimeError("Public mode requires LOGIOPS_PUBLIC_HOST")
-    # MCP Apps: web hosts must render views through a sandbox proxy on another origin.
     sandbox_host = os.environ.get("LOGIOPS_SANDBOX_HOST", "").strip().lower()
     if sandbox_host and (not HOSTNAME.fullmatch(sandbox_host) or ".." in sandbox_host):
         raise RuntimeError("LOGIOPS_SANDBOX_HOST must be one exact hostname without a scheme or port")
@@ -111,13 +110,12 @@ def create_app(
         raise RuntimeError("LOGIOPS_SANDBOX_HOST must differ from LOGIOPS_PUBLIC_HOST")
     path = Path(db_path or os.environ.get("LOGIOPS_DB_PATH", "data/logiops.sqlite3"))
     try:
-        scenario_day = scenario_clock(os.environ.get("LOGIOPS_SCENARIO_ANCHOR"))  # a bad value fails at startup
+        scenario_day = scenario_clock(os.environ.get("LOGIOPS_SCENARIO_ANCHOR"))
     except ValueError as exc:
         raise RuntimeError(str(exc)) from exc
     service = LogiOpsService(path, scenario_day=scenario_day)
     preferences = PreferenceStore(path)
     budget = DailyModelBudget.from_env(path)
-    # One live client for the app: building boto3 clients per request races on the default session.
     bedrock = BedrockConverse()
     mcp = create_mcp_server(service, preferences=preferences, public_host=public_host or None)
 
@@ -127,7 +125,6 @@ def create_app(
             yield
 
     app = FastAPI(title="LogiOps AI", version="0.1.0", lifespan=lifespan)
-    # Per-process secret that marks the agent's in-process MCP calls; never leaves the server.
     internal_key = secrets.token_hex(32)
     if agent_limit_per_minute is None:
         agent_limit_per_minute = int(os.environ.get("LOGIOPS_AGENT_LIMIT_PER_MINUTE", "10"))
@@ -182,8 +179,6 @@ def create_app(
             _self, host_origin = origins(request)
             if host_origin is None:
                 return JSONResponse(status_code=404, content={"detail": "Not found"})
-        # Views are loaded through srcdoc and inherit this policy, so it allows inline
-        # code but no network; each view also gets its own, stricter policy.
         policy = (
             "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:; "
             f"connect-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors {host_origin}"
@@ -229,7 +224,6 @@ def create_app(
         return service.reset(incident_id)
 
     def visible_plans(snapshot: dict[str, Any]) -> list[dict[str, Any]]:
-        # After execution the version moves on; what is shown are the executed plans.
         executions = snapshot["executions"]
         version = executions[0]["source_version"] if executions else snapshot["source_version"]
         return [plan for plan in snapshot["plans"] if plan["source_version"] == version]
@@ -313,7 +307,6 @@ def create_app(
                     access_token=access_token, internal_key=internal_key,
                 )
             except BedrockError as exc:
-                # Failed runs belong in the audit trail too, not only in the HTTP response.
                 service.record_agent_event(
                     incident_id, "agent_run_failed", {"job": "investigate", "mode": run_mode, "error": str(exc)}
                 )
@@ -327,7 +320,6 @@ def create_app(
         """Answer a follow-up from the latest investigation of the data being shown."""
         snapshot = service.get(incident_id)
         executions = snapshot["executions"]
-        # After execution the version moves on; follow-ups still refer to the executed plans.
         version = executions[0]["source_version"] if executions else snapshot["source_version"]
         latest = next((
             event for event in reversed(snapshot["events"])
@@ -343,7 +335,6 @@ def create_app(
                 {key: plan[key] for key in PLAN_FIELDS}
                 for plan in snapshot["plans"] if plan["source_version"] == version
             ],
-            # After execution the version moves on, so match the approval to the plans shown.
             "current_approval": next(
                 (item for item in snapshot["approvals"] if item["source_version"] == version), None
             ),
@@ -360,7 +351,6 @@ def create_app(
                     access_token=access_token, internal_key=internal_key,
                 )
             except BedrockError as exc:
-                # Answers change nothing and are not stored, but failed paid calls are audited.
                 service.record_agent_event(
                     incident_id, "agent_run_failed", {"job": "ask", "mode": run_mode, "error": str(exc)}
                 )
@@ -377,7 +367,6 @@ def create_app(
                     access_token=access_token, internal_key=internal_key,
                 )
             except BedrockError as exc:
-                # A briefing belongs to no incident, so its failure goes to the server log.
                 logger.warning("Briefing failed (%s mode): %s", run_mode, exc)
                 raise
         found = START_WITH.search(run["answer"])

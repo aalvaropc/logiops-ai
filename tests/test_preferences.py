@@ -29,8 +29,8 @@ def _picks(preferences):
 def test_a_250_dollar_cap_changes_the_pick_on_three_incidents_of_four():
     picks = _picks({"rule": "balanced", "max_cost_usd": 250})
     assert picks == {
-        "SHIP-421": "split-express",  # $120 already fits
-        "SHIP-433": "priority-air",  # $390 no longer fits; the hospital is still flown
+        "SHIP-421": "split-express",
+        "SHIP-433": "priority-air",
         "SHIP-452": "split-wait",
         "SHIP-460": "priority-first",
     }
@@ -42,7 +42,6 @@ def test_a_250_dollar_cap_changes_the_pick_on_three_incidents_of_four():
 
 def test_the_cheapest_rule_still_keeps_critical_orders_on_time():
     picks = _picks({"rule": "cheapest_unless_critical_late", "max_cost_usd": None})
-    # SHIP-433's $0 and $150 plans leave the hospital late; the cheapest safe plan is the $240 flight.
     assert picks == {"SHIP-421": "wait", "SHIP-433": "priority-air", "SHIP-452": "split-wait", "SHIP-460": "priority-first"}
 
 
@@ -82,7 +81,6 @@ def test_preferences_survive_a_restart_and_the_incident_migration(tmp_path):
     path = tmp_path / "prefs.sqlite3"
     LogiOpsService(path)
     PreferenceStore(path).put("cheapest_unless_critical_late", 250, "  Hospitals   first ")
-    # A later schema version rebuilds the incident tables, and only those.
     with sqlite3.connect(path) as connection:
         connection.execute("UPDATE meta SET value = '1' WHERE key = 'schema_version'")
     LogiOpsService(path)
@@ -104,11 +102,9 @@ def test_the_api_saves_applies_and_forgets_preferences(tmp_path, monkeypatch):
                     assert (await http.put("/operator/preferences", json=bad)).status_code == 422
                 saved = await http.put("/operator/preferences", json={"max_cost_usd": 250, "note": "Hospitals first"})
                 assert saved.status_code == 200 and saved.json()["preferences"]["rule"] == "balanced"
-                # Before any investigation there is nothing to pick from.
                 incident = (await http.get("/incidents/SHIP-433")).json()
                 assert incident["operator_preferences"]["max_cost_usd"] == 250 and incident["preference"] is None
 
-                # The agent sees the preference in the MCP result and recommends its plan.
                 run = (await http.post("/incidents/SHIP-433/agent/investigate", json={})).json()
                 preferred = next(plan for plan in run["plans"] if plan["kind"] == "priority-air")
                 assert run["answer"].rstrip().endswith(f"Recommended plan: {preferred['id']}")
@@ -116,14 +112,11 @@ def test_the_api_saves_applies_and_forgets_preferences(tmp_path, monkeypatch):
                 assert step["output"]["operator_preferences"]["preferred_plan_id"] == preferred["id"]
                 incident = (await http.get("/incidents/SHIP-433")).json()
                 assert incident["preference"]["preferred_plan_id"] == preferred["id"]
-                # A preference is not an approval.
                 assert incident["approvals"] == [] and incident["state"]["status"] == "investigated"
 
-                # Follow-ups answer with the preference in mind.
                 ask = (await http.post("/incidents/SHIP-433/agent/ask", json={"question": "Which plan now?"})).json()
                 assert preferred["id"] in ask["answer"]
 
-                # Resetting one incident keeps the preferences; resetting everything forgets them.
                 await http.post("/demo/reset", json={"incident_id": "SHIP-433"})
                 assert (await http.get("/operator/preferences")).json()["preferences"] is not None
                 await http.post("/demo/reset")

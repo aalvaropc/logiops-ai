@@ -48,8 +48,6 @@ class BedrockConverse:
         self.read_timeout = read_timeout
         self.max_tokens = max_tokens
         self._client = client
-        # boto3 clients are thread-safe once built; building one on the shared default session is not,
-        # and the app shares one instance across requests that call it from worker threads.
         self._lock = threading.Lock()
 
     def _get_client(self) -> Any:
@@ -64,7 +62,6 @@ class BedrockConverse:
                 config=Config(
                     connect_timeout=5,
                     read_timeout=self.read_timeout,
-                    # Adaptive mode backs off on ThrottlingException before we give up.
                     retries={"mode": "adaptive", "max_attempts": 4},
                 ),
             )
@@ -89,13 +86,11 @@ class BedrockConverse:
                 "AWS credentials are not configured; sign in with aws login or attach an instance role"
             ) from exc
         except ClientError as exc:
-            # Only the error code is relayed; messages can include account details.
             code = exc.response.get("Error", {}).get("Code", "Unknown")
             raise BedrockError(f"Bedrock Converse failed ({code}); check model access and region") from exc
         except (ReadTimeoutError, ConnectTimeoutError, EndpointConnectionError) as exc:
             raise BedrockError("Bedrock request timed out or could not connect") from exc
         except BotoCoreError as exc:
-            # The class name (e.g. MissingDependencyException) says what to fix without leaking details.
             raise BedrockError(f"Bedrock Converse failed ({type(exc).__name__})") from exc
         if not isinstance(response, dict) or "stopReason" not in response:
             raise BedrockError("Bedrock returned an invalid Converse response")

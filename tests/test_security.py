@@ -43,7 +43,6 @@ def test_agent_endpoint_has_its_own_limit_and_internal_mcp_calls_are_exempt(tmp_
     monkeypatch.setenv("LOGIOPS_AGENT_MODE", "replay")
 
     async def run():
-        # An MCP budget of 3 is smaller than one investigation's internal MCP calls.
         app = create_app(
             tmp_path / "limits.sqlite3", access_token=TOKEN,
             mcp_limit_per_minute=3, agent_limit_per_minute=2,
@@ -58,7 +57,6 @@ def test_agent_endpoint_has_its_own_limit_and_internal_mcp_calls_are_exempt(tmp_
                     for _ in range(3)
                 ]
                 assert statuses == [200, 200, 429]
-                # A forged internal header does not bypass the external MCP limit.
                 forged = [
                     (await http.post("/mcp", headers={"x-logiops-internal": "guess"})).status_code
                     for _ in range(4)
@@ -88,8 +86,8 @@ def test_cloudfront_viewer_address_keys_the_limit_only_when_trusted(tmp_path, mo
 
     trusted = asyncio.run(statuses(True))
     untrusted = asyncio.run(statuses(False))
-    assert 429 not in trusted  # three different viewers, one request each
-    assert untrusted[-1] == 429  # same TCP peer for all three
+    assert 429 not in trusted
+    assert untrusted[-1] == 429
 
 
 def test_non_ascii_token_is_rejected_and_responses_are_not_cacheable(tmp_path):

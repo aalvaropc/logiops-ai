@@ -18,14 +18,12 @@ def test_reservations_are_atomic_per_lima_day_and_released(tmp_path):
     budget = DailyModelBudget(tmp_path / "budget.sqlite3", limit=10, clock=lambda: now[0])
     day = budget.reserve(8)
     assert day == "2026-10-20" and budget.used() == 8
-    assert budget.reserve(4) is None and budget.used() == 8  # 12 would not fit: nothing is held
-    budget.release(day, 5)  # the run made 3 calls
+    assert budget.reserve(4) is None and budget.used() == 8
+    budget.release(day, 5)
     assert budget.used() == 3 and budget.reserve(4) == "2026-10-20"
-    # After midnight the run still releases on the day it reserved; today starts empty.
     now[0] = datetime(2026, 10, 21, 0, 5, tzinfo=LIMA)
     budget.release(day, 4)
     assert budget.used() == 0 and budget.used("2026-10-20") == 3
-    # Stored in the database: a restart keeps the day's count.
     assert DailyModelBudget(tmp_path / "budget.sqlite3", limit=10, clock=lambda: now[0]).used("2026-10-20") == 3
 
 
@@ -40,7 +38,6 @@ def test_the_budget_creates_its_directory_and_reads_the_limit(tmp_path, monkeypa
 
 
 def test_concurrent_runs_never_exceed_the_cap_together(tmp_path):
-    # Review: ten runs checking first and spending later reached 80 calls on a limit of 3.
     budget = DailyModelBudget(tmp_path / "race.sqlite3", limit=20)
 
     class Answers:
@@ -118,7 +115,7 @@ def test_live_calls_are_counted_and_the_unused_reservation_released(tmp_path, mo
 
 
 def test_a_used_budget_falls_back_to_the_replay_and_says_so(tmp_path, monkeypatch):
-    first, briefing = _session(tmp_path, monkeypatch, limit=4)  # under an investigation's 8 and a briefing's 5
+    first, briefing = _session(tmp_path, monkeypatch, limit=4)
     assert FakeBedrock.calls == 0
     assert first["mode"] == briefing["mode"] == "replay" and first["fallback"] == briefing["fallback"] == "daily_budget"
     assert first["answer"].rstrip().splitlines()[-1].startswith("Recommended plan: SHIP-421:")

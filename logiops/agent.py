@@ -17,9 +17,7 @@ from .scenario import INCIDENT_IDS
 
 BASE_URL = "http://127.0.0.1:8000"
 INTERNAL_HEADER = "x-logiops-internal"
-# CloudFront closes the origin request after 60 s; finish (or fail clearly) first.
 DEFAULT_DEADLINE_SECONDS = 50.0
-# Most Converse calls one run can make; a live request reserves this many from the daily budget.
 INVESTIGATE_TURNS, FOLLOWUP_TURNS, BRIEFING_TURNS = 8, 4, 5
 READ_TOOLS = {
     "get_shipment",
@@ -29,9 +27,7 @@ READ_TOOLS = {
     "investigate_incident",
     "get_execution_status",
 }
-# Follow-ups answer from the stored investigation; recalculating plans is a fresh investigation.
 FOLLOWUP_TOOLS = READ_TOOLS - {"investigate_incident"}
-# A briefing reads the whole queue and calculates nothing: plans belong to one incident's investigation.
 BRIEFING_TOOLS = FOLLOWUP_TOOLS | {"list_incidents"}
 SPOKEN_LINE = """Spoken: <one or two short sentences a voice assistant reads aloud, without plan
 ids, tables, Markdown, or relative times such as tonight or tomorrow>"""
@@ -224,7 +220,6 @@ def split_spoken(answer: str) -> tuple[str, str]:
         line = found[-1]
         spoken = MARKUP.sub("", line.group(1)).strip().strip('"“”').strip()
         rest = re.sub(r"\n{3,}", "\n\n", answer[:line.start()] + answer[line.end():]).strip()
-        # A rule left dangling above the removed line ("---") goes too.
         rest = re.sub(r"(?:\n\s*(?:-{3,}|\*{3,}|_{3,})\s*)+$", "", "\n" + rest).strip()
         if spoken:
             return (rest or spoken), spoken[:400]
@@ -247,8 +242,6 @@ async def _with_deadline(coroutine: Any, deadline_seconds: float) -> dict[str, A
     except TimeoutError as exc:
         raise BedrockError(f"Agent did not finish within {deadline_seconds:g} seconds; try again") from exc
     except BaseExceptionGroup as group:
-        # AnyIO wraps exceptions raised inside MCP's task groups. Preserve our
-        # controlled API error without leaking a transport traceback to callers.
         found = _bedrock_error(group)
         if found is not None:
             raise found from None

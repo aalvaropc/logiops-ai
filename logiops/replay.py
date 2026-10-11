@@ -10,7 +10,6 @@ from typing import Any
 from .bedrock import BedrockError
 from .scenario import best_plan
 
-# Most specific first: "express transfer" names the transfer, not split + express.
 PLAN_KEYWORDS = (
     ("express-transfer", re.compile(r"\btransfer\b", re.I)),
     ("priority-air-ground", re.compile(r"\b(air|fly|flight)\b.*\bground\b|\bground\b.*\b(air|fly|flight)\b", re.I)),
@@ -33,7 +32,6 @@ def _tool_use(calls: list[tuple[str, dict[str, Any]]]) -> dict[str, Any]:
         "stopReason": "tool_use",
         "usage": {"inputTokens": 0, "outputTokens": 0},
         "output": {"message": {"role": "assistant", "content": [
-            # Ids stay unique when a tool is called twice (two orders).
             {"toolUse": {"toolUseId": f"{name}:{index}", "name": name, "input": arguments}}
             for index, (name, arguments) in enumerate(calls)
         ]}},
@@ -87,7 +85,6 @@ class ReplayConverse:
             return _tool_use(calls)
         result = _result(messages, "investigate_incident")
         if result.get("status") == "error":
-            # Same outcome as a real model that cannot calculate plans: a clear agent error.
             raise BedrockError("Agent could not calculate the incident plans: "
                                + json.dumps(result["content"][0].get("json", {}))[:200])
         plans = result["content"][0]["json"]["plans"]
@@ -128,7 +125,6 @@ class ReplayConverse:
         preference = context.get("operator_preferences")
         best = next((p for p in plans if preference and p["id"] == preference["preferred_plan_id"]), best_plan(plans))
         cheapest = min(plans, key=lambda p: (p["incremental_cost_usd"], p["projected_customer_delay_hours"]))
-        # Once executed, an open question is about what actually ran.
         executed = next((p for p in plans if context.get("execution") and p["id"] == context["execution"]["plan_id"]), None)
         plan = next(
             (p for kind, pattern in PLAN_KEYWORDS if pattern.search(question) for p in plans if p["kind"] == kind),

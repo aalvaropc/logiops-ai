@@ -183,7 +183,7 @@ def test_truncated_final_answer_is_kept_but_flagged(tmp_path):
 
 
 @pytest.mark.parametrize(("incident_id", "orders", "inventory", "best"), [
-    ("SHIP-433", 2, False, "priority-air-ground"),  # two orders, no warehouse
+    ("SHIP-433", 2, False, "priority-air-ground"),
     ("SHIP-452", 1, True, "split-expedite"),
     ("SHIP-460", 2, True, "express-transfer"),
 ])
@@ -200,7 +200,6 @@ def test_replay_investigates_every_incident_through_mcp(tmp_path, monkeypatch, i
                 assert not any(step["is_error"] for step in body["tool_trace"])
                 pick = next(plan for plan in body["plans"] if plan["kind"] == best)
                 assert body["answer"].rstrip().endswith(f"Recommended plan: {pick['id']}")
-                # Each incident keeps its own audit trail.
                 other = (await http.get("/incidents/SHIP-421")).json()
                 assert [event["name"] for event in other["events"]] == ["scenario_reset"]
 
@@ -216,13 +215,10 @@ def test_the_briefing_ranks_the_queue_with_read_tools_only(tmp_path, monkeypatch
             async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url=BASE_URL) as http:
                 body = (await http.post("/agent/briefing", json={})).json()
                 assert [step["tool"] for step in body["tool_trace"]] == ["list_incidents"]
-                # Critical orders first, then the earliest due: the hospital in Trujillo is due with the
-                # one in Cusco, and its replenishment is 48 h late.
                 assert body["start_with"] == "SHIP-460"
                 assert body["answer"].index("SHIP-460") < body["answer"].index("SHIP-433") < body["answer"].index("SHIP-421")
                 assert body["spoken"].startswith("You have 4 open incidents. Start with SHIP-460")
                 assert "Spoken:" not in body["answer"]
-                # It changes nothing: no plans, no events.
                 for incident_id in ("SHIP-421", "SHIP-433", "SHIP-452", "SHIP-460"):
                     snapshot = (await http.get(f"/incidents/{incident_id}")).json()
                     assert snapshot["plans"] == [] and [e["name"] for e in snapshot["events"]] == ["scenario_reset"]
@@ -262,13 +258,11 @@ def test_the_briefing_cannot_calculate_plans_and_may_read_any_incident(tmp_path)
 def test_replies_carry_a_short_line_to_read_aloud(tmp_path, monkeypatch):
     from logiops.agent import split_spoken
 
-    # The model's Spoken: line is split off; without one, the first sentence of prose is used.
     assert split_spoken("## SHIP-421\n\nText.\n\nSpoken: Split it.\nRecommended plan: X:v1") == (
         "## SHIP-421\n\nText.\n\nRecommended plan: X:v1", "Split it.")
     assert split_spoken("## 🚨 SHIP-433 — Outage\n\n**The carrier** stopped. More.\n\nRecommended plan: X") == (
         "## 🚨 SHIP-433 — Outage\n\n**The carrier** stopped. More.\n\nRecommended plan: X", "The carrier stopped.")
     assert split_spoken('Answer.\n**Spoken:** "Short."') == ("Answer.", "Short.")
-    # Live answer shape (2026-10-07): a rule, then the spoken line; the rule goes with it.
     assert split_spoken("Answer.\n\n---\nSpoken: Short.") == ("Answer.", "Short.")
     monkeypatch.setenv("LOGIOPS_AGENT_MODE", "replay")
 
