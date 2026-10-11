@@ -93,3 +93,70 @@ def test_no_revision_without_time_for_it(tmp_path):
 
     model, run_result = asyncio.run(run())
     assert len(model.calls) == 2 and run_result["grounded"] is False and len(run_result["evaluations"]) == 1
+
+
+class Replies:
+    """A follow-up or briefing model: answers in order, after one list_incidents call for a briefing."""
+
+    def __init__(self, *answers, briefing=False):
+        self.answers, self.briefing, self.calls = list(answers), briefing, []
+
+    async def converse(self, messages, system, tools):
+        self.calls.append(messages[-1])
+        if self.briefing and len(self.calls) == 1:
+            return {"stopReason": "tool_use", "usage": {}, "output": {"message": {"role": "assistant", "content": [
+                {"toolUse": {"toolUseId": "l1", "name": "list_incidents", "input": {}}}]}}}
+        return answer(self.answers.pop(0) if len(self.answers) > 1 else self.answers[0])
+
+
+def _follow_up(tmp_path, model, question, execute=False):
+    """Investigate SHIP-421 with the replay (and approve and execute its pick), then ask `model` a follow-up."""
+    async def run():
+        app = create_app(tmp_path / "follow-up.sqlite3", followup_client=model, agent_limit_per_minute=100)
+        async with app.router.lifespan_context(app):
+            async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url=BASE_URL) as http:
+                run = (await http.post("/incidents/SHIP-421/agent/investigate", json={})).json()
+                if execute:
+                    plan = next(p for p in run["plans"] if p["id"] == run["evaluations"][-1]["recommended_plan_id"])
+                    body = {"plan_id": plan["id"], "source_version": plan["source_version"]}
+                    await http.post("/incidents/SHIP-421/approvals", json={**body, "approved_by": "operator"})
+                    await http.post("/incidents/SHIP-421/execute", json=body)
+                return (await http.post("/incidents/SHIP-421/agent/ask", json={"question": question, "history": []})).json()
+
+    return asyncio.run(run())
+
+
+def test_a_follow_up_is_checked_and_revised(tmp_path, monkeypatch):
+    monkeypatch.setenv("LOGIOPS_AGENT_MODE", "replay")
+    model = Replies("Rerouting would cost $95.\nSpoken: About 95 dollars.", "Rerouting costs $80.\nSpoken: 80 dollars.")
+    body = _follow_up(tmp_path, model, "How much is the reroute?")
+    assert [evaluation["passed"] for evaluation in body["evaluations"]] == [False, True] and body["grounded"] is True
+    assert "$95" in model.calls[1]["content"][0]["text"] and body["answer"] == "Rerouting costs $80."
+
+
+def test_a_follow_up_may_quote_the_question_and_the_record(tmp_path, monkeypatch):
+    monkeypatch.setenv("LOGIOPS_AGENT_MODE", "replay")
+    hypothetical = Replies("With only 11 units in Arequipa, 9 more units would need express, which carries 8.\nSpoken: Not enough.")
+    assert _follow_up(tmp_path, hypothetical, "What if only 11 units were in stock?")["grounded"] is True
+    executed = Replies("The split was approved and has been executed; delivery is projected.\nSpoken: It ran.",
+                       "I executed the split.\nSpoken: Done.")
+    body = _follow_up(tmp_path / "executed", executed, "What happened?", execute=True)
+    assert body["grounded"] is True and len(body["evaluations"]) == 1
+    claimed = _follow_up(tmp_path / "claimed", Replies("I executed the split.\nSpoken: Done."), "What happened?", execute=True)
+    assert claimed["grounded"] is False and "I executed" in claimed["evaluations"][0]["issues"][0]
+
+
+def test_the_briefing_is_checked_against_every_incident(tmp_path):
+    good = ("SHIP-433 first: 12 critical units at risk for ORD-433A, due Oct 13, 12:00 Lima time, +24 h. "
+            "SHIP-460 next: 45 units.\n\nStart with: SHIP-433\nSpoken: Start with SHIP-433.")
+    model = Replies(good.replace("SHIP-460 next", "SHIP-999 next"), good, briefing=True)
+
+    async def run():
+        app = create_app(tmp_path / "briefing.sqlite3", model)
+        async with app.router.lifespan_context(app):
+            async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url=BASE_URL) as http:
+                return (await http.post("/agent/briefing", json={"question": "Any delays today?"})).json()
+
+    body = asyncio.run(run())
+    assert [evaluation["passed"] for evaluation in body["evaluations"]] == [False, True] and body["grounded"] is True
+    assert "SHIP-999" in body["evaluations"][0]["issues"][0] and body["start_with"] == "SHIP-433"

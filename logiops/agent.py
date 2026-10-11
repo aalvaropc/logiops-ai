@@ -12,7 +12,7 @@ from mcp import ClientSession
 from mcp.client.streamable_http import streamable_http_client
 
 from .bedrock import BedrockError
-from .evaluator import check_recommendation
+from .evaluator import check_facts, check_recommendation
 from .scenario import INCIDENT_IDS
 
 
@@ -103,7 +103,7 @@ async def _converse_loop(
     app: Any, client: ConverseClient, shipments: frozenset[str], first_message: str, *,
     system: str, required_tool: str | None, tools: frozenset[str] | set[str] = READ_TOOLS,
     access_token: str | None = None, internal_key: str | None = None, max_turns: int = 8,
-    evaluate: Evaluate | None = None, revise_until: float | None = None,
+    evaluate: Evaluate | None = None, revise_until: float | None = None, closing: str = "",
 ) -> dict[str, Any]:
     """The tool-use loop. With `evaluate`, the final answer (its spoken line included) is checked;
     a failed check is sent back once for a revision while a turn is left and the clock is before
@@ -165,7 +165,7 @@ async def _converse_loop(
                             evaluations.append({"attempt": len(evaluations) + 1, **evaluate(answer, trace)})
                             if (not evaluations[-1]["passed"] and len(evaluations) == 1 and turn + 1 < max_turns
                                     and (revise_until is None or asyncio.get_running_loop().time() < revise_until)):
-                                messages.append({"role": "user", "content": [{"text": revision_request(evaluations[-1])}]})
+                                messages.append({"role": "user", "content": [{"text": revision_request(evaluations[-1], closing)}]})
                                 continue
                         answer, spoken = split_spoken(answer)
                         result = {"answer": answer, "spoken": spoken, "tool_trace": trace, "usage": usage}
@@ -211,12 +211,17 @@ async def _converse_loop(
     raise BedrockError(f"Agent exceeded {max_turns} Converse turns")
 
 
-def revision_request(evaluation: dict[str, Any]) -> str:
+def revision_request(evaluation: dict[str, Any], closing: str = "") -> str:
     return (
         "Your answer failed an automatic check against the tool results:\n- " + "\n- ".join(evaluation["issues"])
-        + "\nRevise it using only the tool results; you may call tools again. End with the same two lines "
-        "(Spoken: and Recommended plan:)."
+        + "\nRevise it using only the tool results and the context; you may call tools again." + (f" {closing}" if closing else "")
     )
+
+
+def merged_facts(*facts: dict[str, list[Any]]) -> dict[str, list[Any]]:
+    """Several sets of known facts (scenario.known_figures and the like) as one."""
+    keys = {key for item in facts for key in item}
+    return {key: sorted({value for item in facts for value in item.get(key, [])}) for key in keys}
 
 
 def plans_from(trace: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -301,6 +306,7 @@ async def investigate_with_bedrock(
         system=SYSTEM_PROMPT, required_tool="investigate_incident",
         access_token=access_token, internal_key=internal_key, max_turns=max_turns, evaluate=evaluate,
         revise_until=asyncio.get_running_loop().time() + deadline_seconds - REVISION_MIN_SECONDS,
+        closing="End with the same two lines (Spoken: and Recommended plan:).",
     ), deadline_seconds)
 
 
@@ -326,13 +332,21 @@ async def ask_with_bedrock(
     app: Any, client: ConverseClient, shipment_id: str, question: str,
     context: dict[str, Any], history: list[dict[str, str]], *,
     access_token: str | None = None, internal_key: str | None = None, max_turns: int = FOLLOWUP_TURNS,
-    deadline_seconds: float = FOLLOWUP_DEADLINE_SECONDS,
+    deadline_seconds: float = FOLLOWUP_DEADLINE_SECONDS, facts: dict[str, Any] | None = None,
+    plans: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
-    """Answer a follow-up from the stored investigation with read tools only (no new plans)."""
+    """Answer a follow-up from the stored investigation with read tools only (no new plans). With
+    `facts`, the answer's figures, ids, times and claims are checked against them and `plans`."""
+    evaluate = None
+    if facts is not None:
+        def evaluate(answer: str, _trace: list[dict[str, Any]]) -> dict[str, Any]:
+            return check_facts(answer, plans or [], facts)
     return await _with_deadline(_converse_loop(
         app, client, frozenset({shipment_id.upper()}), followup_message(shipment_id, question, context, history),
         system=FOLLOWUP_PROMPT, required_tool=None, tools=FOLLOWUP_TOOLS,
-        access_token=access_token, internal_key=internal_key, max_turns=max_turns,
+        access_token=access_token, internal_key=internal_key, max_turns=max_turns, evaluate=evaluate,
+        revise_until=asyncio.get_running_loop().time() + deadline_seconds - REVISION_MIN_SECONDS,
+        closing="End with the same Spoken: line.",
     ), deadline_seconds)
 
 
@@ -346,11 +360,18 @@ def briefing_message(question: str, preferences: dict[str, Any] | None) -> str:
 async def brief_with_bedrock(
     app: Any, client: ConverseClient, question: str, preferences: dict[str, Any] | None, *,
     access_token: str | None = None, internal_key: str | None = None, max_turns: int = BRIEFING_TURNS,
-    deadline_seconds: float = BRIEFING_DEADLINE_SECONDS,
+    deadline_seconds: float = BRIEFING_DEADLINE_SECONDS, facts: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    """Brief the open incidents in inbox order, with read tools only; nothing is calculated or stored."""
+    """Brief the open incidents in inbox order, with read tools only; nothing is calculated or stored.
+    With `facts` (every incident's known facts), the answer is checked against them."""
+    evaluate = None
+    if facts is not None:
+        def evaluate(answer: str, _trace: list[dict[str, Any]]) -> dict[str, Any]:
+            return check_facts(answer, [], facts)
     return await _with_deadline(_converse_loop(
         app, client, frozenset(INCIDENT_IDS), briefing_message(question, preferences),
         system=BRIEFING_PROMPT, required_tool="list_incidents", tools=BRIEFING_TOOLS,
-        access_token=access_token, internal_key=internal_key, max_turns=max_turns,
+        access_token=access_token, internal_key=internal_key, max_turns=max_turns, evaluate=evaluate,
+        revise_until=asyncio.get_running_loop().time() + deadline_seconds - REVISION_MIN_SECONDS,
+        closing="End with the same two lines (Start with: and Spoken:).",
     ), deadline_seconds)

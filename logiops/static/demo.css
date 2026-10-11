@@ -84,6 +84,8 @@ input::placeholder { color: #6b888e; }
 .agent-answer small { color: #8eadaf; }
 .visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 .conversation { list-style: none; display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; max-height: 420px; overflow-y: auto; margin: 20px 0 0; padding: 4px 2px; }
+.turn .check-badge { display: inline-block; margin-top: 8px; padding: 2px 8px; border-radius: 99px; color: #0b2420; background: #77dfc8; font-size: 11px; font-weight: 700; }
+.turn .check-badge.failed { color: #ffd6d1; background: #5c2621; }
 .turn { max-width: 88%; min-width: 0; overflow-wrap: anywhere; padding: 13px 16px; border-radius: 12px; background: #0d1c20; border: 1px solid #263f45; }
 .turn.user { justify-self: end; background: #1b3939; border-color: #44726d; }
 .turn.assistant { justify-self: start; border-left: 3px solid #71dfc6; }

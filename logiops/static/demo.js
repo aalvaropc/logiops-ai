@@ -504,6 +504,12 @@ function renderConversation() {
     const text = entry.role === "assistant" ? renderMarkdown(entry.text) : document.createElement("p");
     if (entry.role !== "assistant") text.textContent = entry.text;
     item.append(who, text);
+    if (entry.check) {
+      const badge = document.createElement("span");
+      badge.className = `check-badge${entry.check.passed ? "" : " failed"}`;
+      badge.textContent = entry.check.text;
+      item.append(badge);
+    }
     if (entry.meta) {
       const meta = document.createElement("small");
       meta.textContent = entry.meta;
@@ -530,8 +536,8 @@ function welcomeText() {
   return `Hi, I'm LogiOps. ${queue}. Ask “any delays today?” for my briefing, or ask what's happening with ${state.incidentId}.`;
 }
 
-function say(role, text, meta, spoken) {
-  state.conversation.push({ role, text, meta });
+function say(role, text, meta, spoken, check) {
+  state.conversation.push({ role, text, meta, check });
   renderConversation();
   if (role === "assistant" && $("speak-replies").checked && "speechSynthesis" in window) {
     window.speechSynthesis.cancel();
@@ -630,7 +636,7 @@ function render(snapshot) {
   const agentEvent = latestAgentEvent(snapshot);
   $("agent-mode").textContent = agentEvent ? agentEvent.data.mode : "Agent";
   if (!state.conversation.length && agentEvent) {
-    state.conversation.push({ role: "assistant", text: agentEvent.data.answer, meta: traceSummary(agentEvent.data) });
+    state.conversation.push({ role: "assistant", text: agentEvent.data.answer, meta: traceSummary(agentEvent.data), check: checkBadge(agentEvent.data) });
   }
   renderConversation();
   renderPreferenceLine(snapshot);
@@ -649,6 +655,21 @@ function render(snapshot) {
     $("execution-result").textContent = executionSummary(snapshot, execution);
   }
   renderControls();
+}
+
+function checkBadge(run) {
+  if (!run.evaluations?.length) return null;
+  if (!run.grounded) {
+    const issue = run.evaluations[run.evaluations.length - 1].issues[0] || "";
+    return { passed: false, text: `Did not pass the data check: ${issue}` };
+  }
+  return { passed: true, text: run.evaluations.length > 1 ? "Checked against the data after one revision" : "Checked against the data" };
+}
+
+function noteCheck(run) {
+  if (run.evaluations?.length && !run.grounded) {
+    message("This answer did not pass the automatic check against the incident's data. The plan cards are calculated by code; rely on them.");
+  }
 }
 
 function noteFallback(run) {
@@ -793,8 +814,9 @@ async function handleUtterance(raw) {
       await act(async () => { run = await request("/agent/briefing", "POST", { question: text }); }, "");
       state.briefingPick = run.start_with;
       renderInbox();
-      say("assistant", run.answer, `briefing · ${traceSummary(run)}`, run.spoken);
+      say("assistant", run.answer, `briefing · ${traceSummary(run)}`, run.spoken, checkBadge(run));
       noteFallback(run);
+      noteCheck(run);
     } catch (error) {
       say("assistant", `I couldn't do that: ${error.message || error}`);
     }
@@ -874,8 +896,9 @@ async function handleUtterance(raw) {
           ? await request(incidentPath("/agent/investigate"), "POST", { question: text })
           : await request(incidentPath("/agent/ask"), "POST", { question: text, history });
       }, "");
-      say("assistant", run.answer, `${fresh ? "investigation" : "follow-up"} · ${traceSummary(run)}`, run.spoken);
+      say("assistant", run.answer, `${fresh ? "investigation" : "follow-up"} · ${traceSummary(run)}`, run.spoken, checkBadge(run));
       noteFallback(run);
+      noteCheck(run);
       if (fresh) {
         showMcpApp(run).catch((error) => {
           console.warn("MCP App failed:", error);
