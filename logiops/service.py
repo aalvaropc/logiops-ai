@@ -463,6 +463,6 @@ class LogiOpsService:
                 "tool_trace": run["tool_trace"],
                 "usage": run["usage"],
                 "mode": run["mode"],
-                **{key: run[key] for key in ("model", "evaluations", "grounded") if key in run},
+                **{key: run[key] for key in ("model", "evaluations", "grounded", "fallback") if key in run},
             })
             return {"plans": plans, "source_version": version}
