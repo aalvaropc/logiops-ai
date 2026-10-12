@@ -189,7 +189,7 @@ def test_demo_has_basic_accessibility_hooks():
     assert 'box.setAttribute("role", success || !text ? "status" : "alert")' in script
     assert 'container.setAttribute("role", "radiogroup")' in script
     html = (root / "demo.html").read_text()
-    assert 'lang="en"' in html and 'aria-live="polite"' in html and 'frame.title = "Resolution options' in script
+    assert 'lang="en"' in html and 'aria-live="polite"' in html and 'frameTitle: "Resolution options (MCP App)"' in script
     assert 'node.setAttribute("role", "region")' in script and "node.tabIndex = 0" in script
     assert 'document.createElement(empty ? "td" : "th")' in script
     assert "Math.min(6, previous + 1, 3 + block.level - top)" in script

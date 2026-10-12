@@ -2,6 +2,7 @@
 
 import { createApi, createStorage, explainError as explain } from "./app/api.js";
 import { createMcpClient } from "./app/mcp.js";
+import { createMcpAppHost } from "./app/mcp-host.js";
 import { createStore } from "./app/store.js";
 import {
   EVENT_LABELS, formatDate, visibleVersion, visibleApproval, visiblePlans, latestAgentEvent, byRank, allocationSummary,
@@ -36,10 +37,7 @@ const device = (method, ...args) => {
   const api = window.LogiOpsDevice;
   if (api && typeof api[method] === "function") api[method](...args);
 };
-const MCP_APP = {
-  uriPrefix: "ui://logiops/resolution-options", mime: "text/html;profile=mcp-app", protocol: "2026-01-26",
-  proxyPath: "/mcp-app/sandbox.html",
-};
+const MCP_APP = { uriPrefix: "ui://logiops/resolution-options", proxyPath: "/mcp-app/sandbox.html" };
 const SANDBOX_ORIGIN = (() => {
   const value = document.querySelector('meta[name="logiops-sandbox-origin"]')?.content || "";
   try {
@@ -47,7 +45,6 @@ const SANDBOX_ORIGIN = (() => {
     return /^https?:$/.test(url.protocol) && url.origin !== location.origin ? url.origin : null;
   } catch (_) { return null; }
 })();
-const app = { generation: 0, resource: null, nextId: 1 };
 function message(text, success = false) {
   const box = $("message");
   box.textContent = text;
@@ -149,26 +146,13 @@ function hostContext() {
   };
 }
 
-function sendHostContext() {
-  const frame = $("mcp-app-frame");
-  if (!state.app?.ready || !frame) return;
-  frame.contentWindow.postMessage({ jsonrpc: "2.0", method: "ui/notifications/host-context-changed", params: hostContext() }, SANDBOX_ORIGIN);
-}
-
-function loadAppResource() {
-  app.resource ??= (async () => {
-    const listed = await mcpRequest("tools/list", {});
-    const tool = listed.tools.find((item) => item.name === "investigate_incident");
-    const uri = tool?._meta?.ui?.resourceUri ?? tool?._meta?.["ui/resourceUri"];
-    if (typeof uri !== "string" || !uri.startsWith(MCP_APP.uriPrefix)) return null;
-    const read = await mcpRequest("resources/read", { uri });
-    const content = read.contents?.[0];
-    if (!content || content.mimeType !== MCP_APP.mime || typeof content.text !== "string") return null;
-    const ui = content._meta?.ui || {};
-    return { uri, html: content.text, csp: ui.csp || {}, prefersBorder: ui.prefersBorder !== false, invoked: tool._meta.ui?.invoked || "" };
-  })().catch((error) => { app.resource = null; throw error; });
-  return app.resource;
-}
+const mcpHost = createMcpAppHost({
+  sandboxOrigin: SANDBOX_ORIGIN, hostOrigin: location.origin, proxyPath: MCP_APP.proxyPath, slot: $("mcp-app-slot"),
+  mcp: mcpClient, uriPrefix: MCP_APP.uriPrefix, hostInfo: { name: "LogiOps Alexa+-style demo", version: "1.0.0" },
+  hostContext, frameTitle: "Resolution options (MCP App)",
+  onMessage: (params) => selectFromApp(params),
+  onHide: () => { $("mcp-app").hidden = true; },
+});
 
 async function showMcpApp(run) {
   const step = run.tool_trace?.find((item) => item.tool === "investigate_incident" && !item.is_error);
@@ -179,71 +163,32 @@ async function showMcpApp(run) {
       + "Open the demo on 127.0.0.1 or localhost, or on the deployed hostname. The plans are listed below.");
     return;
   }
-  const generation = ++app.generation;
-  const resource = await loadAppResource();
-  if (!resource || generation !== app.generation || !state.snapshot
-      || String(step.input?.shipment_id || "").trim().toUpperCase() !== state.incidentId
-      || step.output.source_version !== visibleVersion(state.snapshot)) return;
-  await teardownMcpApp("replaced", { invalidate: false });
-  if (generation !== app.generation) return;
-  state.app = {
-    incidentId: state.incidentId,
-    version: step.output.source_version,
-    input: step.input,
+  const wanted = { incidentId: state.incidentId, version: step.output.source_version };
+  const resource = await mcpHost.show({
+    toolName: "investigate_incident", input: step.input,
     result: {
       content: [{ type: "text", text: JSON.stringify(step.output) }], structuredContent: step.output,
       _meta: { "logiops/recommended_plan_id": recommendedPlan(state.snapshot)?.id || null },
     },
-    resource,
-    ready: false,
-  };
-  const frame = document.createElement("iframe");
-  frame.id = "mcp-app-frame";
-  frame.title = "Resolution options (MCP App)";
-  frame.setAttribute("sandbox", "allow-scripts allow-same-origin");
-  frame.setAttribute("referrerpolicy", "no-referrer");
-  frame.src = `${SANDBOX_ORIGIN}${MCP_APP.proxyPath}?host=${encodeURIComponent(location.origin)}`;
-  $("mcp-app-slot").replaceChildren(frame);
+    stillWanted: () => Boolean(state.snapshot) && String(step.input?.shipment_id || "").trim().toUpperCase() === state.incidentId
+      && wanted.version === visibleVersion(state.snapshot),
+  });
+  if (!resource) return;
+  state.app = wanted;
   $("mcp-app-uri").textContent = resource.uri;
   $("mcp-app-status").textContent = resource.invoked ? `· ${resource.invoked}` : "";
   $("mcp-app").classList.toggle("borderless", !resource.prefersBorder);
   $("mcp-app").hidden = false;
 }
 
-function teardownMcpApp(reason, { invalidate = true } = {}) {
-  const current = state.app;
-  const frame = $("mcp-app-frame");
-  state.app = null;
-  if (invalidate) app.generation += 1;
-  $("mcp-app").hidden = true;
-  if (!frame) return Promise.resolve();
-  return new Promise((resolve) => {
-    let finished = false;
-    const id = `teardown-${app.nextId++}`;
-    const finish = () => {
-      if (finished) return;
-      finished = true;
-      window.removeEventListener("message", onReply);
-      frame.remove();
-      resolve();
-    };
-    const onReply = (event) => {
-      if (event.source === frame.contentWindow && event.origin === SANDBOX_ORIGIN && event.data?.id === id) finish();
-    };
-    if (!current?.ready) return finish();
-    window.addEventListener("message", onReply);
-    frame.contentWindow.postMessage({ jsonrpc: "2.0", id, method: "ui/resource-teardown", params: { reason } }, SANDBOX_ORIGIN);
-    setTimeout(finish, 500);
-  });
-}
-
 function hideMcpApp(reason = "hidden") {
-  teardownMcpApp(reason);
+  state.app = null;
+  mcpHost.hide(reason);
 }
 
 function showMcpAppNote(text) {
-  const frame = $("mcp-app-frame");
-  if (frame) frame.remove();
+  state.app = null;
+  mcpHost.hide("note");
   const note = document.createElement("p");
   note.className = "mcp-app-note";
   note.textContent = text;
@@ -255,12 +200,12 @@ function showMcpAppNote(text) {
 $("mcp-app-theme").addEventListener("click", () => {
   state.cardTheme = state.cardTheme === "dark" ? "light" : "dark";
   $("mcp-app-theme").setAttribute("aria-pressed", String(state.cardTheme === "light"));
-  sendHostContext();
+  mcpHost.notifyContext();
 });
 let contextTimer = 0;
 window.addEventListener("resize", () => {
   clearTimeout(contextTimer);
-  contextTimer = setTimeout(sendHostContext, 200);
+  contextTimer = setTimeout(() => mcpHost.notifyContext(), 200);
 });
 
 function selectFromApp(params) {
@@ -275,38 +220,6 @@ function selectFromApp(params) {
   message(`“${plan.label}” selected from the MCP App. Approve it with the operator button below.`, true);
   return true;
 }
-
-window.addEventListener("message", (event) => {
-  const frame = $("mcp-app-frame");
-  if (!state.app || !frame || event.source !== frame.contentWindow || event.origin !== SANDBOX_ORIGIN) return;
-  const msg = event.data;
-  if (!msg || msg.jsonrpc !== "2.0" || typeof msg.method !== "string") return;
-  const send = (payload) => frame.contentWindow.postMessage({ jsonrpc: "2.0", ...payload }, SANDBOX_ORIGIN);
-  const reply = (payload) => { if (msg.id !== undefined) send({ id: msg.id, ...payload }); };
-  if (msg.method === "ui/notifications/sandbox-proxy-ready") {
-    send({ method: "ui/notifications/sandbox-resource-ready", params: { html: state.app.resource.html, csp: state.app.resource.csp } });
-  } else if (msg.method === "logiops/sandbox-view-removed") {
-    hideMcpApp("view navigated");
-  } else if (msg.method === "ui/initialize") {
-    reply({ result: {
-      protocolVersion: MCP_APP.protocol,
-      hostInfo: { name: "LogiOps Alexa+-style demo", version: "1.0.0" },
-      hostCapabilities: {},
-      hostContext: hostContext(),
-    } });
-  } else if (msg.method === "ui/notifications/initialized") {
-    state.app.ready = true;
-    send({ method: "ui/notifications/tool-input", params: { arguments: state.app.input } });
-    send({ method: "ui/notifications/tool-result", params: state.app.result });
-  } else if (msg.method === "ui/notifications/size-changed") {
-    const height = Number(msg.params?.height);
-    if (Number.isFinite(height)) frame.style.height = `${Math.min(Math.max(height, 80), 640)}px`;
-  } else if (msg.method === "ui/message") {
-    reply(selectFromApp(msg.params) ? { result: {} } : { error: { code: -32000, message: "Unknown or unavailable plan, or the operator panel is busy" } });
-  } else {
-    reply({ error: { code: -32601, message: "Method not supported by this host" } });
-  }
-});
 
 function recommendedPlan(snapshot) {
   return pickRecommended(snapshot, window.LogiOpsIntent);
