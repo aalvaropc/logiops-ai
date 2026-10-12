@@ -46,3 +46,23 @@ def test_the_instance_reads_only_allowed_settings_from_ssm():
     policy = (ROOT / "infra" / "amazon" / "main.tf").read_text()
     assert '"polly:SynthesizeSpeech"' in policy and "Resource = [aws_bedrockagentcore_memory.app.arn]" in policy
     assert "bedrock-agentcore:*" not in policy and '"ssm:GetParametersByPath"' in policy
+
+
+def test_the_release_packages_static_subdirectories(tmp_path, monkeypatch):
+    import scripts.deploy_ec2 as deploy
+
+    monkeypatch.setattr(deploy, "ROOT", tmp_path)
+    for path in ("pyproject.toml", "uv.lock", "logiops/api.py", "logiops/static/demo.js", "logiops/static/app/api.js",
+                 "skills/x/SKILL.md"):
+        (tmp_path / path).parent.mkdir(parents=True, exist_ok=True)
+        (tmp_path / path).write_text(path)
+    (tmp_path / "logiops" / "static" / "empty").mkdir()
+    monkeypatch.setattr(deploy.tempfile, "gettempdir", lambda: str(tmp_path / "out"))
+    (tmp_path / "out").mkdir()
+    archive, _ = deploy.package()
+    import tarfile
+
+    with tarfile.open(archive, "r:gz") as release:
+        names = set(release.getnames())
+    assert "logiops/static/app/api.js" in names and "logiops/static/demo.js" in names
+    assert not any(name.endswith("/empty") for name in names)

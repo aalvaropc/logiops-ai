@@ -25,7 +25,7 @@ def package() -> tuple[Path, str]:
         ROOT / "pyproject.toml",
         ROOT / "uv.lock",
         *sorted((ROOT / "logiops").glob("*.py")),
-        *sorted((ROOT / "logiops" / "static").glob("*")),
+        *sorted(path for path in (ROOT / "logiops" / "static").rglob("*") if path.is_file()),
         *sorted(path for path in (ROOT / "skills").rglob("*") if path.is_file()),
     ]
     if not all(path.is_file() for path in files):
