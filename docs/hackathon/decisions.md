@@ -49,3 +49,7 @@ bottom.
 - [ ] Repository public, or the reviewers from the rules invited (`rules-verification.md` 6).
 - [ ] Tag `amazon-v1.0` on that commit and a GitHub Release created.
 - [ ] Submitted at least one day before the deadline (target 22 Oct; deadline 23 Oct, 14:00 Peru).
+| D-AWS-3 | Phase 2 infrastructure applied after the owner reviewed the plan (13 added, 1 changed, 0 destroyed): AgentCore Memory with USER_PREFERENCE and SEMANTIC strategies, a Cognito user pool with a managed-login domain, a resource server and the public PKCE client, SSM app config, and a scoped IAM policy. The instance was replaced for the new deploy script (data kept on EBS) and `main` deployed. Live checks on the CloudFront URL:
+- `check_mcp.py`: 2025-11-25 with 12 tools, 2 prompts and 2 templates;
+- `check_oauth.py`: 401 challenge, RFC 9728, RFC 8414 with S256, and the PKCE sign-in page (200);
+- `verify_remote.py`: Bedrock with the Agent Skill, 3 plans and 5 MCP calls, about US$0.04, with 11,596 input tokens read from the prompt cache, 2,899 written and 3,950 uncached; a booking charged once with its receipt; a proactive alert; Polly (Ruth, generative); and an AgentCore Memory round trip. | 2026-10-12 | `terraform apply`, `scripts/check_mcp.py`, `scripts/check_oauth.py`, `scripts/verify_remote.py`. |

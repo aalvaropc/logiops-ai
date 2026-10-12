@@ -95,3 +95,68 @@ workaround, suggestion. Real friction only, logged as it happens (rules 3.17).
 - **Workaround:** depend on `boto3[crt]`.
 - **Suggestion:** ship the login credential provider without an optional
   extra, or mention it in the `aws login` documentation.
+
+## 2026-10-11 — Cognito discovery does not advertise PKCE
+
+- **Technology:** Amazon Cognito user pools (OAuth 2.0 endpoints).
+- **Task:** let MCP clients (and the Alexa+-style demo) find how to sign in, as
+  the MCP authorization spec and Alexa+ account linking expect.
+- **Steps:** read
+  `https://cognito-idp.us-east-1.amazonaws.com/<pool>/.well-known/openid-configuration`.
+- **Expected:** `code_challenge_methods_supported: ["S256"]`, since Cognito
+  supports PKCE for public clients, and an RFC 8414 document.
+- **Actual:** the OIDC discovery document omits the PKCE methods, and there is
+  no `/.well-known/oauth-authorization-server`. Spec-following MCP clients
+  refuse to start an authorization-code flow without S256 in the metadata.
+- **Severity:** medium. It blocks standard MCP clients unless the resource
+  server works around it.
+- **Workaround:** LogiOps serves its own RFC 8414 document with S256, Cognito's
+  authorize endpoint, and a token endpoint that forwards only PKCE and refresh
+  grants of allowed public clients.
+- **Suggestion:** publish `code_challenge_methods_supported` and an RFC 8414
+  document for user pools.
+
+## 2026-10-11 — Cognito access tokens have no audience
+
+- **Technology:** Amazon Cognito access tokens with a resource server.
+- **Task:** bind tokens to the MCP resource (`https://<host>/mcp`), per RFC 8707
+  and the MCP authorization spec.
+- **Expected:** an `aud` claim naming the resource server, or support for the
+  `resource` parameter.
+- **Actual:** access tokens carry `client_id` and scopes prefixed with the
+  resource server identifier, but no `aud`.
+- **Severity:** low. The scopes still bind the token.
+- **Workaround:** check the issuer, `token_use`, an allowlist of client ids,
+  and the resource-prefixed scopes.
+- **Suggestion:** support RFC 8707 resource indicators (an `aud` per resource
+  server).
+
+## 2026-10-11 — AgentCore Memory: `namespaces` deprecated, found only in the schema
+
+- **Technology:** Terraform AWS provider 6.67, `aws_bedrockagentcore_memory_strategy`.
+- **Task:** define USER_PREFERENCE and SEMANTIC strategies with per-actor
+  namespaces.
+- **Expected:** the docs example to use the current attribute.
+- **Actual:** `namespaces` is deprecated in favor of `namespace_templates`.
+  That showed up only in `terraform providers schema -json`; the resource has
+  no attribute descriptions to explain it.
+- **Severity:** low.
+- **Workaround:** used `namespace_templates = ["/users/{actorId}/…"]`.
+- **Suggestion:** add attribute descriptions and a deprecation note to the
+  resource docs.
+
+## 2026-10-11 — AgentCore Memory: listing events needs a session id
+
+- **Technology:** Amazon Bedrock AgentCore Memory data plane (`ListEvents`).
+- **Task:** recall what a person said in their *previous* session to greet
+  them with "Welcome back".
+- **Expected:** list an actor's latest events across sessions.
+- **Actual:** `ListEvents` requires `sessionId`. Finding the previous session
+  takes `ListSessions`, sorting by `createdAt`, and then a second call. When
+  testing with botocore's Stubber, `memoryRecordId` also needs at least 40
+  characters, which the docs examples do not show.
+- **Severity:** low.
+- **Workaround:** `ListSessions` → newest session other than the current one →
+  `ListEvents`.
+- **Suggestion:** allow `ListEvents` by actor with a time filter, or a "latest
+  sessions with their last events" call.
