@@ -1,5 +1,8 @@
 "use strict";
 
+import { createApi, createStorage, explainError as explain } from "./app/api.js";
+import { createMcpClient } from "./app/mcp.js";
+
 const $ = (id) => document.getElementById(id);
 const DEFAULT_INCIDENT = "SHIP-421";
 const hashIncident = () => decodeURIComponent(location.hash.slice(1)).trim().toUpperCase() || DEFAULT_INCIDENT;
@@ -27,7 +30,7 @@ const device = (method, ...args) => {
 };
 const MCP_APP = {
   uriPrefix: "ui://logiops/resolution-options", mime: "text/html;profile=mcp-app", protocol: "2026-01-26",
-  mcpVersion: "2025-11-25", proxyPath: "/mcp-app/sandbox.html",
+  proxyPath: "/mcp-app/sandbox.html",
 };
 const SANDBOX_ORIGIN = (() => {
   const value = document.querySelector('meta[name="logiops-sandbox-origin"]')?.content || "";
@@ -77,23 +80,7 @@ function setBusy(busy) {
 }
 
 function explainError(status, detail) {
-  if (status === 401 && state.auth.enabled) {
-    return state.session
-      ? "Your sign-in expired. Say “link my account” to sign in again."
-      : "Sign in to do that: say “link my account” or press Link account. Guests can read and ask, but not act.";
-  }
-  if (status === 403 && state.auth.enabled) return "Your sign-in does not allow that action.";
-  if (status === 401) {
-    return state.token
-      ? "That access token was not accepted. Copy it again from the testing instructions, paste it above, and press Connect."
-      : "This public demo needs the access token from the testing instructions. Paste it above and press Connect.";
-  }
-  if (status === 429 && /agent/i.test(detail)) {
-    return "That's the agent's per-minute question limit (each answer calls a paid model). Wait a minute and ask again; the plan panel and buttons still work.";
-  }
-  if (status === 429) return "Too many requests in the last minute. Wait a moment and try again.";
-  if (status >= 500) return "I couldn't reach the planning service just now. Try again in a moment; the plans and buttons still work.";
-  return detail;
+  return explain(status, detail, { authEnabled: state.auth.enabled, signedIn: Boolean(state.session), hasToken: Boolean(state.token) });
 }
 
 const PURCHASE_KEY = "logiops-pending-purchase";
@@ -113,46 +100,26 @@ function forgetPurchase() {
   keepPurchase(null);
 }
 
-const SESSION_KEY = "logiops-session";
-const OAUTH_KEY = "logiops-oauth";
-function readSession() {
-  try { return JSON.parse(sessionStorage.getItem(SESSION_KEY) || "null"); } catch (_) { return null; }
-}
-function keepSession(session) {
-  try {
-    if (session) sessionStorage.setItem(SESSION_KEY, JSON.stringify(session)); else sessionStorage.removeItem(SESSION_KEY);
-  } catch (_) { }
-  state.session = session;
-  state.token = session ? session.access : storedToken();
-  if (session) $("approver").value = session.username;
-  renderAccount();
-}
-function base64url(bytes) {
-  return btoa(String.fromCharCode(...bytes)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
-}
-function randomText(size) {
-  const bytes = new Uint8Array(size);
-  window.crypto.getRandomValues(bytes);
-  return base64url(bytes);
-}
-function tokenClaims(token) {
-  try { return JSON.parse(atob(String(token).split(".")[1].replace(/-/g, "+").replace(/_/g, "/"))); } catch (_) { return {}; }
-}
-function sessionFrom(body, previous) {
-  const claims = tokenClaims(body.access_token);
-  return {
-    access: body.access_token, refresh: body.refresh_token || previous?.refresh || null,
-    expiresAt: Date.now() + Number(body.expires_in || 3600) * 1000, username: String(claims.username || "you").slice(0, 80),
-  };
-}
-async function tokenGrant(fields) {
-  const response = await fetch("/auth/token", {
-    method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, cache: "no-store",
-    body: new URLSearchParams({ client_id: state.auth.client_id, ...fields }),
-  });
-  const body = await response.json().catch(() => ({}));
-  return response.ok && body.access_token ? body : null;
-}
+const api = createApi({
+  storage: createStorage(), origin: location.origin,
+  credentials: () => ({ token: state.token, session: state.session, auth: state.auth }),
+  onSession: (session) => {
+    state.session = session;
+    state.token = session ? session.access : api.storedToken();
+    if (session) $("approver").value = session.username;
+    renderAccount();
+  },
+  onAgentCall: (phase) => {
+    if (phase === "request") {
+      device("voice", "request");
+      startFiller();
+      return;
+    }
+    clearTimeout(state.fillerTimer);
+    if (phase === "error") device("voice", "error");
+  },
+});
+const { request, storedToken, storeToken, readSession, keepSession, signOut, randomText } = api;
 function renderAccount() {
   const box = $("account");
   box.hidden = !state.auth.enabled;
@@ -162,12 +129,7 @@ function renderAccount() {
   $("sign-out").hidden = !state.session;
 }
 async function loadAuth() {
-  try {
-    const response = await fetch("/auth/config", { cache: "no-store" });
-    state.auth = response.ok ? await response.json() : { enabled: false };
-  } catch (_) {
-    state.auth = { enabled: false };
-  }
+  state.auth = await api.loadAuth();
   if (!state.auth.enabled) keepSession(null);
   renderAccount();
 }
@@ -176,131 +138,22 @@ async function linkAccount() {
     say("assistant", "Sign-in isn't set up on this server, so the demo already acts as the operator.");
     return;
   }
-  const verifier = randomText(48);
-  const digest = await window.crypto.subtle.digest("SHA-256", new TextEncoder().encode(verifier));
-  const nonce = randomText(24);
-  try {
-    sessionStorage.setItem(OAUTH_KEY, JSON.stringify({ verifier, state: nonce, hash: location.hash }));
-  } catch (_) {
+  const url = await api.beginSignIn({ hash: location.hash });
+  if (!url) {
     say("assistant", "This browser blocks session storage, so I can't sign you in here.");
     return;
   }
-  const url = new URL(state.auth.authorize_endpoint);
-  url.search = new URLSearchParams({
-    response_type: "code", client_id: state.auth.client_id, redirect_uri: `${location.origin}/demo`, scope: state.auth.scope,
-    state: nonce, code_challenge: base64url(new Uint8Array(digest)), code_challenge_method: "S256",
-  }).toString();
-  location.assign(url.toString());
+  location.assign(url);
 }
 async function finishSignIn() {
-  const params = new URLSearchParams(location.search);
-  const code = params.get("code");
-  const failure = params.get("error");
-  if (!code && !failure) return;
-  let pending = null;
-  try {
-    pending = JSON.parse(sessionStorage.getItem(OAUTH_KEY) || "null");
-    sessionStorage.removeItem(OAUTH_KEY);
-  } catch (_) { }
-  history.replaceState(null, "", `/demo${pending?.hash || location.hash}`);
-  if (failure || !pending || params.get("state") !== pending.state || !state.auth.enabled) {
-    state.signInNote = failure ? "Sign-in was cancelled, so you're still a guest." : "That sign-in didn't match this browser's request, so I ignored it. Say “link my account” to try again.";
-    return;
-  }
-  const body = await tokenGrant({ grant_type: "authorization_code", code, redirect_uri: `${location.origin}/demo`, code_verifier: pending.verifier });
-  if (!body) {
-    state.signInNote = "Sign-in didn't complete. Say “link my account” to try again.";
-    return;
-  }
-  keepSession(sessionFrom(body));
-  state.signInNote = `Account linked: you're signed in as ${state.session.username}. You can now approve, execute and book.`;
-}
-async function refreshSession() {
-  const session = state.session;
-  if (!session?.refresh || !state.auth.enabled) return false;
-  const body = await tokenGrant({ grant_type: "refresh_token", refresh_token: session.refresh }).catch(() => null);
-  keepSession(body ? sessionFrom(body, session) : null);
-  return Boolean(body);
-}
-function signOut() {
-  keepSession(null);
-  state.token = storedToken();
+  const outcome = await api.finishSignIn({ search: location.search, hash: location.hash });
+  if (!outcome) return;
+  history.replaceState(null, "", outcome.path);
+  state.signInNote = outcome.note;
 }
 
-const TOKEN_KEY = "logiops-access-token";
-function storedToken() {
-  try { return sessionStorage.getItem(TOKEN_KEY) || ""; } catch (_) { return ""; }
-}
-function storeToken(token) {
-  try { if (token) sessionStorage.setItem(TOKEN_KEY, token); else sessionStorage.removeItem(TOKEN_KEY); } catch (_) { }
-}
-
-async function request(path, method = "GET", body, retried = false) {
-  const headers = {};
-  if (state.token) headers.Authorization = `Bearer ${state.token}`;
-  if (body !== undefined) headers["Content-Type"] = "application/json";
-  const agentCall = method === "POST" && /\/agent\//.test(path);
-  if (agentCall) {
-    device("voice", "request");
-    startFiller();
-  }
-  let response;
-  try {
-    response = await fetch(path, {
-      method,
-      headers,
-      body: body === undefined ? undefined : JSON.stringify(body),
-      cache: "no-store",
-    });
-  } catch (error) {
-    if (agentCall) {
-      clearTimeout(state.fillerTimer);
-      device("voice", "error");
-    }
-    throw error;
-  }
-  if (agentCall) clearTimeout(state.fillerTimer);
-  if (!response.ok && response.status === 401 && !retried && state.session
-      && /invalid_token/.test(response.headers.get("www-authenticate") || "") && await refreshSession()) {
-    return request(path, method, body, true);
-  }
-  if (!response.ok) {
-    if (agentCall) device("voice", "error");
-    let detail = `HTTP ${response.status}`;
-    try { detail = (await response.json()).detail || detail; } catch (_) { }
-    const error = new Error(explainError(response.status, detail));
-    error.status = response.status;
-    throw error;
-  }
-  return response.json();
-}
-
-async function mcpPost(message, version) {
-  const headers = { "Content-Type": "application/json", Accept: "application/json, text/event-stream" };
-  if (state.token) headers.Authorization = `Bearer ${state.token}`;
-  if (version) headers["MCP-Protocol-Version"] = version;
-  const response = await fetch("/mcp", { method: "POST", headers, cache: "no-store", body: JSON.stringify({ jsonrpc: "2.0", ...message }) });
-  if (!response.ok) throw new Error(`MCP HTTP ${response.status}`);
-  return response.status === 202 ? null : response.json();
-}
-
-function mcpProtocol() {
-  app.protocol ??= (async () => {
-    const body = await mcpPost({ id: 0, method: "initialize", params: {
-      protocolVersion: MCP_APP.mcpVersion, capabilities: {}, clientInfo: { name: "LogiOps demo host", version: "1.0.0" },
-    } });
-    if (body.error) throw new Error(body.error.message || "MCP error");
-    await mcpPost({ method: "notifications/initialized" }, body.result.protocolVersion);
-    return body.result.protocolVersion;
-  })().catch((error) => { app.protocol = null; throw error; });
-  return app.protocol;
-}
-
-async function mcpRequest(method, params) {
-  const body = await mcpPost({ id: 1, method, params }, await mcpProtocol());
-  if (body.error) throw new Error(body.error.message || "MCP error");
-  return body.result;
-}
+const mcpClient = createMcpClient({ getToken: () => state.token });
+const mcpRequest = (method, params) => mcpClient.request(method, params);
 
 function hostContext() {
   const slot = $("mcp-app-slot");
