@@ -118,16 +118,17 @@ def test_proxy_and_host_follow_the_sandbox_contract(tmp_path):
     app = create_app(tmp_path / "contract.sqlite3")
     proxy = get(app, "/mcp-app/sandbox.html", "localhost:8000").text
     script = get(app, "/assets/demo.js", "127.0.0.1:8000").text
+    host = get(app, "/assets/app/mcp-host.js", "127.0.0.1:8000").text
     assert "ui/notifications/sandbox-proxy-ready" in proxy and "ui/notifications/sandbox-resource-ready" in proxy
     assert "`<!doctype html>${meta}${body}`" in proxy
     grantable = re.search(r"const GRANTABLE = new Set\(\[([^\]]*)\]\)", proxy).group(1)
     assert "allow-same-origin" not in grantable and "allow-top-navigation" not in grantable
     assert 'const SANDBOX_PREFIX = "ui/notifications/sandbox-"' in proxy and "isProxyMethod(message)" in proxy
     assert "event.origin === hostOrigin" in proxy and "connect-src ${list(connect, \"'none'\")}" in proxy
-    assert 'frame.setAttribute("sandbox", "allow-scripts allow-same-origin")' in script
-    assert "event.origin !== SANDBOX_ORIGIN" in script and "srcdoc" not in script
-    assert "ui/resource-teardown" in script and "hostCapabilities: {}" in script
-    assert "url.origin !== location.origin" in script
+    assert 'element.setAttribute("sandbox", "allow-scripts allow-same-origin")' in host
+    assert "event.origin !== sandboxOrigin" in host and "srcdoc" not in host and "srcdoc" not in script
+    assert "ui/resource-teardown" in host and "hostCapabilities: {}" in host
+    assert "url.origin !== location.origin" in script and 'import { createMcpAppHost } from "./app/mcp-host.js";' in script
 
 
 def test_release_archive_includes_the_view():
@@ -173,9 +174,10 @@ def test_the_demo_host_negotiates_mcp_and_sends_its_context(tmp_path):
     assert 'method: "initialize"' in client and 'method: "notifications/initialized"' in client
     assert 'headers["MCP-Protocol-Version"] = version' in client and 'MCP_VERSION = "2025-11-25"' in client
     assert 'import { createMcpClient } from "./app/mcp.js";' in script
-    assert "hostContext: hostContext()," in script and '"ui/notifications/host-context-changed"' in script
+    host = get(app, "/assets/app/mcp-host.js", "127.0.0.1:8000").text
+    assert "hostContext: hostContext()" in host and '"ui/notifications/host-context-changed"' in host
     assert "theme: state.cardTheme" in script and "safeAreaInsets" in script and "containerDimensions" in script
-    assert 'uri.startsWith(MCP_APP.uriPrefix)' in script
+    assert "uri.startsWith(uriPrefix)" in host and "uriPrefix: MCP_APP.uriPrefix" in script
     assert 'id="mcp-app-theme"' in page and 'aria-pressed="false"' in page
 
 
