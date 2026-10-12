@@ -144,7 +144,8 @@ def test_the_agent_pick_follows_the_shared_grounding_cases():
 
 def test_demo_routes_utterances_through_the_intent_module(tmp_path):
     script = (Path(__file__).resolve().parents[1] / "logiops" / "static" / "demo.js").read_text()
-    assert "LogiOpsIntent.parseCommand(text)" in script and "LogiOpsIntent.recommendedPlanId(" in script
+    assert "LogiOpsIntent.parseCommand(text)" in script and "pickRecommended(snapshot, window.LogiOpsIntent)" in script
+    assert "intent.recommendedPlanId(" in (Path(__file__).resolve().parents[1] / "logiops" / "static" / "app" / "selectors.js").read_text()
     assert "test(lower)) {" not in script
     assert "was already executed" in script
     assert "That plan isn't available for the current data" in script
@@ -272,7 +273,7 @@ def test_the_inbox_and_the_greeting_name_the_critical_units_at_risk():
     root = Path(__file__).resolve().parents[1] / "logiops" / "static"
     script, style = (root / "demo.js").read_text(), (root / "demo.css").read_text()
     assert 'tag("at-risk", `${item.critical_units_at_risk} critical units at risk`)' in script
-    assert "critical units nothing on hand delivers in time" in script
+    assert "critical units nothing on hand delivers in time" in (root / "app" / "greeting.js").read_text()
     assert ".incident-card .at-risk {" in style
 
 
@@ -326,9 +327,9 @@ def test_the_demo_shows_preferences_briefings_and_speaks_the_short_line():
 
 def test_replies_show_whether_they_passed_the_data_check():
     root = Path(__file__).resolve().parents[1] / "logiops" / "static"
-    script, style = (root / "demo.js").read_text(), (root / "demo.css").read_text()
-    assert "function checkBadge(run)" in script and '"Checked against the data"' in script
-    assert "Did not pass the data check: ${issue}" in script and "noteCheck(run);" in script
+    script, style, badges = (root / "demo.js").read_text(), (root / "demo.css").read_text(), (root / "app" / "run-badges.js").read_text()
+    assert "export function checkBadge(run)" in badges and '"Checked against the data"' in badges
+    assert "Did not pass the data check: ${issue}" in badges and "noteCheck(run);" in script
     assert "check: checkBadge(agentEvent.data)" in script
     assert ".turn .check-badge {" in style and ".turn .check-badge.failed {" in style
 
