@@ -167,14 +167,15 @@ def test_demo_routes_utterances_through_the_intent_module(tmp_path):
 
 def test_judges_see_why_and_what_to_do_next():
     root = Path(__file__).resolve().parents[1] / "logiops" / "static"
-    script, html = (root / "demo.js").read_text(), (root / "demo.html").read_text()
+    script, html, api = (root / "demo.js").read_text(), (root / "demo.html").read_text(), (root / "app" / "api.js").read_text()
     assert 'id="state-banner"' in html and 'id="banner-reset"' in html
     assert '$("state-banner").hidden = !execution;' in script
-    assert "needs the access token from the testing instructions" in script
-    assert "That access token was not accepted" in script
-    assert "per-minute question limit" in script
+    assert "needs the access token from the testing instructions" in api
+    assert "That access token was not accepted" in api
+    assert "per-minute question limit" in api
     assert 'textContent = "Locked"' in script
-    assert "sessionStorage.setItem(TOKEN_KEY, token)" in script and "localStorage" not in script
+    assert "vault.set(TOKEN_KEY, token || null);" in api and "globalThis.sessionStorage" in api
+    assert not [path for path in root.rglob("*.js") if "localStorage" in path.read_text()]
     assert '<link rel="icon" href="data:,">' in html
 
 
@@ -404,7 +405,8 @@ def test_help_and_start_over_follow_the_alexa_guidelines():
     assert script.index("isStartOver(text)") < script.index("const pending = state.pendingApproval;")
     assert "Nothing was changed or approved." in script and "const CAPABILITIES_SPOKEN" in script
     assert "agentEvent.data.display_answer || agentEvent.data.answer" in script
-    assert "if (status >= 500) return" in script and "state.pendingApproval = pending;" in script
+    api = (Path(__file__).resolve().parents[1] / "logiops" / "static" / "app" / "api.js").read_text()
+    assert "if (status >= 500) return" in api and "state.pendingApproval = pending;" in script
 
 
 def test_replies_speak_with_polly_and_stop_when_the_person_talks():
@@ -421,13 +423,15 @@ def test_replies_speak_with_polly_and_stop_when_the_person_talks():
 def test_link_account_uses_pkce_s256_and_a_checked_state():
     import json
 
-    script = (Path(__file__).resolve().parents[1] / "logiops" / "static" / "demo.js").read_text()
-    assert "const verifier = randomText(48);" in script and 'window.crypto.subtle.digest("SHA-256", new TextEncoder().encode(verifier))' in script
-    assert 'code_challenge_method: "S256"' in script and "params.get(\"state\") !== pending.state" in script
-    assert "sessionStorage.removeItem(OAUTH_KEY);" in script and 'history.replaceState(null, "", `/demo${pending?.hash || location.hash}`);' in script
-    assert 'grant_type: "authorization_code", code, redirect_uri: `${location.origin}/demo`, code_verifier: pending.verifier' in script
-    assert "/invalid_token/.test(response.headers.get(\"www-authenticate\") || \"\") && await refreshSession()" in script
-    assert "localStorage" not in script
+    static = Path(__file__).resolve().parents[1] / "logiops" / "static"
+    script, api = (static / "demo.js").read_text(), (static / "app" / "api.js").read_text()
+    assert "const verifier = randomText(48);" in api and 'randomness().subtle.digest("SHA-256", new TextEncoder().encode(verifier))' in api
+    assert 'code_challenge_method: "S256"' in api and "params.get(\"state\") !== pending.state" in api
+    assert "vault.remove(OAUTH_KEY);" in api and 'path: `${SIGN_IN_PATH}${pending?.hash || hash}`' in api
+    assert 'history.replaceState(null, "", outcome.path);' in script
+    assert 'grant_type: "authorization_code", code, redirect_uri: `${origin}${SIGN_IN_PATH}`, code_verifier: pending.verifier' in api
+    assert "/invalid_token/.test(response.headers.get(\"www-authenticate\") || \"\") && await refreshSession()" in api
+    assert "localStorage" not in script and "localStorage" not in api
     cases = {"link my account": "link", "sign in": "link", "log in": "link", "Link account": "link",
              "sign out": "unlink", "log out": "unlink", "unlink my account": "unlink",
              "link the express": None, "sign in as admin": None}

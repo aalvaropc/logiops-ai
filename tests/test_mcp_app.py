@@ -168,9 +168,11 @@ def test_the_view_follows_the_host_context():
 def test_the_demo_host_negotiates_mcp_and_sends_its_context(tmp_path):
     app = create_app(tmp_path / "host.sqlite3")
     script = get(app, "/assets/demo.js", "127.0.0.1:8000").text
+    client = get(app, "/assets/app/mcp.js", "127.0.0.1:8000").text
     page = get(app, "/demo", "127.0.0.1:8000").text
-    assert 'method: "initialize"' in script and 'method: "notifications/initialized"' in script
-    assert 'headers["MCP-Protocol-Version"] = version' in script and 'mcpVersion: "2025-11-25"' in script
+    assert 'method: "initialize"' in client and 'method: "notifications/initialized"' in client
+    assert 'headers["MCP-Protocol-Version"] = version' in client and 'MCP_VERSION = "2025-11-25"' in client
+    assert 'import { createMcpClient } from "./app/mcp.js";' in script
     assert "hostContext: hostContext()," in script and '"ui/notifications/host-context-changed"' in script
     assert "theme: state.cardTheme" in script and "safeAreaInsets" in script and "containerDimensions" in script
     assert 'uri.startsWith(MCP_APP.uriPrefix)' in script
