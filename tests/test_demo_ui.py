@@ -341,17 +341,20 @@ def test_assets_come_from_one_allowlist_route(tmp_path):
             served = {name: await client.get(f"/assets/{name}") for name in DEMO_ASSETS}
             refused = [await client.get(path) for path in (
                 "/assets/demo.html", "/assets/api.py", "/assets/..%2Fapi.py", "/assets/mcp_app_sandbox.html",
-                "/assets/resolution_options.html", "/assets/static/demo.js", "/assets/",
+                "/assets/resolution_options.html", "/assets/static/demo.js", "/assets/", "/assets/app/",
             )]
         return served, refused
 
     served, refused = asyncio.run(run())
+    assert {"demo.css", "demo.js", "markdown.js", "intent.js", "route.js", "device.js"} <= set(DEMO_ASSETS)
+    assert all(not name.startswith("/") and ".." not in name and name.rsplit(".", 1)[1] in ("css", "js", "svg", "png") for name in DEMO_ASSETS)
     assert {name: (r.status_code, r.headers["content-type"].split(";")[0]) for name, r in served.items()} == {
-        "demo.css": (200, "text/css"), "demo.js": (200, "text/javascript"), "markdown.js": (200, "text/javascript"),
-        "intent.js": (200, "text/javascript"), "route.js": (200, "text/javascript"), "device.js": (200, "text/javascript")}
-    assert [response.status_code for response in refused] == [404] * 7
+        name: (200, {"css": "text/css", "js": "text/javascript", "svg": "image/svg+xml", "png": "image/png"}[name.rsplit(".", 1)[1]])
+        for name in DEMO_ASSETS}
+    assert [response.status_code for response in refused] == [404] * 8
     page = (Path(__file__).resolve().parents[1] / "logiops" / "static" / "demo.html").read_text()
-    assert set(re.findall(r'/assets/([\w.-]+)', page)) <= set(DEMO_ASSETS)
+    assert set(re.findall(r'/assets/([\w./-]+)', page)) <= set(DEMO_ASSETS)
+    assert '<script src="/assets/demo.js" type="module"></script>' in page
 
 
 

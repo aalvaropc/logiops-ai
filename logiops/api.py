@@ -45,8 +45,11 @@ HOSTNAME = re.compile(r"[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?")
 LOOPBACK_PAIRS = {"127.0.0.1": "localhost", "localhost": "127.0.0.1"}
 START_WITH = re.compile(r"start with[*_`]*\s*[:：]\s*[*_`]*\s*(SHIP-\d+)", re.I)
 SANDBOX_META = '<meta name="logiops-sandbox-origin" content="">'
-DEMO_ASSETS = ("demo.css", "demo.js", "markdown.js", "intent.js", "route.js", "device.js")
-ASSET_TYPES = {".css": "text/css", ".js": "text/javascript"}
+ASSET_TYPES = {".css": "text/css", ".js": "text/javascript", ".svg": "image/svg+xml", ".png": "image/png"}
+STATIC_DIR = Path(__file__).resolve().parent / "static"
+DEMO_ASSETS = tuple(sorted(
+    path.relative_to(STATIC_DIR).as_posix() for path in STATIC_DIR.rglob("*") if path.is_file() and path.suffix in ASSET_TYPES
+))
 
 
 class ApprovalRequest(BaseModel):
@@ -201,7 +204,7 @@ def create_app(
         @app.get("/auth/config", include_in_schema=False)
         async def auth_off() -> dict[str, Any]:
             return {"enabled": False}
-    static_dir = Path(__file__).resolve().parent / "static"
+    static_dir = STATIC_DIR
     demo_page_html = (static_dir / "demo.html").read_text(encoding="utf-8")
     demo_assets = {name: (static_dir / name).read_bytes() for name in DEMO_ASSETS}
     sandbox_page = (static_dir / "mcp_app_sandbox.html").read_text(encoding="utf-8")
@@ -246,9 +249,10 @@ def create_app(
             "Content-Security-Policy": policy, "Referrer-Policy": "no-referrer", "Cache-Control": "no-store",
         })
 
-    @app.get("/assets/{name}", include_in_schema=False)
+    @app.get("/assets/{name:path}", include_in_schema=False)
     async def demo_asset(name: str) -> Response:
-        """The demo's stylesheet and scripts: only the names in DEMO_ASSETS, read once at start-up."""
+        """The demo's stylesheets, scripts and images: only the files under static/ with an allowed
+        extension, listed in DEMO_ASSETS and read once at start-up."""
         body = demo_assets.get(name)
         if body is None:
             return JSONResponse(status_code=404, content={"detail": "Not found"})
