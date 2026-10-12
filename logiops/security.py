@@ -16,7 +16,7 @@ from .oauth import GUEST, InvalidToken, OAuthSettings, base_url, challenge, need
 
 
 SANDBOX_PATH = "/mcp-app/sandbox.html"
-PUBLIC_PATHS = ("/healthz", "/docs", "/openapi.json", "/redoc", "/demo", "/auth/config", SANDBOX_PATH)
+PUBLIC_PATHS = ("/healthz", "/docs", "/openapi.json", "/redoc", "/demo", "/console", "/auth/config", SANDBOX_PATH)
 OAUTH_PATHS = ("/auth/config", "/auth/token")
 
 

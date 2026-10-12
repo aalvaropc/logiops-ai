@@ -134,6 +134,9 @@ test("sign-in uses PKCE S256 and a random state kept for the callback", async ()
   const digest = await webcrypto.subtle.digest("SHA-256", new TextEncoder().encode(pending.verifier));
   assert.equal(url.searchParams.get("code_challenge"), base64url(new Uint8Array(digest)));
   assert.equal(await setup().api.beginSignIn(), null, "no sign-in without the auth config");
+  const console = setup({ auth });
+  await console.api.beginSignIn({ hash: "#SHIP-421", returnTo: "/console" });
+  assert.equal(console.storage.getJson(OAUTH_KEY).returnTo, "/console");
 });
 
 test("the callback checks the state, exchanges the code with the verifier and cleans the path", async () => {
@@ -156,6 +159,8 @@ test("the callback checks the state, exchanges the code with the verifier and cl
   assert.equal(JSON.parse(storage.get(SESSION_KEY)).refresh, "r1");
   storage.set(OAUTH_KEY, JSON.stringify({ verifier: "v", state: "n", hash: "" }));
   assert.match((await api.finishSignIn({ search: "?error=access_denied&state=n" })).note, /cancelled/);
+  storage.set(OAUTH_KEY, JSON.stringify({ verifier: "v".repeat(64), state: "nonce", hash: "#SHIP-452", returnTo: "/console" }));
+  assert.equal((await api.finishSignIn({ search: "?code=c2&state=nonce" })).path, "/console#SHIP-452");
 });
 
 test("sign out drops the session and falls back to the stored operator token", async () => {

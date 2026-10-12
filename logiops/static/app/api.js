@@ -105,14 +105,14 @@ export function createApi({ fetch: doFetch, storage, crypto: webCrypto, origin, 
     }
   }
 
-  async function beginSignIn({ hash = "" } = {}) {
+  async function beginSignIn({ hash = "", returnTo = null } = {}) {
     const { auth } = current();
     if (!auth.enabled) return null;
     const verifier = randomText(48);
     const digest = await randomness().subtle.digest("SHA-256", new TextEncoder().encode(verifier));
     const nonce = randomText(24);
     try {
-      vault.set(OAUTH_KEY, JSON.stringify({ verifier, state: nonce, hash }));
+      vault.set(OAUTH_KEY, JSON.stringify({ verifier, state: nonce, hash, returnTo: returnTo || null }));
       if (vault.getJson(OAUTH_KEY)?.state !== nonce) return null;
     } catch (_) {
       return null;
@@ -132,7 +132,7 @@ export function createApi({ fetch: doFetch, storage, crypto: webCrypto, origin, 
     if (!code && !failure) return null;
     const pending = vault.getJson(OAUTH_KEY);
     vault.remove(OAUTH_KEY);
-    const outcome = { session: null, note: "", path: `${SIGN_IN_PATH}${pending?.hash || hash}` };
+    const outcome = { session: null, note: "", path: `${pending?.returnTo || SIGN_IN_PATH}${pending?.hash || hash}` };
     if (failure || !pending || params.get("state") !== pending.state || !current().auth.enabled) {
       outcome.note = failure
         ? "Sign-in was cancelled, so you're still a guest."

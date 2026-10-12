@@ -122,7 +122,7 @@ async function linkAccount() {
     say("assistant", "Sign-in isn't set up on this server, so the demo already acts as the operator.");
     return;
   }
-  const url = await api.beginSignIn({ hash: location.hash });
+  const url = await api.beginSignIn({ hash: location.hash, returnTo: location.pathname === "/console" ? "/console" : null });
   if (!url) {
     say("assistant", "This browser blocks session storage, so I can't sign you in here.");
     return;
@@ -132,6 +132,10 @@ async function linkAccount() {
 async function finishSignIn() {
   const outcome = await api.finishSignIn({ search: location.search, hash: location.hash });
   if (!outcome) return;
+  if (outcome.path.startsWith("/console")) {
+    location.replace(outcome.path);
+    return new Promise(() => {});
+  }
   history.replaceState(null, "", outcome.path);
   state.signInNote = outcome.note;
 }
@@ -151,7 +155,7 @@ function hostContext() {
   };
 }
 
-const mcpHost = createMcpAppHost({
+const mcpHost = $("mcp-app-slot") && createMcpAppHost({
   sandboxOrigin: SANDBOX_ORIGIN, hostOrigin: location.origin, proxyPath: MCP_APP.proxyPath, slot: $("mcp-app-slot"),
   mcp: mcpClient, uriPrefix: MCP_APP.uriPrefix, hostInfo: { name: "LogiOps Alexa+-style demo", version: "1.0.0" },
   hostContext, frameTitle: "Resolution options (MCP App)",
@@ -161,7 +165,7 @@ const mcpHost = createMcpAppHost({
 
 async function showMcpApp(run) {
   const step = run.tool_trace?.find((item) => item.tool === "investigate_incident" && !item.is_error);
-  if (!step) return;
+  if (!step || !mcpHost) return;
   if (!SANDBOX_ORIGIN) {
     console.info("MCP App not shown: no sandbox origin separate from this page is configured.");
     showMcpAppNote("The interactive card needs a second origin for its sandbox, and none is available on this address. "
@@ -188,11 +192,12 @@ async function showMcpApp(run) {
 
 function hideMcpApp(reason = "hidden") {
   state.app = null;
-  mcpHost.hide(reason);
+  if (mcpHost) mcpHost.hide(reason);
 }
 
 function showMcpAppNote(text) {
   state.app = null;
+  if (!mcpHost) return;
   mcpHost.hide("note");
   const note = document.createElement("p");
   note.className = "mcp-app-note";
@@ -202,7 +207,7 @@ function showMcpAppNote(text) {
   $("mcp-app").hidden = false;
 }
 
-$("mcp-app-theme").addEventListener("click", () => {
+$("mcp-app-theme")?.addEventListener("click", () => {
   state.cardTheme = state.cardTheme === "dark" ? "light" : "dark";
   $("mcp-app-theme").setAttribute("aria-pressed", String(state.cardTheme === "light"));
   mcpHost.notifyContext();
@@ -210,7 +215,7 @@ $("mcp-app-theme").addEventListener("click", () => {
 let contextTimer = 0;
 window.addEventListener("resize", () => {
   clearTimeout(contextTimer);
-  contextTimer = setTimeout(() => mcpHost.notifyContext(), 200);
+  contextTimer = setTimeout(() => mcpHost?.notifyContext(), 200);
 });
 
 function selectFromApp(params) {
