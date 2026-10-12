@@ -320,7 +320,7 @@ def test_the_demo_shows_preferences_briefings_and_speaks_the_short_line():
     assert 'request("/agent/briefing", "POST"' in script and 'tag("start-here", "Start here")' in script
     assert '"Your preference", "badge preference"' in script and "never approve" in script
     assert "if (speaking) speak(spoken || window.LogiOpsMarkdown.plainText(text));" in script
-    assert "const utterance = new SpeechSynthesisUtterance(line);" in script
+    assert "const utterance = new win.SpeechSynthesisUtterance(line);" in (Path(__file__).resolve().parents[1] / "logiops" / "static" / "app" / "voice.js").read_text()
     assert "run.spoken, checkBadge(run));" in script
     assert "operator_preferences" in view and '"Your preference"' in view
 
@@ -372,9 +372,11 @@ def test_the_device_view_sits_above_the_operator_view():
     assert order == sorted(order)
     assert "innerHTML" not in device and "insertAdjacentHTML" not in device and "document.createElementNS(SVG" in device
     for hook in ('device("voice", "request")', 'device("voice", "error")', 'device("voice", "listen-start")',
-                 'device("voice", "listen-end")', 'device("voice", "speech-end")', "state.speechTimer = setTimeout(done, 30000)",
-                 'device("reply", text, spoken, speaking)', 'device("heard", text)', "showOnDevice(snapshot);", 'device("mount");'):
+                 'device("voice", "listen-end")', 'device("reply", text, spoken, speaking)', 'device("heard", text)',
+                 "showOnDevice(snapshot);", 'device("mount");'):
         assert hook in script, hook
+    voice = (root / "app" / "voice.js").read_text()
+    assert 'device("voice", "speech-end")' in voice and "current.speechTimer = setTimeout(done, SPEECH_TIMEOUT_MS)" in voice
     assert "@media (prefers-reduced-motion: reduce) { .orb { animation: none !important; } }" in style
     assert "@media (max-width: 650px) { .device-screen" in style
 
@@ -412,12 +414,13 @@ def test_help_and_start_over_follow_the_alexa_guidelines():
 
 def test_replies_speak_with_polly_and_stop_when_the_person_talks():
     script = (Path(__file__).resolve().parents[1] / "logiops" / "static" / "demo.js").read_text()
-    assert 'fetch("/voice/speech", { method: "POST", headers, body: JSON.stringify({ text: line }), cache: "no-store" })' in script
-    assert "browserSpeak(line, done);" in script and "if (turn !== state.speechTurn) return;" in script
+    voice = (Path(__file__).resolve().parents[1] / "logiops" / "static" / "app" / "voice.js").read_text()
+    assert 'fetcher("/voice/speech", { method: "POST", headers, body: JSON.stringify({ text: line }), cache: "no-store" })' in voice
+    assert "browserSpeak(line, done);" in voice and 'if (turn !== current.turn) return "dropped";' in voice
     assert script.index("if (!text || state.busy) return;\n  stopSpeaking();") > 0
     assert '$("ask-input").addEventListener("input", () => stopSpeaking());' in script
     assert "stopSpeaking();\n    mic.textContent = \"Listening…\";" in script
-    assert "startFiller();" in script and "}, 2500);" in script and "stopSpeaking({ quiet: true });" in script
+    assert "startFiller();" in script and "}, FILLER_DELAY_MS);" in voice and "stop({ quiet: true });" in voice
     assert 'state.voice = await request("/voice/config");' in script and '$("speak-replies").checked = true;' in script
 
 
@@ -444,7 +447,7 @@ def test_memory_commands_and_hooks():
     import json
 
     script = (Path(__file__).resolve().parents[1] / "logiops" / "static" / "demo.js").read_text()
-    assert 'if (!session || (state.auth.enabled && !state.session)) return;' in script
+    assert "if (!id || !allowed()) return false;" in (Path(__file__).resolve().parents[1] / "logiops" / "static" / "app" / "memory.js").read_text()
     assert 'if (!state.forgetting && !String(meta || "").startsWith("welcome back")) remember(' in script
     assert "state.forgetting = window.LogiOpsIntent.isForgetMe(text);" in script
     assert 'request("/memory", "DELETE")' in script and "recallMemory();" in script
