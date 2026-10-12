@@ -99,14 +99,15 @@ def test_buying_declining_and_resuming_are_closed_commands():
 
 
 def test_a_purchase_is_read_back_and_paid_once():
-    script = (Path(__file__).resolve().parents[1] / "logiops" / "static" / "demo.js").read_text()
-    assert 'command === "confirm" && purchase' in script and "await confirmPurchase(purchase);" in script
-    assert "Say “yes” to approve and pay, or “no”." in script and "Say “yes” to pay, or “no”." in script
-    assert "IGV 18% ${dollars(quote.igv_usd)}, total ${dollars(quote.total_usd)}" in script
-    assert "confirmed_total_usd: purchase.quote.total_usd, idempotency_key: purchase.key" in script
-    assert "keepPurchase({ ...purchase, approve: false });" in script
-    assert "Say “yes” to try again; it never charges twice." in script
-    assert script.index("const purchase = state.pendingPurchase;") < script.index("const preference = window.LogiOpsIntent.parsePreference(text);")
+    static = Path(__file__).resolve().parents[1] / "logiops" / "static"
+    script, purchase = (static / "demo.js").read_text(), (static / "app" / "purchase.js").read_text()
+    assert 'command === "confirm" && pendingPurchase' in script and "await purchase.confirm(pendingPurchase);" in script
+    assert "Say “yes” to approve and pay, or “no”." in purchase and "Say “yes” to pay, or “no”." in purchase
+    assert "IGV 18% ${dollars(quote.igv_usd)}, total ${dollars(quote.total_usd)}" in purchase
+    assert "confirmed_total_usd: purchase.quote.total_usd, idempotency_key: purchase.key" in purchase
+    assert "keep({ ...purchase, approve: false });" in purchase
+    assert "Say “yes” to try again; it never charges twice." in purchase
+    assert script.index("const pendingPurchase = purchase.take();") < script.index("const preference = window.LogiOpsIntent.parsePreference(text);")
     assert "Nothing is waiting for a “yes” right now." in script
 
 
