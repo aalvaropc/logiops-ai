@@ -2,17 +2,25 @@
 
 import { createApi, createStorage, explainError as explain } from "./app/api.js";
 import { createMcpClient } from "./app/mcp.js";
+import { createStore } from "./app/store.js";
+import {
+  EVENT_LABELS, formatDate, visibleVersion, visibleApproval, visiblePlans, latestAgentEvent, byRank, allocationSummary,
+  localWarehouse, namedPlanKinds, recommendedPlan as pickRecommended, planFromUtterance as pickFromUtterance,
+} from "./app/selectors.js";
+import { welcomeText as greeting } from "./app/greeting.js";
+import { checkBadge, checkNote, fallbackNote, traceSummary, executionSummary } from "./app/run-badges.js";
 
 const $ = (id) => document.getElementById(id);
 const DEFAULT_INCIDENT = "SHIP-421";
 const hashIncident = () => decodeURIComponent(location.hash.slice(1)).trim().toUpperCase() || DEFAULT_INCIDENT;
-const state = {
+const store = createStore({
   token: "", snapshot: null, selectedPlanId: null, busy: false, conversation: [], speaking: false, app: null,
   awaitingExecute: false, pendingApproval: null, incidentId: hashIncident(), inbox: [], conversations: {}, selections: {}, stockFor: null,
   briefingPick: null, prefsShown: undefined, cardTheme: "dark", pendingPurchase: null, alerts: [],
   voice: { engine: "browser", voice: null, fillers: [] }, speechTurn: 0, auth: { enabled: false }, session: null,
   memoryIncident: null,
-};
+});
+const state = store.state;
 const CAPABILITIES_TEXT = "I'm LogiOps, your operations desk for late or held shipments. I can:\n"
   + "- brief your queue: say “any delays today?”;\n"
   + "- investigate an incident and compare its plans: “what's happening with SHIP-433?”;\n"
@@ -40,32 +48,6 @@ const SANDBOX_ORIGIN = (() => {
   } catch (_) { return null; }
 })();
 const app = { generation: 0, resource: null, nextId: 1 };
-const eventLabels = {
-  scenario_reset: "Synthetic incident reset",
-  incident_investigated: "MCP investigation completed",
-  agent_investigation_completed: "Agent assessment recorded",
-  plan_approved: "Plan approved by operator",
-  plan_executed: "Fulfillment plan executed",
-  notifications_simulated: "Notifications simulated",
-  execution_verified: "All units accounted for",
-  inventory_changed: "Local inventory changed",
-  schema_migrated: "Data rebuilt for a new version",
-};
-const planKeywords = [
-  [["express-transfer"], /\btransfer\b/],
-  [["priority-air-ground"], /\b(air|fly|flight)\b.*\bground\b|\bground\b.*\b(air|fly|flight)\b/],
-  [["priority-air"], /\b(air|fly|flight)\b/],
-  [["split-expedite"], /\b(split|stock)\b.*\bexpedit|\bexpedit\w*\b.*\b(split|stock)\b/],
-  [["expedite", "split-expedite"], /\bexpedit\w*\b|\bbroker\b/],
-  [["first-come"], /\b(first[- ]come|as placed|school first)\b/],
-  [["priority-first"], /\b(hospital first|priority first)\b/],
-  [["split-express", "split-expedite", "split-wait"], /\bsplit\b/],
-  [["split-express"], /\bexpress\b/],
-  [["local-stock"], /\b(local|warehouse)\b/],
-  [["reroute"], /\b(reroute|re-route|economy|rebook)\b/],
-  [["wait"], /\bwait\b/],
-];
-
 function message(text, success = false) {
   const box = $("message");
   box.textContent = text;
@@ -75,7 +57,7 @@ function message(text, success = false) {
 }
 
 function setBusy(busy) {
-  state.busy = busy;
+  store.set({ busy });
   renderControls();
 }
 
@@ -326,50 +308,8 @@ window.addEventListener("message", (event) => {
   }
 });
 
-function formatDate(iso) {
-  return new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit", timeZone: "America/Lima" }).format(new Date(iso));
-}
-
-function visibleVersion(snapshot) {
-  return snapshot.executions[0]?.source_version ?? snapshot.source_version;
-}
-
-function visibleApproval(snapshot) {
-  return snapshot.approvals.find((approval) => approval.source_version === visibleVersion(snapshot));
-}
-
-function visiblePlans(snapshot) {
-  return snapshot.plans.filter((plan) => plan.source_version === visibleVersion(snapshot));
-}
-
-function latestAgentEvent(snapshot) {
-  return [...snapshot.events].reverse().find((event) =>
-    event.name === "agent_investigation_completed" && event.data.source_version === visibleVersion(snapshot));
-}
-
-function rankKey(plan) {
-  const critical = (plan.orders || []).filter((order) => order.priority === "critical").map((order) => order.delay_hours);
-  return [Math.max(0, ...critical), plan.projected_customer_delay_hours, plan.late_units || 0, plan.incremental_cost_usd];
-}
-function byRank(a, b) {
-  const left = rankKey(a), right = rankKey(b);
-  return left.reduce((found, value, index) => found || value - right[index], 0);
-}
-
 function recommendedPlan(snapshot) {
-  const plans = visiblePlans(snapshot);
-  if (!plans.length) return null;
-  const answer = latestAgentEvent(snapshot)?.data.answer || "";
-  const id = window.LogiOpsIntent.recommendedPlanId(answer, plans);
-  return plans.find((plan) => plan.id === id)
-    || plans.find((plan) => answer.toLowerCase().includes(`recommend ${plan.label.toLowerCase()}`))
-    || [...plans].sort(byRank)[0];
-}
-
-function allocationSummary(plan) {
-  const units = new Map();
-  for (const item of plan.allocations) units.set(item.source, (units.get(item.source) || 0) + item.units);
-  return [...units].map(([source, count]) => `${count} via ${source.replaceAll("-", " ")}`).join(" · ");
+  return pickRecommended(snapshot, window.LogiOpsIntent);
 }
 
 function renderPlans(snapshot) {
@@ -507,7 +447,7 @@ function renderTimeline(events) {
   for (const event of [...events].reverse()) {
     const item = document.createElement("li");
     const title = document.createElement("strong");
-    title.textContent = eventLabels[event.name] || event.name.replaceAll("_", " ");
+    title.textContent = EVENT_LABELS[event.name] || event.name.replaceAll("_", " ");
     const when = document.createElement("small");
     when.textContent = formatDate(event.recorded_at);
     item.append(title, when);
@@ -601,19 +541,7 @@ function renderConversation() {
 }
 
 function welcomeText() {
-  const open = state.inbox.filter((item) => item.status !== "verified");
-  if (!state.inbox.length) {
-    return `Hi, I'm LogiOps. Ask me what's happening with ${state.incidentId}, and I'll investigate it with the MCP tools.`;
-  }
-  const critical = open.filter((item) => item.priority === "critical").map((item) => item.incident_id);
-  const atRisk = open.filter((item) => item.critical_units_at_risk > 0)
-    .map((item) => `${item.incident_id} has ${item.critical_units_at_risk} critical units nothing on hand delivers in time`);
-  const queue = open.length
-    ? `${open.length} open incident${open.length === 1 ? "" : "s"} in the inbox`
-      + (critical.length ? `; ${critical.join(" and ")} ${critical.length === 1 ? "has a critical order" : "have critical orders"}` : "")
-      + (atRisk.length ? `, and ${atRisk.join(" and ")}` : "")
-    : "Every incident in the inbox is resolved";
-  return `Hi, I'm LogiOps. ${queue}. Ask “any delays today?” for my briefing, or ask what's happening with ${state.incidentId}.`;
+  return greeting({ inbox: state.inbox, incidentId: state.incidentId });
 }
 
 function memorySession() {
@@ -788,10 +716,6 @@ function renderControls() {
   $("connect").disabled = state.busy;
 }
 
-function localWarehouse(snapshot) {
-  return Object.keys(snapshot.state.inventory || {})[0] || null;
-}
-
 function renderInbox() {
   const list = $("inbox");
   list.replaceChildren();
@@ -879,37 +803,14 @@ function render(snapshot) {
   renderControls();
 }
 
-function checkBadge(run) {
-  if (!run.evaluations?.length) return null;
-  if (!run.grounded) {
-    const issue = run.evaluations[run.evaluations.length - 1].issues[0] || "";
-    return { passed: false, text: `Did not pass the data check: ${issue}` };
-  }
-  return { passed: true, text: run.evaluations.length > 1 ? "Checked against the data after one revision" : "Checked against the data" };
-}
-
 function noteCheck(run) {
-  if (run.evaluations?.length && !run.grounded) {
-    message("This answer did not pass the automatic check against the incident's data. The plan cards are calculated by code; rely on them.");
-  }
+  const note = checkNote(run);
+  if (note) message(note);
 }
 
 function noteFallback(run) {
-  if (run.fallback === "daily_budget") {
-    message("Today's live model budget is used, so answers come from the scripted replay until midnight, Lima time.", true);
-  }
-}
-
-function traceSummary(run) {
-  const tokens = (run.usage?.inputTokens || 0) + (run.usage?.outputTokens || 0);
-  const fallback = run.fallback === "daily_budget" ? " · daily live budget used" : "";
-  return `${run.tool_trace.length} MCP calls · ${run.mode} mode${fallback} · ${tokens} tokens${run.truncated ? " · truncated" : ""}`;
-}
-
-function executionSummary(snapshot, execution) {
-  const accounted = execution.accounted_units
-    ?? snapshot.state.shipment.units_on_delayed_route + execution.fulfillments.reduce((sum, item) => sum + item.units, 0);
-  return `Verified: ${accounted} units accounted for · $${execution.incremental_cost_usd} extra · ${execution.notifications.length} simulated notifications. Customer delay: ${execution.projected_customer_delay_hours}h (projected).`;
+  const note = fallbackNote(run);
+  if (note) message(note, true);
 }
 
 async function refresh() {
@@ -976,26 +877,8 @@ async function executeApproved() {
   });
 }
 
-function namedPlanKinds(text) {
-  const found = planKeywords.find(([, pattern]) => pattern.test(text));
-  return found ? found[0] : null;
-}
-
 function planFromUtterance(text) {
-  const plans = visiblePlans(state.snapshot);
-  const preferred = state.snapshot.preference && plans.find((plan) => plan.id === state.snapshot.preference.preferred_plan_id);
-  if (preferred && /\b(?:preferred|my preference)\b/.test(text)) return preferred;
-  const selector = window.LogiOpsIntent.planSelector(text);
-  if (selector.cheapest) {
-    return [...plans].sort((a, b) => a.incremental_cost_usd - b.incremental_cost_usd || byRank(a, b))[0] || null;
-  }
-  if (selector.cost !== undefined) {
-    const priced = plans.filter((plan) => plan.incremental_cost_usd === selector.cost);
-    return priced.length === 1 ? priced[0] : null;
-  }
-  const kinds = namedPlanKinds(text);
-  if (kinds) return kinds.map((kind) => plans.find((plan) => plan.kind === kind)).find(Boolean) || null;
-  return recommendedPlan(state.snapshot);
+  return pickFromUtterance(text, state.snapshot, window.LogiOpsIntent);
 }
 
 function dollars(value) {
@@ -1210,7 +1093,7 @@ async function handleUtterance(raw) {
   const lower = text.toLowerCase();
   if (window.LogiOpsIntent.isStartOver(text)) {
     forgetPurchase();
-    Object.assign(state, { pendingApproval: null, awaitingExecute: false, selectedPlanId: null, conversation: state.conversation.slice(-1) });
+    store.set({ pendingApproval: null, awaitingExecute: false, selectedPlanId: null, conversation: state.conversation.slice(-1) });
     state.selections[state.incidentId] = null;
     hideMcpApp();
     say("assistant", "Okay, starting over. Nothing was changed or approved. Ask about your queue, or about an incident.",
@@ -1464,7 +1347,7 @@ $("access-token").addEventListener("keydown", (event) => {
 $("reset").addEventListener("click", () => act(async () => {
   forgetPurchase();
   await request("/demo/reset", "POST");
-  Object.assign(state, {
+  store.set({
     selectedPlanId: null, conversation: [], conversations: {}, selections: {}, stockFor: null,
     briefingPick: null, prefsShown: undefined,
   });
@@ -1486,7 +1369,7 @@ $("pref-clear").addEventListener("click", () => act(async () => {
 $("banner-reset").addEventListener("click", () => act(async () => {
   forgetPurchase();
   await request("/demo/reset", "POST", { incident_id: state.incidentId });
-  Object.assign(state, { selectedPlanId: null, conversation: [], stockFor: null });
+  store.set({ selectedPlanId: null, conversation: [], stockFor: null });
   hideMcpApp();
 }, "This incident was reset.").catch(() => {}));
 window.addEventListener("hashchange", () => {
