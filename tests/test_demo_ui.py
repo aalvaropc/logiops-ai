@@ -416,7 +416,7 @@ def test_help_and_start_over_follow_the_alexa_guidelines():
     assert "Nothing was changed or approved." in commands and "export const CAPABILITIES_SPOKEN" in _static("app", "capabilities.js")
     assert "agentEvent.data.display_answer || agentEvent.data.answer" in script
     api = (Path(__file__).resolve().parents[1] / "logiops" / "static" / "app" / "api.js").read_text()
-    assert "if (status >= 500) return" in api and "state.pendingApproval = pending;" in script
+    assert "if (status >= 500) return" in api and "state.pendingApproval = pending;" in commands
 
 
 def test_replies_speak_with_polly_and_stop_when_the_person_talks():
