@@ -438,7 +438,7 @@ def test_link_account_uses_pkce_s256_and_a_checked_state():
     script, api = (static / "demo.js").read_text(), (static / "app" / "api.js").read_text()
     assert "const verifier = randomText(48);" in api and 'randomness().subtle.digest("SHA-256", new TextEncoder().encode(verifier))' in api
     assert 'code_challenge_method: "S256"' in api and "params.get(\"state\") !== pending.state" in api
-    assert "vault.remove(OAUTH_KEY);" in api and 'path: `${SIGN_IN_PATH}${pending?.hash || hash}`' in api
+    assert "vault.remove(OAUTH_KEY);" in api and 'path: `${pending?.returnTo || SIGN_IN_PATH}${pending?.hash || hash}`' in api
     assert 'history.replaceState(null, "", outcome.path);' in script
     assert 'grant_type: "authorization_code", code, redirect_uri: `${origin}${SIGN_IN_PATH}`, code_verifier: pending.verifier' in api
     assert "/invalid_token/.test(response.headers.get(\"www-authenticate\") || \"\") && await refreshSession()" in api

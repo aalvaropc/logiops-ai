@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <title>LogiOps AI · Operator console</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="/assets/demo.css">
+  <link rel="stylesheet" href="/assets/console.css">
+  <script src="/assets/markdown.js"></script>
+  <script src="/assets/intent.js"></script>
+  <script src="/assets/demo.js" type="module"></script>
+</head>
+<body>
+  <div class="shell">
+    <header class="topbar">
+      <div class="brand"><span class="brand-mark">L</span><span>LogiOps <strong>AI</strong></span></div>
+      <div class="topbar-right"><button id="alerts-bell" type="button" class="alerts-bell" hidden></button><a class="track page-link" href="/demo">← Alexa+ device</a><span class="track">Operator console</span><span id="connection" class="connection">Connecting</span></div>
+    </header>
+
+    <main>
+      <section class="console-head" aria-label="Operator console">
+        <div>
+          <div class="eyebrow">Operator console <span>·</span> Synthetic scenario</div>
+          <h1 id="page-title">Every incident, in full.</h1>
+          <p>The same MCP tools and data as the Alexa+ device: investigate, compare the calculated plans, approve one, execute it and keep the audit trail. Only a person approves.</p>
+        </div>
+        <div id="account" class="account-row" hidden>
+          <span id="account-status" class="account-status" role="status">Guest · read only</span>
+          <button id="link-account" type="button" class="secondary">Link account</button>
+          <button id="sign-out" type="button" class="quiet" hidden>Sign out</button>
+        </div>
+      </section>
+
+      <div id="message" class="message" role="status" aria-live="polite"></div>
+
+      <section class="inbox-panel" aria-labelledby="inbox-title">
+        <div class="panel-heading"><span class="section-index" id="inbox-title">00 / INCIDENT INBOX</span><span class="muted">Synthetic data · open first, most critical units at risk next</span></div>
+        <ul id="inbox" class="inbox" aria-labelledby="inbox-title"><li class="empty">Connect to load the incidents.</li></ul>
+      </section>
+
+      <section class="overview" aria-label="Incident summary">
+        <div class="overview-heading"><span class="section-index">01 / INCIDENT</span><h2><span id="incident-id">SHIP-421</span> <span id="incident-status" class="status-chip">Loading</span></h2><p id="incident-title"></p><p id="incident-route">Lima <span class="route-arrow">→</span> Arequipa</p></div>
+        <div class="metric"><span>Original ETA</span><strong id="original-eta">—</strong><small id="promise-label">Customer promise</small></div>
+        <div class="metric warning"><span>Delayed ETA</span><strong id="delayed-eta">—</strong><small id="delay-hours">—</small></div>
+        <div class="metric"><span>Local stock</span><strong id="stock-value">—</strong><small id="stock-label">Warehouse</small></div>
+      </section>
+
+      <section class="workbench">
+        <div class="main-column">
+          <section class="panel assistant-panel" aria-labelledby="assistant-title">
+            <div class="panel-heading"><span class="section-index">02 / ASK LOGIOPS</span><span id="agent-mode" class="mode-chip">Agent</span></div>
+            <h2 id="assistant-title">Talk to the operations agent</h2>
+            <p>Ask in plain language, by text or voice. The agent calls the MCP tools for shipment, order, inventory, and carrier facts, then calculates the plans. Ask “any delays today?” for a briefing on the whole queue, say “remember my spend cap is $250” to save a preference, and “approve the split plan” or “execute it” to act; every action still checks the exact plan and version.</p>
+            <div id="state-banner" class="state-banner" role="status" hidden>
+              <p id="state-banner-text"></p>
+              <button id="banner-reset" type="button" class="secondary">↺ Reset this incident</button>
+            </div>
+            <ol id="conversation" class="conversation" aria-live="polite" aria-label="Conversation" tabindex="0"></ol>
+            <div class="suggestions" aria-label="Suggested requests">
+              <button type="button" class="chip" data-say="Any delays today? What needs my attention first?">Any delays today?</button>
+              <button id="chip-status" type="button" class="chip" data-say="What's happening with shipment SHIP-421, and which plan should we choose?">What's happening with SHIP-421?</button>
+              <button type="button" class="chip" data-say="Approve the recommended plan">Approve the recommended plan</button>
+              <button type="button" class="chip" data-say="Execute the approved plan">Execute it</button>
+              <button type="button" class="chip" data-say="Book and pay for the recommended plan">Book and pay</button>
+            </div>
+            <form id="ask-form" class="ask-row">
+              <label class="visually-hidden" for="ask-input">Message to LogiOps</label>
+              <input id="ask-input" type="text" maxlength="500" autocomplete="off" placeholder="Ask LogiOps about this incident">
+              <button id="mic" type="button" class="secondary mic" aria-pressed="false" hidden>Speak</button>
+              <button id="ask" type="submit" class="secondary">Send</button>
+            </form>
+            <label id="speak-toggle" class="speak-toggle" hidden><input id="speak-replies" type="checkbox"> Read replies aloud<span id="speak-engine"></span></label>
+          </section>
+
+          <section class="panel plans-panel" aria-labelledby="plans-title">
+            <div class="panel-heading"><span class="section-index">03 / DECIDE</span><span class="muted">Human approval required</span></div>
+            <h2 id="plans-title">Compare the options</h2>
+            <p>Completion times are projections from synthetic carrier quotes. Physical delivery is not verified.</p>
+            <p id="preference-line" class="preference-line" role="status" hidden></p>
+            <div id="plans" class="plans"><div class="empty">Run the investigation to see the options.</div></div>
+            <div class="approval-row"><label for="approver">Approved by</label><input id="approver" type="text" maxlength="80" value="demo-operator"><button id="approve" class="secondary" type="button" disabled>Approve selected plan</button></div>
+          </section>
+
+          <section class="panel execute-panel" aria-labelledby="execution-title">
+            <div class="panel-heading"><span class="section-index">04 / EXECUTE</span><span id="execution-state" class="muted">Waiting for approval</span></div>
+            <h2 id="execution-title">Put the plan into motion</h2>
+            <p>Execution updates the synthetic fulfillment state, simulates notifications, and checks every order's units are accounted for.</p>
+            <button id="execute" class="primary" type="button" disabled>Execute approved plan <span>→</span></button>
+            <div id="execution-result" class="result" hidden></div>
+            <section id="booking" class="booking" aria-label="Carrier booking receipt" hidden></section>
+          </section>
+        </div>
+
+        <aside class="side-column" aria-label="Operational trace">
+          <section class="panel preferences-panel" aria-labelledby="pref-title">
+            <div class="panel-heading"><span class="section-index">OPERATOR PREFERENCES</span><span id="pref-saved" class="muted">None saved</span></div>
+            <h2 id="pref-title">Remembered for every incident</h2>
+            <p>Say “remember my spend cap is $250”, or set them here. They steer which plan is picked and are kept across sessions; they never approve a plan.</p>
+            <form id="pref-form" class="pref-form">
+              <label for="pref-rule">Rule</label>
+              <select id="pref-rule">
+                <option value="balanced">Balanced (default ranking)</option>
+                <option value="cheapest_unless_critical_late">Cheapest unless a critical order is late</option>
+              </select>
+              <label for="pref-cap">Spend cap per incident (USD)</label>
+              <input id="pref-cap" type="number" min="0" max="100000" step="1" placeholder="No cap">
+              <label for="pref-note">Note for the agent <span>(data, not instructions)</span></label>
+              <input id="pref-note" type="text" maxlength="200" autocomplete="off" placeholder="e.g. Hospitals always come first">
+              <div class="pref-actions"><button id="pref-save" type="submit" class="secondary">Save preferences</button><button id="pref-clear" type="button" class="quiet">Clear</button></div>
+            </form>
+          </section>
+          <section class="panel trace-panel"><div class="panel-heading"><span class="section-index">AUDIT TRAIL</span><span id="event-count" class="muted">0 events</span></div><h2>Every step, recorded.</h2><ol id="timeline" class="timeline"></ol></section>
+          <div class="boundary"><strong>Operator boundary</strong><p>The agent can investigate and recommend. Only the operator can approve; execution checks the exact plan and source version.</p></div>
+          <details id="developer" class="developer">
+            <summary>Developer</summary>
+            <label for="access-token">Demo access token <span>(public deployment only)</span></label>
+            <div class="token-row"><input id="access-token" type="password" autocomplete="off" placeholder="Paste operator token"><button id="connect" type="button" class="secondary">Connect</button></div>
+            <label for="stock-input" class="stock-label">Simulate a stock change <span id="stock-scope">(this incident's warehouse; invalidates approvals)</span></label>
+            <div class="token-row"><input id="stock-input" type="number" min="0" max="20" step="1" value="11"><button id="set-stock" type="button" class="secondary">Apply</button></div>
+            <button id="reset" type="button" class="quiet">↺ Reset all incidents and preferences</button>
+            <p class="developer-links"><a href="/mcp">MCP endpoint</a> · <a href="/docs">REST API</a> · <a href="/scenario/packs/builtin">Built-in incidents (JSON)</a></p>
+          </details>
+        </aside>
+      </section>
+    </main>
+    <footer>LogiOps AI · Operator console · Operational verification ≠ physical delivery</footer>
+  </div>
+</body>
+</html>

@@ -1,0 +1,14 @@
+.console-head { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: end; gap: 24px; padding: 40px 0 28px; }
+.console-head h1 { margin: 10px 0 8px; font-size: 40px; letter-spacing: -.04em; }
+.console-head p { max-width: 640px; margin: 0; color: #a4b8bb; font-size: 15px; line-height: 1.65; }
+.console-head .account-row { margin: 0; }
+.page-link { color: #9ff0dc; text-decoration: none; }
+.page-link:hover { text-decoration: underline; }
+.developer { margin-top: 18px; padding: 16px 20px; border: 1px dashed #4f7f76; border-radius: 14px; background: #0f1d22; }
+.developer summary { cursor: pointer; color: #9ff0dc; font-size: 12px; font-weight: 800; letter-spacing: .14em; text-transform: uppercase; }
+.developer label { display: block; margin-top: 14px; color: #c7d7d7; font-size: 12px; font-weight: 650; }
+.developer label span { color: #80989c; font-weight: 400; }
+.developer .quiet { margin-top: 14px; }
+.developer-links { margin: 14px 0 0; color: #80989c; font-size: 12px; }
+.developer-links a { color: #9ff0dc; }
+@media (max-width: 760px) { .console-head { grid-template-columns: minmax(0, 1fr); align-items: start; padding: 28px 0 18px; } .console-head h1 { font-size: 30px; } }

@@ -206,6 +206,7 @@ def create_app(
             return {"enabled": False}
     static_dir = STATIC_DIR
     demo_page_html = (static_dir / "demo.html").read_text(encoding="utf-8")
+    console_page_html = (static_dir / "console.html").read_text(encoding="utf-8")
     demo_assets = {name: (static_dir / name).read_bytes() for name in DEMO_ASSETS}
     sandbox_page = (static_dir / "mcp_app_sandbox.html").read_text(encoding="utf-8")
 
@@ -229,6 +230,11 @@ def create_app(
     async def demo_page(request: Request) -> HTMLResponse:
         _page, sandbox = origins(request)
         return HTMLResponse(demo_page_html.replace(SANDBOX_META, SANDBOX_META.replace('content=""', f'content="{html.escape(sandbox or "")}"')))
+
+    @app.get("/console", include_in_schema=False)
+    async def console_page() -> HTMLResponse:
+        """The operator console: the same incidents, plans, approvals and audit trail as the device, in full."""
+        return HTMLResponse(console_page_html)
 
     @app.get(SANDBOX_PATH, include_in_schema=False)
     async def mcp_app_sandbox(request: Request) -> Response:
