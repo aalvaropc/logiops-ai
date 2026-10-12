@@ -1,0 +1,30 @@
+{
+  "version": 1,
+  "incidents": [
+    {
+      "id": "SHIP-470",
+      "kind": "port_strike",
+      "kind_label": "Port strike",
+      "title": "Dock strike at Paita holds frozen seafood for Piura",
+      "shipment": {
+        "origin": "Paita", "destination": "Piura", "sku": "SEAFOOD-07", "units_on_delayed_route": 50,
+        "original_eta": "2026-10-13T10:00:00-05:00", "delayed_eta": "2026-10-15T10:00:00-05:00",
+        "disruption": "Dock workers at Paita stopped loading; the union's own estimate is 48 hours."
+      },
+      "orders": [
+        {"id": "ORD-470", "sku": "SEAFOOD-07", "quantity": 30, "customer": "Piura regional hospital", "priority": "critical",
+         "due_eta": "2026-10-13T12:00:00-05:00", "placed_at": "2026-10-06T09:00:00-05:00"},
+        {"id": "ORD-471", "sku": "SEAFOOD-07", "quantity": 20, "customer": "Piura supermarket", "priority": "standard",
+         "due_eta": "2026-10-14T12:00:00-05:00", "placed_at": "2026-10-05T09:00:00-05:00"}
+      ],
+      "inventory": {"piura": {"sku": "SEAFOOD-07", "available": 30, "ready_at": "2026-10-13T08:00:00-05:00"}},
+      "carriers": {"refrigerated-truck": {"capacity": 50, "arrival_eta": "2026-10-13T22:00:00-05:00", "incremental_cost_usd": 420}},
+      "options": [
+        {"kind": "wait", "label": "Wait for the strike to end", "sources": ["delayed-shipment"]},
+        {"kind": "priority-local", "label": "Serve the hospital from Piura stock; the supermarket waits",
+         "sources": {"critical": ["piura-stock"], "standard": ["delayed-shipment"]}, "use_all": true},
+        {"kind": "reroute", "label": "Move everything by refrigerated truck", "sources": ["refrigerated-truck"]}
+      ]
+    }
+  ]
+}
