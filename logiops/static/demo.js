@@ -3,6 +3,9 @@
 import { createApi, createStorage, explainError as explain } from "./app/api.js";
 import { createMcpClient } from "./app/mcp.js";
 import { createMcpAppHost } from "./app/mcp-host.js";
+import { createVoice } from "./app/voice.js";
+import { createMemory } from "./app/memory.js";
+import { describePreferences, mergedPreferences, preferenceLine, preferenceEffect as effectOf } from "./app/preferences.js";
 import { createStore } from "./app/store.js";
 import {
   EVENT_LABELS, formatDate, visibleVersion, visibleApproval, visiblePlans, latestAgentEvent, byRank, allocationSummary,
@@ -94,7 +97,7 @@ const api = createApi({
       startFiller();
       return;
     }
-    clearTimeout(state.fillerTimer);
+    voice.cancelFiller();
     if (phase === "error") device("voice", "error");
   },
 });
@@ -306,24 +309,15 @@ function renderPlans(snapshot) {
   }
 }
 
-const RULE_NAMES = { balanced: "balanced ranking", cheapest_unless_critical_late: "cheapest unless a critical order is late" };
-
-function describePreferences(prefs) {
-  const parts = [RULE_NAMES[prefs.rule] || prefs.rule];
-  parts.push(prefs.max_cost_usd === null || prefs.max_cost_usd === undefined ? "no spend cap" : `spend cap $${prefs.max_cost_usd}`);
-  if (prefs.note) parts.push(`note “${prefs.note}”`);
-  return parts.join(" · ");
-}
-
 function renderPreferenceLine(snapshot) {
   const line = $("preference-line");
   const preference = snapshot.preference;
   line.hidden = !preference;
   if (!preference) return;
   const strong = document.createElement("strong");
-  strong.textContent = `Your preference → “${preference.preferred_plan_label}”. `;
-  const text = preference.changes_pick ? preference.reason : "It agrees with the default pick.";
-  line.replaceChildren(strong, document.createTextNode([text, ...preference.warnings].join(" ")));
+  const described = preferenceLine(preference);
+  strong.textContent = described.lead;
+  line.replaceChildren(strong, document.createTextNode(described.text));
 }
 
 function renderPreferences(snapshot) {
@@ -338,20 +332,12 @@ function renderPreferences(snapshot) {
 }
 
 async function savePreferences(update) {
-  const current = state.snapshot?.operator_preferences || {};
-  const merged = {
-    rule: current.rule || "balanced", max_cost_usd: current.max_cost_usd ?? null, note: current.note || "", ...update,
-  };
-  await request("/operator/preferences", "PUT", merged);
+  await request("/operator/preferences", "PUT", mergedPreferences(state.snapshot?.operator_preferences, update));
   state.prefsShown = undefined;
 }
 
 function preferenceEffect() {
-  const preference = state.snapshot?.preference;
-  if (!preference) return `I'll apply them to ${state.incidentId} once its plans are calculated.`;
-  if (!preference.changes_pick) return `For ${state.incidentId}, they agree with the default pick, “${preference.default_plan_label}”.`;
-  return `For ${state.incidentId}, they point to “${preference.preferred_plan_label}” instead of the default pick, `
-    + `“${preference.default_plan_label}”. ${preference.reason} ${preference.warnings.join(" ")}`.trim();
+  return effectOf(state.snapshot, state.incidentId);
 }
 
 function renderTimeline(events) {
@@ -457,38 +443,17 @@ function welcomeText() {
   return greeting({ inbox: state.inbox, incidentId: state.incidentId });
 }
 
-function memorySession() {
-  try {
-    let id = sessionStorage.getItem("logiops-memory-session");
-    if (!id) {
-      id = `s-${randomText(12)}`;
-      sessionStorage.setItem("logiops-memory-session", id);
-    }
-    return id;
-  } catch (_) {
-    return null;
-  }
-}
-
-function remember(role, text) {
-  const session = memorySession();
-  if (!session || (state.auth.enabled && !state.session)) return;
-  const headers = { "Content-Type": "application/json" };
-  if (state.token) headers.Authorization = `Bearer ${state.token}`;
-  fetch("/memory/turns", {
-    method: "POST", headers, cache: "no-store",
-    body: JSON.stringify({ session, role, text: String(text).slice(0, 4000), incident: state.incidentId }),
-  }).catch(() => {});
-}
+const memory = createMemory({
+  storage: createStorage(), request, randomText,
+  credentials: () => ({ token: state.token, session: state.session, auth: state.auth }),
+  incident: () => state.incidentId,
+});
+const memorySession = () => memory.session();
+const remember = (role, text) => memory.remember(role, text);
 
 async function recallMemory() {
-  if (state.auth.enabled && !state.session) return;
-  let recalled;
-  try {
-    recalled = await request(`/memory?session=${encodeURIComponent(memorySession() || "")}`);
-  } catch (_) {
-    return;
-  }
+  const recalled = await memory.recall();
+  if (!recalled) return;
   state.memoryIncident = recalled.last_incident || null;
   if (recalled.welcome && !state.conversation.some((turn) => turn.role === "user")) {
     say("assistant", recalled.welcome, "welcome back · from memory", recalled.welcome);
@@ -512,83 +477,10 @@ function speechOn() {
   return $("speak-replies").checked && (state.voice.engine === "polly" || "speechSynthesis" in window);
 }
 
-function stopSpeaking({ quiet = false } = {}) {
-  state.speechTurn += 1;
-  clearTimeout(state.fillerTimer);
-  clearTimeout(state.speechTimer);
-  let stopped = false;
-  if (state.audio) {
-    state.audio.pause();
-    state.audio = null;
-    stopped = true;
-  }
-  if ("speechSynthesis" in window && (window.speechSynthesis.speaking || window.speechSynthesis.pending)) {
-    window.speechSynthesis.cancel();
-    stopped = true;
-  }
-  if (stopped && !quiet) device("voice", "speech-end");
-}
-
-function browserSpeak(line, done) {
-  if (!("speechSynthesis" in window)) {
-    done();
-    return;
-  }
-  const utterance = new SpeechSynthesisUtterance(line);
-  utterance.lang = "en-US";
-  utterance.addEventListener("end", done);
-  utterance.addEventListener("error", done);
-  window.speechSynthesis.speak(utterance);
-}
-
-async function speak(line, { filler = false } = {}) {
-  stopSpeaking({ quiet: true });
-  const turn = state.speechTurn;
-  const done = () => {
-    if (turn !== state.speechTurn) return;
-    clearTimeout(state.speechTimer);
-    if (!filler) device("voice", "speech-end");
-  };
-  state.speechTimer = setTimeout(done, 30000);
-  if (state.voice.engine === "polly") {
-    try {
-      const headers = { "Content-Type": "application/json" };
-      if (state.token) headers.Authorization = `Bearer ${state.token}`;
-      const response = await fetch("/voice/speech", { method: "POST", headers, body: JSON.stringify({ text: line }), cache: "no-store" });
-      if (turn !== state.speechTurn) return;
-      if (response.ok) {
-        const url = URL.createObjectURL(await response.blob());
-        if (turn !== state.speechTurn) {
-          URL.revokeObjectURL(url);
-          return;
-        }
-        const audio = new Audio(url);
-        state.audio = audio;
-        const finish = () => {
-          URL.revokeObjectURL(url);
-          if (state.audio === audio) state.audio = null;
-          done();
-        };
-        audio.addEventListener("ended", finish);
-        audio.addEventListener("error", finish);
-        await audio.play();
-        return;
-      }
-    } catch (_) {
-      if (turn !== state.speechTurn) return;
-    }
-  }
-  browserSpeak(line, done);
-}
-
-function startFiller() {
-  clearTimeout(state.fillerTimer);
-  if (!speechOn()) return;
-  state.fillerTimer = setTimeout(() => {
-    const fillers = state.voice.fillers.length ? state.voice.fillers : ["One moment, I'm still working on it."];
-    speak(fillers[Math.floor(Math.random() * fillers.length)], { filler: true });
-  }, 2500);
-}
+const voice = createVoice({ getToken: () => state.token, getConfig: () => state.voice, isEnabled: speechOn, device });
+const stopSpeaking = (options) => voice.stop(options);
+const speak = (line, options) => voice.speak(line, options);
+const startFiller = () => voice.startFiller();
 
 async function loadVoice() {
   try {
