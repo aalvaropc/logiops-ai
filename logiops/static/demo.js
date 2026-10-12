@@ -6,6 +6,8 @@ import { createMcpAppHost } from "./app/mcp-host.js";
 import { createVoice } from "./app/voice.js";
 import { createMemory } from "./app/memory.js";
 import { describePreferences, mergedPreferences, preferenceLine, preferenceEffect as effectOf } from "./app/preferences.js";
+import { createPurchase, dollars, bookingRows } from "./app/purchase.js";
+import { createAlerts, bellText } from "./app/alerts.js";
 import { createStore } from "./app/store.js";
 import {
   EVENT_LABELS, formatDate, visibleVersion, visibleApproval, visiblePlans, latestAgentEvent, byRank, allocationSummary,
@@ -20,7 +22,7 @@ const hashIncident = () => decodeURIComponent(location.hash.slice(1)).trim().toU
 const store = createStore({
   token: "", snapshot: null, selectedPlanId: null, busy: false, conversation: [], speaking: false, app: null,
   awaitingExecute: false, pendingApproval: null, incidentId: hashIncident(), inbox: [], conversations: {}, selections: {}, stockFor: null,
-  briefingPick: null, prefsShown: undefined, cardTheme: "dark", pendingPurchase: null, alerts: [],
+  briefingPick: null, prefsShown: undefined, cardTheme: "dark",
   voice: { engine: "browser", voice: null, fillers: [] }, speechTurn: 0, auth: { enabled: false }, session: null,
   memoryIncident: null,
 });
@@ -65,23 +67,6 @@ function explainError(status, detail) {
   return explain(status, detail, { authEnabled: state.auth.enabled, signedIn: Boolean(state.session), hasToken: Boolean(state.token) });
 }
 
-const PURCHASE_KEY = "logiops-pending-purchase";
-function storedPurchase() {
-  try {
-    const value = JSON.parse(sessionStorage.getItem(PURCHASE_KEY) || "null");
-    return value && value.quote && Date.parse(value.quote.expires_at) > Date.now() ? value : null;
-  } catch (_) { return null; }
-}
-function keepPurchase(purchase) {
-  state.pendingPurchase = purchase;
-  try {
-    if (purchase) sessionStorage.setItem(PURCHASE_KEY, JSON.stringify(purchase)); else sessionStorage.removeItem(PURCHASE_KEY);
-  } catch (_) { }
-}
-function forgetPurchase() {
-  keepPurchase(null);
-}
-
 const api = createApi({
   storage: createStorage(), origin: location.origin,
   credentials: () => ({ token: state.token, session: state.session, auth: state.auth }),
@@ -102,6 +87,32 @@ const api = createApi({
   },
 });
 const { request, storedToken, storeToken, readSession, keepSession, signOut, randomText } = api;
+
+const purchase = createPurchase({
+  storage: createStorage(), request, crypto: window.crypto,
+  api: { token: () => state.token, fetch: (...args) => fetch(...args), explain: explainError },
+  selectors: { visiblePlans, visibleApproval, namedPlanKinds, planFromUtterance: (text) => planFromUtterance(text) },
+  snapshot: () => state.snapshot, incidentId: () => state.incidentId,
+  say: (...args) => say(...args), act: (...args) => act(...args), approvePlan: (plan) => approvePlan(plan),
+  onBooking: (booking) => showBooking(booking),
+});
+const storedPurchase = () => purchase.stored();
+const forgetPurchase = () => purchase.forget();
+
+const alerts = createAlerts({
+  request, incidentId: () => state.incidentId, isBusy: () => state.busy, isHidden: () => document.hidden,
+  onAlerts: () => renderAlertBell(),
+  onAnnounce: async (alert) => {
+    state.pendingApproval = null;
+    state.awaitingExecute = false;
+    if (purchase.pending()?.incidentId === alert.incident_id || storedPurchase()?.incidentId === alert.incident_id) forgetPurchase();
+    state.selectedPlanId = alert.new_plan?.plan_id || null;
+    await refresh().catch(() => {});
+    say("assistant", alert.message, "proactive alert · nothing approved", alert.spoken);
+  },
+});
+const checkAlerts = () => alerts.check();
+
 function renderAccount() {
   const box = $("account");
   box.hidden = !state.auth.enabled;
@@ -636,7 +647,7 @@ async function selectIncident(id) {
   state.selectedPlanId = state.selections[id] || null;
   state.awaitingExecute = false;
   state.pendingApproval = null;
-  state.pendingPurchase = null;
+  purchase.take();
   history.replaceState(null, "", `#${encodeURIComponent(id)}`);
   hideMcpApp("incident changed");
   await act(refresh, "");
@@ -686,36 +697,6 @@ function planFromUtterance(text) {
   return pickFromUtterance(text, state.snapshot, window.LogiOpsIntent);
 }
 
-function dollars(value) {
-  return `$${Number(value).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-}
-
-function newPurchaseKey() {
-  const random = window.crypto?.randomUUID ? window.crypto.randomUUID() : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}`;
-  return `buy-${random}`;
-}
-
-function spelled(number) {
-  return String(number).replace("-", "").split("").join(" ");
-}
-
-function purchaseReadback(purchase, plan) {
-  const quote = purchase.quote;
-  const card = String(quote.payment_method).replace(/\s*\(simulated\)$/i, "").toLowerCase();
-  const breakdown = `carriers and services ${dollars(quote.base_usd)}, service fee ${dollars(quote.service_fee_usd)}, `
-    + `IGV 18% ${dollars(quote.igv_usd)}, total ${dollars(quote.total_usd)}, charged to the ${card}`;
-  if (!purchase.approve) {
-    const text = `To book “${quote.plan_label}”: ${breakdown}. Say “yes” to pay, or “no”.`;
-    return { text, spoken: text };
-  }
-  const delay = plan.projected_customer_delay_hours ? `${plan.projected_customer_delay_hours} hours of delay` : "no delay";
-  const late = (plan.orders || []).filter((order) => order.priority === "critical" && order.delay_hours > 0);
-  const warning = late.length ? ` It leaves the critical order for ${late.map((order) => order.customer).join(" and ")} late.` : "";
-  const text = `To approve “${quote.plan_label}” (${delay}) and book it: ${breakdown}.${warning} `
-    + "Say “yes” to approve and pay, or “no”.";
-  return { text, spoken: text };
-}
-
 function showBooking(booking) {
   const box = $("booking");
   if (!booking) {
@@ -729,12 +710,7 @@ function showBooking(booking) {
   head.textContent = `Booked ${booking.number} · ${dollars(booking.total_usd)} charged once (simulated payment)`;
   const list = document.createElement("dl");
   list.className = "booking-lines";
-  const rows = [
-    ...booking.lines.map((line) => [`${line.service}, ${line.units} units`, "cost_usd" in line ? dollars(line.cost_usd) : "included"]),
-    ["Carriers and services", dollars(booking.base_usd)], ["Service fee", dollars(booking.service_fee_usd)],
-    ["IGV 18%", dollars(booking.igv_usd)], ["Total", dollars(booking.total_usd)],
-  ];
-  for (const [term, value] of rows) {
+  for (const [term, value] of bookingRows(booking)) {
     const dt = document.createElement("dt");
     dt.textContent = term;
     const dd = document.createElement("dd");
@@ -752,129 +728,18 @@ function showBooking(booking) {
 }
 
 async function openReceipt(number) {
-  const headers = state.token ? { Authorization: `Bearer ${state.token}` } : {};
-  const response = await fetch(`/bookings/${encodeURIComponent(number)}/receipt`, { headers, cache: "no-store" });
-  if (!response.ok) throw new Error(explainError(response.status, "The receipt could not be opened."));
-  const url = URL.createObjectURL(new Blob([await response.text()], { type: "text/html" }));
+  const html = await purchase.openReceipt(number);
+  const url = URL.createObjectURL(new Blob([html], { type: "text/html" }));
   window.open(url, "_blank");
   setTimeout(() => URL.revokeObjectURL(url), 60000);
 }
 
 function renderAlertBell() {
-  const elsewhere = state.alerts.filter((alert) => alert.incident_id !== state.incidentId);
   const bell = $("alerts-bell");
-  bell.hidden = !elsewhere.length;
-  bell.textContent = `${elsewhere.length} alert${elsewhere.length === 1 ? "" : "s"} · ${elsewhere[0]?.incident_id || ""}`;
-  bell.setAttribute("aria-label", `${elsewhere.length} proactive alert${elsewhere.length === 1 ? "" : "s"}; open ${elsewhere[0]?.incident_id || ""}`);
-}
-
-async function announceAlert(alert) {
-  try {
-    await request(`/alerts/${encodeURIComponent(alert.id)}/dismiss`, "POST");
-  } catch (_) {
-    return;
-  }
-  state.alerts = state.alerts.filter((item) => item.id !== alert.id);
-  renderAlertBell();
-  state.pendingApproval = null;
-  state.awaitingExecute = false;
-  if (state.pendingPurchase?.incidentId === alert.incident_id || storedPurchase()?.incidentId === alert.incident_id) forgetPurchase();
-  state.selectedPlanId = alert.new_plan?.plan_id || null;
-  await refresh().catch(() => {});
-  say("assistant", alert.message, "proactive alert · nothing approved", alert.spoken);
-}
-
-async function checkAlerts() {
-  if (!state.snapshot || state.busy || document.hidden) return;
-  try {
-    state.alerts = (await request("/alerts")).alerts;
-  } catch (_) {
-    return;
-  }
-  renderAlertBell();
-  const here = state.alerts.find((alert) => alert.incident_id === state.incidentId);
-  if (here && !state.busy) await announceAlert(here);
-}
-
-async function startPurchase(lower) {
-  const snapshot = state.snapshot;
-  if (!visiblePlans(snapshot).length) {
-    say("assistant", "There are no plans for the current data yet. Ask me to investigate first.");
-    return;
-  }
-  const approval = visibleApproval(snapshot);
-  const lockedId = snapshot.executions[0]?.plan_id || approval?.plan_id;
-  const locked = lockedId && snapshot.plans.find((plan) => plan.id === lockedId);
-  const named = namedPlanKinds(lower);
-  if (locked && named && !named.includes(locked.kind)) {
-    say("assistant", `The approved plan is “${locked.label}”, so that's the only one I can book. Nothing was charged.`);
-    return;
-  }
-  const plan = locked || planFromUtterance(lower);
-  if (!plan) {
-    const options = visiblePlans(snapshot).map((item) => `“${item.label}” ($${item.incremental_cost_usd})`).join(", ");
-    say("assistant", `That plan isn't available for the current data. The options are ${options}.`);
-    return;
-  }
-  const booked = (snapshot.bookings || []).find((item) => item.plan_id === plan.id);
-  if (booked) {
-    say("assistant", `“${plan.label}” is already booked as ${booked.number}: ${dollars(booked.total_usd)} was charged once. Nothing more to pay.`);
-    showBooking(booked);
-    return;
-  }
-  if (!plan.incremental_cost_usd) {
-    say("assistant", `“${plan.label}” uses no paid carrier or service, so there's nothing to book.`);
-    return;
-  }
-  let quote;
-  await act(async () => { quote = await request(incidentPath("/bookings/quote"), "POST", { plan_id: plan.id }); }, "");
-  const purchase = {
-    incidentId: state.incidentId, planId: plan.id, sourceVersion: plan.source_version, approve: !quote.approved,
-    quote, key: newPurchaseKey(),
-  };
-  keepPurchase(purchase);
-  const readback = purchaseReadback(purchase, plan);
-  say("assistant", readback.text, "price read-back · nothing charged yet", readback.spoken);
-}
-
-async function confirmPurchase(purchase) {
-  if (Date.parse(purchase.quote.expires_at) <= Date.now()) {
-    forgetPurchase();
-    say("assistant", "That price expired, so nothing was charged. Say “book it” for a new quote.");
-    return;
-  }
-  const plan = state.snapshot.plans.find((item) => item.id === purchase.planId && item.source_version === purchase.sourceVersion);
-  const current = plan && (plan.source_version === state.snapshot.source_version || state.snapshot.executions.some((item) => item.plan_id === plan.id));
-  if (!current) {
-    forgetPurchase();
-    say("assistant", "The data changed after I read that price back, so nothing was approved or charged. Ask me again.");
-    return;
-  }
-  let approvedNow = false;
-  if (purchase.approve && !visibleApproval(state.snapshot) && !state.snapshot.executions.length) {
-    await act(() => approvePlan(plan), "");
-    approvedNow = true;
-    keepPurchase({ ...purchase, approve: false });
-  }
-  let booking;
-  try {
-    await act(async () => {
-      booking = await request(`/quotes/${encodeURIComponent(purchase.quote.quote_id)}/confirm`, "POST", {
-        confirmed_total_usd: purchase.quote.total_usd, idempotency_key: purchase.key,
-      });
-    }, "");
-  } catch (error) {
-    const retry = !error.status || error.status >= 500;
-    if (!retry) forgetPurchase();
-    say("assistant", `${approvedNow ? `Approved “${plan.label}”, but the` : "The"} booking didn't go through: ${error.message || error}`
-      + (retry ? " Say “yes” to try again; it never charges twice." : ""));
-    return;
-  }
-  forgetPurchase();
-  showBooking(booking);
-  say("assistant", `${approvedNow ? "Approved. " : ""}${booking.confirmation} The receipt is in the execute panel.`,
-    `booking · ${booking.number}`,
-    `${approvedNow ? "Approved, and booked. " : "Booked. "}${dollars(booking.total_usd)} charged. Your confirmation number is ${spelled(booking.number)}.`);
+  const shown = bellText(alerts.current(), state.incidentId);
+  bell.hidden = !shown;
+  bell.textContent = shown ? shown.text : "";
+  bell.setAttribute("aria-label", shown ? shown.label : "No proactive alerts");
 }
 
 function approvalReadback(plan) {
@@ -911,8 +776,7 @@ async function handleUtterance(raw) {
   }
   const pending = state.pendingApproval;
   state.pendingApproval = null;
-  const purchase = state.pendingPurchase;
-  state.pendingPurchase = null;
+  const pendingPurchase = purchase.take();
   const preference = window.LogiOpsIntent.parsePreference(text);
   if (preference) {
     state.awaitingExecute = false;
@@ -967,11 +831,11 @@ async function handleUtterance(raw) {
       hideMcpApp();
       say("assistant", `Done. ${id} is back to its original state.`);
     } else if (command === "book") {
-      await startPurchase(lower);
-    } else if (command === "confirm" && purchase) {
-      await confirmPurchase(purchase);
+      await purchase.start(lower);
+    } else if (command === "confirm" && pendingPurchase) {
+      await purchase.confirm(pendingPurchase);
     } else if (command === "decline") {
-      if (purchase || storedPurchase()) {
+      if (pendingPurchase || storedPurchase()) {
         forgetPurchase();
         say("assistant", "Okay, nothing was booked or charged.");
       } else {
@@ -1010,24 +874,7 @@ async function handleUtterance(raw) {
         say("assistant", "Signed out on this page. You're a guest again: you can read and ask, but not act.");
       }
     } else if (command === "resume") {
-      const parked = storedPurchase();
-      if (!parked) {
-        say("assistant", "There's no booking waiting. Say “book it” to price the approved plan's carriers.");
-        return;
-      }
-      if (parked.incidentId !== state.incidentId) {
-        await selectIncident(parked.incidentId);
-        if (state.incidentId !== parked.incidentId) return;
-      }
-      const plan = state.snapshot.plans.find((item) => item.id === parked.planId);
-      if (!plan) {
-        forgetPurchase();
-        say("assistant", "That booking no longer matches the incident's data, so nothing was charged. Say “book it” for a new quote.");
-        return;
-      }
-      keepPurchase(parked);
-      const readback = purchaseReadback(parked, plan);
-      say("assistant", readback.text, "price read-back · nothing charged yet", readback.spoken);
+      await purchase.resume(selectIncident);
     } else if (command === "approve") {
       if (!visiblePlans(state.snapshot).length) {
         say("assistant", "There are no plans for the current data yet. Ask me to investigate first.");
@@ -1194,10 +1041,10 @@ $("sign-out").addEventListener("click", () => {
   message("Signed out. You're a guest: you can read and ask, but not act.", true);
 });
 $("alerts-bell").addEventListener("click", async () => {
-  const alert = state.alerts.find((item) => item.incident_id !== state.incidentId);
+  const alert = alerts.elsewhere();
   if (!alert || state.busy) return;
   await selectIncident(alert.incident_id).catch(() => {});
-  if (state.incidentId === alert.incident_id) await announceAlert(alert);
+  if (state.incidentId === alert.incident_id) await alerts.announce(alert);
 });
 $("ask-input").addEventListener("input", () => stopSpeaking());
 $("ask-form").addEventListener("submit", (event) => {
