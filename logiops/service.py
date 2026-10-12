@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Any, Callable, Iterator
 
 from .scenario import (
-    INCIDENT_ID, INCIDENT_IDS, SEED_DAY, SHIPMENT_SOURCE, available_units, build_plans, inbox_key, incident_summary,
+    INCIDENT_ID, SEED_DAY, SHIPMENT_SOURCE, available_units, build_plans, inbox_key, incident_ids, incident_summary,
     local_warehouse, seed_state,
 )
 from .tools import find_alternative_carriers, get_local_inventory, get_orders, get_shipment
@@ -70,7 +70,11 @@ class LogiOpsService:
             )
             seeded = {row[0] for row in connection.execute("SELECT incident_id FROM snapshot")}
             day = self._scenario_day()
-            for incident_id in INCIDENT_IDS:
+            for incident_id in seeded - set(incident_ids()):
+                for table in INCIDENT_TABLES:
+                    connection.execute(f"DELETE FROM {table} WHERE incident_id = ?", (incident_id,))
+                logger.warning("Dropped the stored incident %s: it is not registered in this process", incident_id)
+            for incident_id in incident_ids():
                 if incident_id not in seeded:
                     self._seed(connection, incident_id, day)
                     if migrated_from is not None:
@@ -121,6 +125,18 @@ class LogiOpsService:
         cls._event(connection, incident_id, "scenario_reset",
                    {"source_version": 1, **({"dates_refreshed": True} if refreshed else {})})
 
+    def seed_missing(self) -> list[str]:
+        """Seed every registered incident that has no stored data yet (a pack registered after start-up)."""
+        day = self._scenario_day()
+        seeded = []
+        with self._connection(write=True) as connection:
+            stored = {row[0] for row in connection.execute("SELECT incident_id FROM snapshot")}
+            for incident_id in incident_ids():
+                if incident_id not in stored:
+                    self._seed(connection, incident_id, day)
+                    seeded.append(incident_id)
+        return seeded
+
     @staticmethod
     def _stale(state: dict[str, Any], version: int, day: date) -> bool:
         """Dates to move forward: an untouched incident once the anchor day moves on, and any
@@ -142,7 +158,7 @@ class LogiOpsService:
         refreshed = []
         with self._connection(write=True) as connection:
             for row in connection.execute("SELECT incident_id, state_json, version FROM snapshot").fetchall():
-                if self._stale(json.loads(row["state_json"]), row["version"], day):
+                if row["incident_id"] in incident_ids() and self._stale(json.loads(row["state_json"]), row["version"], day):
                     for table in INCIDENT_TABLES:
                         connection.execute(f"DELETE FROM {table} WHERE incident_id = ?", (row["incident_id"],))
                     self._seed(connection, row["incident_id"], day, refreshed=True)
@@ -171,7 +187,7 @@ class LogiOpsService:
 
     def reset(self, incident_id: str | None = None) -> dict[str, Any]:
         """Restore one incident, or all of them, to its original synthetic state."""
-        if incident_id is not None and incident_id not in INCIDENT_IDS:
+        if incident_id is not None and incident_id not in incident_ids():
             raise WorkflowError(f"Unknown incident: {incident_id}", 404)
         with self._connection(write=True) as connection:
             if incident_id is None:
@@ -181,7 +197,7 @@ class LogiOpsService:
                 for table in INCIDENT_TABLES:
                     connection.execute(f"DELETE FROM {table} WHERE incident_id = ?", (incident_id,))
             day = self._scenario_day()
-            for item in INCIDENT_IDS if incident_id is None else (incident_id,):
+            for item in incident_ids() if incident_id is None else (incident_id,):
                 self._seed(connection, item, day)
         return self.get(incident_id or INCIDENT_ID)
 
