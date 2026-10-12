@@ -41,6 +41,10 @@ def _intent(script: str) -> str:
     return _node(script, module="intent.js")
 
 
+def _static(*parts: str) -> str:
+    return (Path(__file__).resolve().parents[1] / "logiops" / "static").joinpath(*parts).read_text()
+
+
 def test_only_a_whole_command_acts():
     import json
 
@@ -101,14 +105,15 @@ def test_buying_declining_and_resuming_are_closed_commands():
 def test_a_purchase_is_read_back_and_paid_once():
     static = Path(__file__).resolve().parents[1] / "logiops" / "static"
     script, purchase = (static / "demo.js").read_text(), (static / "app" / "purchase.js").read_text()
-    assert 'command === "confirm" && pendingPurchase' in script and "await purchase.confirm(pendingPurchase);" in script
+    commands = _static("app", "commands.js")
+    assert 'command === "confirm" && pendingPurchase' in commands and "await purchase.confirm(pendingPurchase);" in commands
     assert "Say “yes” to approve and pay, or “no”." in purchase and "Say “yes” to pay, or “no”." in purchase
     assert "IGV 18% ${dollars(quote.igv_usd)}, total ${dollars(quote.total_usd)}" in purchase
     assert "confirmed_total_usd: purchase.quote.total_usd, idempotency_key: purchase.key" in purchase
     assert "keep({ ...purchase, approve: false });" in purchase
     assert "Say “yes” to try again; it never charges twice." in purchase
-    assert script.index("const pendingPurchase = purchase.take();") < script.index("const preference = window.LogiOpsIntent.parsePreference(text);")
-    assert "Nothing is waiting for a “yes” right now." in script
+    assert commands.index("const pendingPurchase = purchase.take();") < commands.index("const preference = intent.parsePreference(text);")
+    assert "Nothing is waiting for a “yes” right now." in commands
 
 
 def test_approval_phrases_can_name_a_price_or_the_cheapest_plan():
@@ -121,11 +126,11 @@ def test_approval_phrases_can_name_a_price_or_the_cheapest_plan():
 
 
 def test_a_spoken_approval_is_read_back_before_it_acts():
-    script = (Path(__file__).resolve().parents[1] / "logiops" / "static" / "demo.js").read_text()
-    assert "state.pendingApproval = { planId: plan.id, sourceVersion: plan.source_version };" in script
-    assert "Say “yes” to approve it, or ask me anything else." in script
-    assert 'command === "confirm" && pending' in script
-    assert "state.pendingApproval = null;" in script
+    commands = _static("app", "commands.js")
+    assert "state.pendingApproval = { planId: plan.id, sourceVersion: plan.source_version };" in commands
+    assert "Say “yes” to approve it, or ask me anything else." in commands
+    assert 'command === "confirm" && pending' in commands
+    assert "state.pendingApproval = null;" in commands
 
 
 def test_the_agent_pick_follows_the_shared_grounding_cases():
@@ -144,12 +149,12 @@ def test_the_agent_pick_follows_the_shared_grounding_cases():
 
 
 def test_demo_routes_utterances_through_the_intent_module(tmp_path):
-    script = (Path(__file__).resolve().parents[1] / "logiops" / "static" / "demo.js").read_text()
-    assert "LogiOpsIntent.parseCommand(text)" in script and "pickRecommended(snapshot, window.LogiOpsIntent)" in script
-    assert "intent.recommendedPlanId(" in (Path(__file__).resolve().parents[1] / "logiops" / "static" / "app" / "selectors.js").read_text()
-    assert "test(lower)) {" not in script
-    assert "was already executed" in script
-    assert "That plan isn't available for the current data" in script
+    script, commands = _static("demo.js"), _static("app", "commands.js")
+    assert "intent.parseCommand(text)" in commands and "intent: window.LogiOpsIntent" in script
+    assert "pickRecommended(snapshot, window.LogiOpsIntent)" in script and "intent.recommendedPlanId(" in _static("app", "selectors.js")
+    assert "test(lower)) {" not in script and "test(lower)) {" not in commands
+    assert "was already executed" in commands
+    assert "That plan isn't available for the current data" in commands
     assert "Number.parseInt" not in script and "Number.isInteger(available)" in script
 
     async def run():
@@ -246,17 +251,17 @@ def test_markdown_asset_is_served_and_shipped(tmp_path):
 
 
 def test_a_card_that_cannot_load_says_why():
-    script = (Path(__file__).resolve().parents[1] / "logiops" / "static" / "demo.js").read_text()
-    assert "showMcpAppNote(" in script and "could not be loaded" in script
-    assert "showMcpApp(run).catch(() => hideMcpApp())" not in script
+    script, commands = _static("demo.js"), _static("app", "commands.js")
+    assert "function showMcpAppNote(" in script and "could not be loaded" in commands
+    assert "showMcpApp(run).catch(() => hideMcpApp())" not in commands
 
 
 def test_execute_never_runs_a_plan_other_than_the_one_named():
-    script = (Path(__file__).resolve().parents[1] / "logiops" / "static" / "demo.js").read_text()
-    assert "if (approved && named && !named.includes(approved.kind)) {" in script
-    assert "so nothing was executed" in script
-    assert '(command === "confirm" && awaitingExecute && visibleApproval(state.snapshot))' in script
-    assert "state.awaitingExecute = true;" in script and "state.awaitingExecute = false;" in script
+    commands = _static("app", "commands.js")
+    assert "if (approved && named && !named.includes(approved.kind)) {" in commands
+    assert "so nothing was executed" in commands
+    assert '(command === "confirm" && awaitingExecute && selectors.visibleApproval(state.snapshot))' in commands
+    assert "state.awaitingExecute = true;" in commands and "state.awaitingExecute = false;" in commands
 
 
 def test_the_demo_is_an_inbox_of_incidents():
@@ -267,7 +272,7 @@ def test_the_demo_is_an_inbox_of_incidents():
     assert "inventory.arequipa" not in script and "SHIP-421" not in html.split("<main>")[1].split('id="incident-id">')[0]
     assert "state.app.incidentId !== snapshot.state.incident_id" in script
     assert 'card.setAttribute("aria-pressed", String(item.incident_id === state.incidentId));' in script
-    assert "window.LogiOpsIntent.mentionedIncident(text," in script
+    assert "intent.mentionedIncident(text," in _static("app", "commands.js")
 
 
 def test_the_inbox_and_the_greeting_name_the_critical_units_at_risk():
@@ -317,12 +322,13 @@ def test_the_demo_shows_preferences_briefings_and_speaks_the_short_line():
     view = (root / "resolution_options.html").read_text()
     assert 'id="pref-form"' in html and 'id="preference-line"' in html and "Any delays today?" in html
     assert 'value="cheapest_unless_critical_late"' in html
-    assert script.index("LogiOpsIntent.parsePreference(text)") < script.index("LogiOpsIntent.parseCommand(text)")
-    assert 'request("/agent/briefing", "POST"' in script and 'tag("start-here", "Start here")' in script
+    commands = _static("app", "commands.js")
+    assert commands.index("intent.parsePreference(text)") < commands.index("intent.parseCommand(text)")
+    assert 'request("/agent/briefing", "POST"' in commands and 'tag("start-here", "Start here")' in script
     assert '"Your preference", "badge preference"' in script and "never approve" in script
     assert "if (speaking) speak(spoken || window.LogiOpsMarkdown.plainText(text));" in script
     assert "const utterance = new win.SpeechSynthesisUtterance(line);" in (Path(__file__).resolve().parents[1] / "logiops" / "static" / "app" / "voice.js").read_text()
-    assert "run.spoken, checkBadge(run));" in script
+    assert "run.spoken, badges.checkBadge(run));" in commands
     assert "operator_preferences" in view and '"Your preference"' in view
 
 
@@ -330,7 +336,7 @@ def test_replies_show_whether_they_passed_the_data_check():
     root = Path(__file__).resolve().parents[1] / "logiops" / "static"
     script, style, badges = (root / "demo.js").read_text(), (root / "demo.css").read_text(), (root / "app" / "run-badges.js").read_text()
     assert "export function checkBadge(run)" in badges and '"Checked against the data"' in badges
-    assert "Did not pass the data check: ${issue}" in badges and "noteCheck(run);" in script
+    assert "Did not pass the data check: ${issue}" in badges and "badges.noteCheck(run);" in _static("app", "commands.js")
     assert "check: checkBadge(agentEvent.data)" in script
     assert ".turn .check-badge {" in style and ".turn .check-badge.failed {" in style
 
@@ -387,7 +393,7 @@ def test_the_device_replays_the_recorded_tool_trace_and_the_check():
     html, script, device = ((root / name).read_text() for name in ("demo.html", "demo.js", "device.js"))
     assert 'id="device-elapsed" class="device-elapsed" aria-hidden="true"' in html
     assert 'aria-label="Steps the agent took, from the recorded tool trace"' in html and 'id="device-check"' in html
-    assert script.count('device("trace", run);') == 2
+    assert script.count("device,") == 1 and _static("app", "commands.js").count('device("trace", run);') == 1
     assert "From the recorded tool trace · ${steps.length} MCP call" in device
     assert 'matchMedia("(prefers-reduced-motion: reduce)")' in device and "answered in ${" in device
     assert '"Checked against the data after one revision"' in device and '"Did not pass the data check"' in device
@@ -405,9 +411,9 @@ def test_help_and_start_over_follow_the_alexa_guidelines():
         "clear the conversation": (False, True), "help me approve the split plan": (False, False),
         "start over with SHIP-421": (False, False),
     }
-    script = (Path(__file__).resolve().parents[1] / "logiops" / "static" / "demo.js").read_text()
-    assert script.index("isStartOver(text)") < script.index("const pending = state.pendingApproval;")
-    assert "Nothing was changed or approved." in script and "const CAPABILITIES_SPOKEN" in script
+    script, commands = _static("demo.js"), _static("app", "commands.js")
+    assert commands.index("isStartOver(text)") < commands.index("const pending = state.pendingApproval;")
+    assert "Nothing was changed or approved." in commands and "export const CAPABILITIES_SPOKEN" in _static("app", "capabilities.js")
     assert "agentEvent.data.display_answer || agentEvent.data.answer" in script
     api = (Path(__file__).resolve().parents[1] / "logiops" / "static" / "app" / "api.js").read_text()
     assert "if (status >= 500) return" in api and "state.pendingApproval = pending;" in script
@@ -418,7 +424,7 @@ def test_replies_speak_with_polly_and_stop_when_the_person_talks():
     voice = (Path(__file__).resolve().parents[1] / "logiops" / "static" / "app" / "voice.js").read_text()
     assert 'fetcher("/voice/speech", { method: "POST", headers, body: JSON.stringify({ text: line }), cache: "no-store" })' in voice
     assert "browserSpeak(line, done);" in voice and 'if (turn !== current.turn) return "dropped";' in voice
-    assert script.index("if (!text || state.busy) return;\n  stopSpeaking();") > 0
+    assert _static("app", "commands.js").index("if (!text || state.busy) return;\n    stopSpeaking();") > 0
     assert '$("ask-input").addEventListener("input", () => stopSpeaking());' in script
     assert "stopSpeaking();\n    mic.textContent = \"Listening…\";" in script
     assert "startFiller();" in script and "}, FILLER_DELAY_MS);" in voice and "stop({ quiet: true });" in voice
@@ -450,8 +456,8 @@ def test_memory_commands_and_hooks():
     script = (Path(__file__).resolve().parents[1] / "logiops" / "static" / "demo.js").read_text()
     assert "if (!id || !allowed()) return false;" in (Path(__file__).resolve().parents[1] / "logiops" / "static" / "app" / "memory.js").read_text()
     assert 'if (!state.forgetting && !String(meta || "").startsWith("welcome back")) remember(' in script
-    assert "state.forgetting = window.LogiOpsIntent.isForgetMe(text);" in script
-    assert 'request("/memory", "DELETE")' in script and "recallMemory();" in script
+    assert "state.forgetting = intent.isForgetMe(text);" in _static("app", "commands.js")
+    assert 'request("/memory", "DELETE")' in _static("app", "commands.js") and "recallMemory();" in script
     cases = {"forget me": "forget_me", "forget our conversations": "forget_me", "delete my memory": "forget_me",
              "pick up where we left off": "pick_up", "where were we": "pick_up", "pick up there": "pick_up",
              "forget my preferences": None, "forget me not": None}
