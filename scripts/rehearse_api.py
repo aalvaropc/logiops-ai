@@ -86,8 +86,10 @@ def walk(client: httpx.Client) -> None:
     post("/demo/reset")
 
     inbox = client.get("/incidents").json()["incidents"]
-    check("the inbox lists four incidents of different kinds",
-          len(inbox) == 4 and len({item["kind"] for item in inbox}) == 4, str([item["incident_id"] for item in inbox]))
+    builtin = {"SHIP-421", "SHIP-433", "SHIP-452", "SHIP-460"}
+    check("the inbox lists the four built-in incidents of different kinds, plus any registered pack",
+          builtin <= {item["incident_id"] for item in inbox} and len({item["kind"] for item in inbox}) == len(inbox),
+          str([item["incident_id"] for item in inbox]))
     outage = post("/incidents/SHIP-433/agent/investigate")
     pick = outage.json()["plans"] if outage.status_code == 200 else []
     best = kind(pick, "priority-air-ground") if pick else None
