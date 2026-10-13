@@ -408,6 +408,13 @@ def test_the_device_page_is_the_full_screen_alexa_experience():
     assert 'id="device-orb"' not in console and "data-surface" not in console
 
 
+def test_a_refresh_runs_once_so_a_tap_is_not_lost_while_the_page_settles():
+    for name in (("device", "main.js"), ("console.js",)):
+        script = _static(*name)
+        assert 'act(refresh, "")' not in script and "await work();\n    await refresh();" in script
+        assert 'act(async () => {}, "")' in script
+
+
 def test_the_device_replays_the_recorded_tool_trace_and_the_check():
     root = Path(__file__).resolve().parents[1] / "logiops" / "static"
     html, script, render = (root / "demo.html").read_text(), (root / "device" / "main.js").read_text(), (root / "device" / "render.js").read_text()

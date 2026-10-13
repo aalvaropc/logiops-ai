@@ -480,7 +480,7 @@ async function selectIncident(id) {
   state.pendingApproval = null;
   purchase.take();
   history.replaceState(null, "", `#${encodeURIComponent(id)}`);
-  await act(refresh, "");
+  await act(async () => {}, "");
   renderAlertBell();
 }
 
@@ -619,7 +619,7 @@ function setUpVoice() {
 
 $("connect").addEventListener("click", () => {
   state.token = $("access-token").value.trim();
-  act(async () => { await refresh(); storeToken(state.token); }, "Connected to the incident.").catch(() => {});
+  act(async () => { storeToken(state.token); }, "Connected to the incident.").catch(() => {});
 });
 $("access-token").addEventListener("keydown", (event) => {
   if (event.key === "Enter") $("connect").click();
@@ -734,7 +734,7 @@ if (resumed) {
   state.token = resumed.access;
 }
 setInterval(() => { checkAlerts().catch(() => {}); }, 5000);
-loadAuth().catch(() => {}).then(() => act(refresh, "").catch(() => {})).then(() => {
+loadAuth().catch(() => {}).then(() => act(async () => {}, "").catch(() => {})).then(() => {
   if (state.session) $("approver").value = state.session.username;
   loadVoice();
   recallMemory();
