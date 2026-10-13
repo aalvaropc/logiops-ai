@@ -38,6 +38,37 @@ built; see also `amazon-friction-log.md` for discrete problems. Numbers marked
   - Web hosts must load views through a sandbox proxy on a different origin. We implemented it, but for one domain it means a second hostname (a second CDN distribution here). A reference proxy page in the SDK, and guidance for local development (we pair `127.0.0.1` with `localhost`), would save every host author the same work.
   - Tool `visibility` defaults to `["model", "app"]`, so a state-changing tool is callable from views unless you opt out. That default is easy to miss.
 
+## Strands Agents (1.60)
+
+- **Used for:** the agent's tool loop since 2026-10-12, replacing a hand-written Converse loop with the same contract (`logiops/strands_runtime.py`).
+- **Worked well:** the `Model` interface is small enough to adapt our non-streaming Converse client (Bedrock, the daily-budget wrapper, the replay and every test fake) in one class; `AgentTool` lets a tool run on an MCP session we own; hooks (`AfterModelCallEvent`, `AfterToolCallEvent`) hold the same guards as before, enforced before any tool runs; `limits={"turns": n}` and `NullConversationManager` make the loop as predictable as the old one; system prompt content blocks carry the Agent Skill and a cache point.
+- **Measured:** on the deployment, an investigation of five tool calls and three plans answered in 13.6 s with 5,872 tokens (the earlier hand-written loop measured 15.8 s on 2026-10-06 and 14.1 s on 2026-10-12); the SHIP-421 run read 5,818 prompt-cache tokens and wrote 2,909; locally 18.5 s with 11,636 cache-read tokens. The runtime added no measurable latency over the previous loop.
+- **Needs work:** the SDK's `MCPClient` runs its own thread and event loop and deadlocks with an in-process stateless Streamable HTTP server (friction 2026-10-12); the order of `AfterModelCallEvent` and the max-tokens recovery, and how turn limits count cycles, we learned from the source; a production install pulls OpenTelemetry and watchdog even when tracing is off.
+- **Would build with it again:** yes, with the adapter pattern; it took one day to land with every test green.
+
+## Amazon Polly
+
+- **Used for:** reading the spoken line of every reply on the deployment (Ruth, generative engine), cached per text in SQLite and capped per day (`LOGIOPS_DAILY_SPEECH_CHARS`).
+- **Measured:** one spoken line of about 25 words is an 11 KB MP3 in under a second; repeated lines cost nothing.
+- **Worked well:** the generative voice reads numbers, times and ids ("L G O …") naturally; the browser's voice is a transparent fallback when the budget is spent.
+- **Needs work:** nothing blocked us; a per-text cache hint would remove the store we keep (feature request P3).
+
+## Amazon Cognito (managed login, OAuth 2.1 with PKCE)
+
+- **Used for:** sign-in on the device, the console and MCP clients; scopes `incidents.operate` and `bookings.pay` on a resource server; the API proxies the token endpoint and publishes RFC 9728 and RFC 8414 metadata itself.
+- **Worked well:** the managed-login domain and the public PKCE client took one Terraform apply; `check_oauth.py` passes 4/4 against the deployment and a real sign-in was tested on 2026-10-12.
+- **Needs work:** the OIDC discovery document does not advertise PKCE and access tokens carry no `aud` (friction 2026-10-11), so an MCP client cannot trust Cognito's own metadata.
+
+## Amazon Bedrock AgentCore Memory
+
+- **Used for:** per-user memory across sessions (USER_PREFERENCE and SEMANTIC strategies), the "Welcome back" line and "forget me".
+- **Measured:** on the deployment, `verify_remote.py` recalls the previous session's turn and forgets one item in under two seconds each.
+- **Needs work:** listing a person's latest events needs a session id (friction 2026-10-11); the Terraform resource's attribute descriptions are missing (friction 2026-10-11).
+
+## Terraform on AWS (phase 2)
+
+- Thirteen more resources (AgentCore Memory with two strategies, Cognito user pool, domain, resource server and client, SSM parameters, IAM for Polly and Memory) applied cleanly on 2026-10-11 after a plan review; the instance reads settings from SSM at deploy time, so rotating the operator token is one script and one deploy.
+
 ## Alexa+ developer tools
 
 - We wanted to build directly on the Category SDK, MCP Toolkit, CLI and Web Simulator, but they are partner-only and there is no way to request access. Individual setup pages do not always say so, which costs time. A public simulator, even a limited one, would let builders test the real Alexa+ conversation instead of building their own.

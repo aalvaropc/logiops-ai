@@ -28,3 +28,25 @@ def test_the_docs_name_the_device_the_console_strands_metrics_and_packs():
     for text in ("## Production path", "Strands Agents", "AgentCore Memory", "Amazon Polly", "Amazon Cognito", "scenario packs", "alexa-plus-readiness.md"):
         assert text in architecture, text
     assert "operator panel" not in readme
+
+
+def test_the_hackathon_package_is_complete_and_prioritised():
+    hackathon = ROOT / "docs" / "hackathon"
+    for name in ("alexa-plus-readiness.md", "feature-requests.md", "video-script.md", "recording-checklist.md",
+                 "amazon-feedback.md", "amazon-friction-log.md", "testing-instructions.md", "decisions.md", "submission-fields.md"):
+        assert (hackathon / name).is_file(), name
+    requests = (hackathon / "feature-requests.md").read_text()
+    rows = [line for line in requests.splitlines() if line.startswith(("| P1", "| P2", "| P3"))]
+    assert len(rows) >= 10 and all(line.split("|")[1].strip() in ("P1", "P2", "P3") for line in rows)
+    feedback = (hackathon / "amazon-feedback.md").read_text()
+    for section in ("## Strands Agents", "## Amazon Polly", "## Amazon Cognito", "## Amazon Bedrock AgentCore Memory"):
+        assert section in feedback, section
+    friction = (hackathon / "amazon-friction-log.md").read_text()
+    assert "2026-10-12 — Strands Agents" in friction and "NoRegionError" in friction
+    readiness = (hackathon / "alexa-plus-readiness.md").read_text()
+    for item in ("MCP Apps", "Agent Skills", "OAuth 2.1", "Purchasing", "State across sessions", "Proactive notifications"):
+        assert item in readiness, item
+    script = (hackathon / "video-script.md").read_text()
+    assert "2:50–3:00" in script and "under 3 minutes" in script
+    instructions = (hackathon / "testing-instructions.md").read_text()
+    assert "operator panel" not in instructions and "/console" in instructions
