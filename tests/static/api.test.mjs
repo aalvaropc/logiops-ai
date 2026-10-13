@@ -171,3 +171,14 @@ test("sign out drops the session and falls back to the stored operator token", a
   assert.equal(state.token, "operator-token");
   assert.equal(backing.getItem(SESSION_KEY), null);
 });
+
+test("a structured error keeps its detail for the page and a readable message", async () => {
+  const { fetcher } = fetchScript({ "/scenario/packs": jsonResponse(422, { detail: { message: "The pack was not registered", errors: [{ incident: "SHIP-470", path: "orders[0].priority", message: "priority must be critical or standard" }] } }) });
+  const api = createApi({ fetch: fetcher, storage: createStorage(memoryStorage()), origin: "http://127.0.0.1:8000", credentials: () => ({ token: "", session: null, auth: { enabled: false } }) });
+  await assert.rejects(api.request("/scenario/packs", "POST", { version: 1 }), (error) => {
+    assert.equal(error.status, 422);
+    assert.equal(error.message, "The pack was not registered");
+    assert.equal(error.detail.errors[0].path, "orders[0].priority");
+    return true;
+  });
+});

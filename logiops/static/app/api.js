@@ -185,8 +185,10 @@ export function createApi({ fetch: doFetch, storage, crypto: webCrypto, origin, 
       if (agent) agentCall("error");
       let detail = `HTTP ${response.status}`;
       try { detail = (await response.json()).detail || detail; } catch (_) { }
-      const error = new Error(explainError(response.status, detail, { authEnabled: auth.enabled, signedIn: Boolean(session), hasToken: Boolean(token) }));
+      const text = typeof detail === "string" ? detail : detail?.message || `HTTP ${response.status}`;
+      const error = new Error(explainError(response.status, text, { authEnabled: auth.enabled, signedIn: Boolean(session), hasToken: Boolean(token) }));
       error.status = response.status;
+      error.detail = detail;
       throw error;
     }
     return response.json();

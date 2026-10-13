@@ -45,3 +45,12 @@ def test_the_console_script_has_no_card_and_signs_in_through_the_device_page():
     assert "createMcpAppHost" not in script and "LogiOpsDevice" not in script and "mcp-app" not in script
     assert 'returnTo: "/console"' in script and "finishSignIn" not in script
     assert 'if (outcome.path.startsWith("/console")) {' in device and "location.replace(outcome.path);" in device
+
+
+def test_the_developer_drawer_imports_a_scenario_pack():
+    console, script, api = (STATIC / "console.html").read_text(), (STATIC / "console.js").read_text(), (STATIC / "app" / "api.js").read_text()
+    assert 'id="pack-file" type="file" accept="application/json,.json"' in console and 'id="import-pack"' in console
+    assert 'id="pack-result" class="developer-links" role="status" aria-live="polite"' in console
+    assert 'request("/scenario/packs", "POST", pack)' in script and "error.detail?.errors" in script
+    assert "Nothing was registered." in script and "until the server restarts" in script
+    assert "error.detail = detail;" in api and 'typeof detail === "string" ? detail : detail?.message' in api

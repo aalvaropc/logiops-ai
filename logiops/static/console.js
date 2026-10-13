@@ -343,6 +343,7 @@ function renderControls() {
   $("banner-reset").disabled = state.busy;
   $("set-stock").disabled = state.busy || !snapshot || executed || !localWarehouse(snapshot);
   for (const id of ["pref-rule", "pref-cap", "pref-note", "pref-save", "pref-clear"]) $(id).disabled = state.busy || !snapshot;
+  $("import-pack").disabled = state.busy;
   $("stock-input").disabled = state.busy || !snapshot || !localWarehouse(snapshot);
   $("connect").disabled = state.busy;
 }
@@ -652,6 +653,42 @@ $("banner-reset").addEventListener("click", () => act(async () => {
 window.addEventListener("hashchange", () => {
   const id = hashIncident();
   if (id !== state.incidentId) selectIncident(id).catch(() => {});
+});
+function packResult(text, failed = false) {
+  const box = $("pack-result");
+  box.textContent = text;
+  box.classList.toggle("failed", failed);
+}
+
+async function importPack(file) {
+  let pack;
+  try {
+    pack = JSON.parse(await file.text());
+  } catch (_) {
+    throw new Error("That file is not JSON. Start from the built-in incidents (JSON) below and keep the same shape.");
+  }
+  try {
+    const result = await request("/scenario/packs", "POST", pack);
+    packResult(`Registered ${result.registered.join(", ")}: ${result.incidents.length} incidents in the inbox until the server restarts.`);
+    return result;
+  } catch (error) {
+    const problems = error.detail?.errors;
+    if (Array.isArray(problems) && problems.length) {
+      packResult(`Nothing was registered. ${problems.slice(0, 3).map((item) => `${item.incident} ${item.path}: ${item.message}`).join(" · ")}${problems.length > 3 ? ` · and ${problems.length - 3} more` : ""}`, true);
+    } else {
+      packResult(error.message || String(error), true);
+    }
+    throw error;
+  }
+}
+
+$("import-pack").addEventListener("click", () => {
+  const file = $("pack-file").files?.[0];
+  if (!file) {
+    packResult("Choose a JSON scenario pack first.", true);
+    return;
+  }
+  act(() => importPack(file), "").catch(() => {});
 });
 $("set-stock").addEventListener("click", () => act(async () => {
   const raw = $("stock-input").value.trim();

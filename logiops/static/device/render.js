@@ -102,7 +102,8 @@ export function drawMap(map, caption, snapshot, plan, route, doc = globalThis.do
   const list = el("ul", "legend", undefined, doc);
   for (const leg of legs) {
     const item = el("li", `leg-${leg.type}${leg.late ? " late" : ""}`, undefined, doc);
-    const where = leg.from && leg.to && leg.from.name !== leg.to.name ? `${leg.from.name} → ${leg.to.name}` : `at ${leg.to ? leg.to.name : shipment.destination}`;
+    const where = leg.from && leg.to ? (leg.from.name !== leg.to.name ? `${leg.from.name} → ${leg.to.name}` : `at ${leg.to.name}`)
+      : `${leg.type === "local" ? leg.source.replace(/-stock$/, "") : shipment.origin} → ${shipment.destination}`;
     item.append(el("span", "swatch", undefined, doc), el("span", "", `${leg.label}: ${leg.units} units ${where}, ${when(leg.arrival_eta)}${leg.late ? " · late" : ""}`, doc));
     list.append(item);
   }
