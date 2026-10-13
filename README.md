@@ -330,7 +330,12 @@ Run tests with `uv run pytest`, in a shell without `LOGIOPS_ACCESS_TOKEN`,
 `LOGIOPS_AGENT_MODE`, or `LOGIOPS_TRUST_CLOUDFRONT` exported. The MCP
 interoperability tests use the official Python MCP client against the
 in-process ASGI app, and the Bedrock tests validate request shapes against
-botocore's service model without a paid call.
+botocore's service model without a paid call. The browser walkthroughs
+(`tests/browser/`, Playwright against a replay server, axe with zero
+violations at 1440 and 390 px) need the `browser` extra and a browser:
+`uv sync --extra dev --extra browser`, `uv run playwright install --only-shell chromium`,
+then `LOGIOPS_BROWSER=1 uv run pytest -q tests/browser`. CI runs them in the
+`browser` job.
 
 ### Carrier booking and payment
 

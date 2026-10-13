@@ -149,6 +149,15 @@ env -u LOGIOPS_ACCESS_TOKEN -u LOGIOPS_AGENT_MODE -u LOGIOPS_PUBLIC -u LOGIOPS_P
     -u LOGIOPS_SANDBOX_HOST uv run pytest -q
 ```
 
+The browser walkthroughs (device and console in replay, axe with zero violations
+at 1440 and 390 px) run with the `browser` extra and a Chromium headless shell:
+
+```sh
+uv sync --extra dev --extra browser
+uv run playwright install --only-shell chromium
+LOGIOPS_BROWSER=1 uv run pytest -q tests/browser
+```
+
 `scripts/clean_room.sh <ref>` clones a ref into a temporary directory and runs the
 install, the tests, the Docker build, `check_mcp.py` and the `rehearse_api.py`
 walkthrough from scratch.
