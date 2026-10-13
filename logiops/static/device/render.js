@@ -35,12 +35,22 @@ function button(text, className, onClick, doc = globalThis.document) {
   return node;
 }
 
-export function renderHome(section, { greeting, lead }, doc = globalThis.document) {
+export function renderHome(section, { greeting, lead, session }, doc = globalThis.document) {
   section.querySelector(".home-head")?.remove();
+  section.querySelector(".session-strip")?.remove();
   const head = el("div", "home-head", undefined, doc);
   head.append(el("p", "label", "Alexa+ · LogiOps", doc), el("p", "lead", lead || greeting, doc));
   if (lead) head.append(el("p", "sub", greeting, doc));
   section.prepend(head);
+  if (!session) return;
+  const strip = el("ul", "session-strip", undefined, doc);
+  strip.setAttribute("aria-label", "This session's outcomes, from the recorded events");
+  for (const [value, label] of session) {
+    const item = el("li", "", undefined, doc);
+    item.append(el("strong", "", value, doc), el("span", "", label, doc));
+    strip.append(item);
+  }
+  section.append(strip);
 }
 
 function drawCity(layer, city, role, doc) {
@@ -218,7 +228,7 @@ export function renderAlert(section, alert, doc = globalThis.document) {
   section.replaceChildren(card);
 }
 
-export function renderResult(section, { snapshot, execution, plan, booking }, doc = globalThis.document) {
+export function renderResult(section, { snapshot, execution, plan, booking, times = [] }, doc = globalThis.document) {
   const card = el("div", "result-card", undefined, doc);
   card.append(el("p", "label", "Executed · operationally verified", doc), el("h2", "", plan?.label || execution.plan_id, doc),
     el("p", "lead", `${snapshot.state.incident_id} · ${snapshot.state.title}`, doc));
@@ -230,6 +240,7 @@ export function renderResult(section, { snapshot, execution, plan, booking }, do
     figures.append(box);
   }
   card.append(figures);
+  if (times.length) card.append(el("p", "times", times.map(([label, value]) => `${label} ${value}`).join(" · "), doc));
   if (booking) card.append(el("p", "note", `Booked ${booking.number} · ${dollars(booking.total_usd)} charged once.`, doc));
   card.append(el("p", "note", "Delivery is projected from synthetic quotes, not physically confirmed.", doc));
   section.replaceChildren(card);

@@ -256,3 +256,8 @@ input::placeholder { color: #6b888e; }
   *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; scroll-behavior: auto !important; }
   .orb { animation: none !important; }
 }
+.session-strip { list-style: none; display: flex; flex-wrap: wrap; gap: 8px; margin: 18px 0 0; padding: 0; }
+.session-strip li { display: grid; gap: 1px; min-width: 110px; padding: 8px 12px; border: 1px solid #1d4552; border-radius: 10px; background: #0b1f27; }
+.session-strip strong { font-size: 16px; letter-spacing: -.02em; }
+.session-strip span { color: #9fc3cc; font-size: 10.5px; }
+.result-card .times { margin: 12px 0 0; color: #8fe8c9; font-size: 13px; font-weight: 650; }
