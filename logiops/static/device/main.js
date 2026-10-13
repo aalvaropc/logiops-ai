@@ -416,7 +416,9 @@ async function refresh() {
 
 async function loadMetrics() {
   state.metrics = await request("/metrics");
-  if (["home", "result"].includes(surfaces.current().name)) paintSurface();
+  const shown = surfaces.current();
+  if (shown.name === "home") renderHome(sections.home, { greeting: welcomeText(), lead: shown.payload.lead, session: sessionFigures(state.metrics.session) });
+  else if (shown.name === "result") paintSurface();
 }
 
 async function selectIncident(id) {
