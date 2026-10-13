@@ -13,9 +13,9 @@ from decimal import Decimal
 from pathlib import Path
 from typing import Any, AsyncIterator, Literal
 
-from fastapi import BackgroundTasks, FastAPI, Request
+from fastapi import BackgroundTasks, FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse, Response
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from . import __version__
 from .alerts import AlertWatcher
@@ -36,7 +36,7 @@ from .oauth import OAuthSettings, install_oauth
 from .preferences import COST_LIMIT, NOTE_LIMIT, RULES, PreferenceStore, preference_for, with_preference_figures
 from .presentation import customer_text, shown_run
 from .replay import ReplayConverse
-from .scenario import INCIDENT_ID, INCIDENT_IDS, incident_ids, known_figures, scenario_clock
+from .scenario import INCIDENT_ID, PACK_VERSION, ScenarioPackError, builtin_incidents, incident_ids, known_figures, load_scenario_pack, register_pack, scenario_clock
 from .security import SANDBOX_PATH, install_security
 from .voice import PollyVoice
 
@@ -71,6 +71,25 @@ class InventoryChange(BaseModel):
 
 class ResetRequest(BaseModel):
     incident_id: str | None = Field(default=None, min_length=1, max_length=40)
+
+
+class IncidentDefinition(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    id: str = Field(min_length=1, max_length=40)
+    kind: str = Field(min_length=1, max_length=40)
+    kind_label: str = Field(min_length=1, max_length=80)
+    title: str = Field(min_length=1, max_length=200)
+    shipment: dict[str, Any]
+    orders: list[dict[str, Any]] = Field(min_length=1, max_length=20)
+    inventory: dict[str, dict[str, Any]] = Field(default_factory=dict)
+    carriers: dict[str, dict[str, Any]] = Field(default_factory=dict)
+    options: list[dict[str, Any]] = Field(min_length=1, max_length=20)
+
+
+class ScenarioPack(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    version: Literal[1]
+    incidents: list[IncidentDefinition] = Field(min_length=1, max_length=50)
 
 
 class AgentInvestigationRequest(BaseModel):
@@ -153,6 +172,12 @@ def create_app(
         scenario_day = scenario_clock(os.environ.get("LOGIOPS_SCENARIO_ANCHOR"))
     except ValueError as exc:
         raise RuntimeError(str(exc)) from exc
+    pack_path = os.environ.get("LOGIOPS_SCENARIO_PACK", "").strip()
+    if pack_path:
+        try:
+            load_scenario_pack(pack_path)
+        except ScenarioPackError as exc:
+            raise RuntimeError(f"LOGIOPS_SCENARIO_PACK could not be loaded: {exc}") from exc
     service = LogiOpsService(path, scenario_day=scenario_day)
     preferences = PreferenceStore(path)
     bookings = BookingStore(path, service)
@@ -327,7 +352,7 @@ def create_app(
     async def remember_turn(turn: MemoryTurn, request: Request, background: BackgroundTasks) -> dict[str, Any]:
         """Remember one turn of the conversation for the person asking (never for a guest); written after the reply."""
         actor = actor_of(request)
-        incident = turn.incident if turn.incident in INCIDENT_IDS else None
+        incident = turn.incident if turn.incident in incident_ids() else None
         background.add_task(memory.remember, actor, turn.session, turn.role, turn.text, incident)
         return {"accepted": actor.kind != "guest", "backend": memory.backend}
 
@@ -374,6 +399,22 @@ def create_app(
     async def list_incidents() -> dict[str, Any]:
         """The incident inbox: open first, then by critical units at risk, priority and due time."""
         return {"incidents": service.list_incidents()}
+
+    @app.get("/scenario/packs/builtin")
+    async def builtin_pack() -> dict[str, Any]:
+        """The four built-in incidents in pack form: the template for a pack of your own."""
+        return {"version": PACK_VERSION, "incidents": builtin_incidents()}
+
+    @app.post("/scenario/packs", status_code=201)
+    async def upload_pack(pack: ScenarioPack) -> dict[str, Any]:
+        """Register the incidents of a scenario pack and seed them; they live in this process until it restarts
+        (set LOGIOPS_SCENARIO_PACK to load a pack at every start). A pack with one bad incident registers nothing."""
+        try:
+            registered = register_pack(pack.model_dump())
+        except ScenarioPackError as exc:
+            raise HTTPException(status_code=422, detail={"message": "The pack was not registered", "errors": exc.errors}) from exc
+        service.seed_missing()
+        return {"registered": registered, "incidents": service.list_incidents()}
 
     @app.get("/metrics")
     async def metrics() -> dict[str, Any]:
@@ -518,7 +559,7 @@ def create_app(
         """Brief the open incidents in inbox order and say which to open first; it reads, and changes nothing."""
         saved = preferences.get(profile_of(actor_of(http_request)))
         facts = merged_facts(
-            *(known_figures(service.get(incident_id)["state"]) for incident_id in INCIDENT_IDS),
+            *(known_figures(service.get(incident_id)["state"]) for incident_id in incident_ids()),
             with_preference_figures({}, saved), figures_in(request.question))
         async with agent_client(followup_client or bedrock_client, BRIEFING_TURNS, http_request) as (client, run_mode, fallback):
             try:
@@ -530,7 +571,7 @@ def create_app(
                 logger.warning("Briefing failed (%s mode): %s", run_mode, exc)
                 raise
         found = START_WITH.search(run["answer"])
-        start_with = found.group(1).upper() if found and found.group(1).upper() in INCIDENT_IDS else None
+        start_with = found.group(1).upper() if found and found.group(1).upper() in incident_ids() else None
         return {**shown_run(labelled(run, run_mode, fallback), []), "start_with": start_with}
 
     @app.post("/incidents/{incident_id}/approvals")

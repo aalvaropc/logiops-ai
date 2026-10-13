@@ -15,7 +15,7 @@ from pydantic import AnyUrl
 
 from .bedrock import BedrockError
 from .evaluator import check_facts, check_recommendation
-from .scenario import INCIDENT_IDS
+from .scenario import incident_ids
 from .skill import SKILL_NAME, SKILL_URI
 from .strands_runtime import run_agent
 
@@ -295,7 +295,7 @@ async def brief_with_bedrock(
         def evaluate(answer: str, _trace: list[dict[str, Any]]) -> dict[str, Any]:
             return check_facts(answer, [], facts)
     return await _with_deadline(_converse_loop(
-        app, client, frozenset(INCIDENT_IDS), briefing_message(question, preferences),
+        app, client, frozenset(incident_ids()), briefing_message(question, preferences),
         system=BRIEFING_PROMPT, required_tool="list_incidents", tools=BRIEFING_TOOLS,
         access_token=access_token, internal_key=internal_key, max_turns=max_turns, evaluate=evaluate,
         revise_until=asyncio.get_running_loop().time() + deadline_seconds - REVISION_MIN_SECONDS,
