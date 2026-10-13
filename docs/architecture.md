@@ -17,7 +17,9 @@ approval, execution, and operational verification in SQLite transactions;
 it records source versions and audit events. `logiops/api.py` exposes this
 workflow through FastAPI and Swagger. `logiops/mcp_server.py` exposes real MCP
 tools over Streamable HTTP at `/mcp`. `logiops/agent.py` runs the Bedrock
-Converse tool loop through that MCP endpoint; `logiops/bedrock.py` calls
+Converse tool loop through that MCP endpoint on Strands Agents
+(`logiops/strands_runtime.py`: a model provider over the Converse client, one
+agent tool per allowed MCP tool, guard hooks); `logiops/bedrock.py` calls
 Converse with boto3 and the default credential chain (an `aws login` session
 locally, the instance role on EC2). `logiops/replay.py` provides an explicit
 deterministic local replay. `logiops/security.py` enforces a bearer token when

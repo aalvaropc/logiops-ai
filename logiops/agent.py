@@ -17,6 +17,7 @@ from .bedrock import BedrockError
 from .evaluator import check_facts, check_recommendation
 from .scenario import INCIDENT_IDS
 from .skill import SKILL_NAME, SKILL_URI
+from .strands_runtime import run_agent
 
 
 BASE_URL = "http://127.0.0.1:8000"
@@ -109,14 +110,10 @@ async def _converse_loop(
     access_token: str | None = None, internal_key: str | None = None, max_turns: int = 8,
     evaluate: Evaluate | None = None, revise_until: float | None = None, closing: str = "",
 ) -> dict[str, Any]:
-    """The tool-use loop. The Agent Skill is read from the MCP server and sent with the system prompt.
-    With `evaluate`, the final answer (its spoken line included) is checked; a failed check is sent
-    back once for a revision while a turn is left and the clock is before `revise_until`, and the
-    result carries the evaluations and whether the last one passed."""
-    messages: list[dict[str, Any]] = [{"role": "user", "content": [{"text": first_message}]}]
-    trace: list[dict[str, Any]] = []
-    evaluations: list[dict[str, Any]] = []
-    usage = {"inputTokens": 0, "outputTokens": 0}
+    """The tool-use loop, run on Strands Agents (strands_runtime). The Agent Skill is read from the MCP
+    server and sent with the system prompt. With `evaluate`, the final answer (its spoken line included)
+    is checked; a failed check is sent back once for a revision while a turn is left and the clock is
+    before `revise_until`, and the result carries the evaluations and whether the last one passed."""
     headers = {"Authorization": f"Bearer {access_token}"} if access_token else {}
     if internal_key:
         headers[INTERNAL_HEADER] = internal_key
@@ -129,96 +126,15 @@ async def _converse_loop(
                 skill = (await session.read_resource(AnyUrl(SKILL_URI))).contents[0].text
                 loaded = {"name": SKILL_NAME, "uri": SKILL_URI, "sha256": hashlib.sha256(skill.encode()).hexdigest()}
                 listed = await session.list_tools()
-                tool_specs = [
-                    {
-                        "toolSpec": {
-                            "name": tool.name,
-                            "description": tool.description or tool.name,
-                            "inputSchema": {"json": tool.inputSchema},
-                        }
-                    }
-                    for tool in listed.tools if tool.name in tools
-                ]
-                if {spec["toolSpec"]["name"] for spec in tool_specs} != set(tools):
+                offered = [tool for tool in listed.tools if tool.name in tools]
+                if {tool.name for tool in offered} != set(tools):
                     raise BedrockError("The read-only MCP toolset is incomplete")
-                for turn in range(max_turns):
-                    response = await client.converse(messages, system, tool_specs, skill=skill)
-                    turn_usage = response.get("usage", {})
-                    for key in usage:
-                        usage[key] += turn_usage.get(key, 0)
-                    for key in ("cacheReadInputTokens", "cacheWriteInputTokens"):
-                        if key in turn_usage:
-                            usage[key] = usage.get(key, 0) + turn_usage[key]
-                    assistant_message = response.get("output", {}).get("message")
-                    if not isinstance(assistant_message, dict) or assistant_message.get("role") != "assistant":
-                        raise BedrockError("Bedrock returned no assistant message")
-                    messages.append(assistant_message)
-                    stop_reason = response["stopReason"]
-                    has_tool_use = any("toolUse" in block for block in assistant_message.get("content", []))
-                    if stop_reason == "max_tokens" and has_tool_use:
-                        raise BedrockError("Bedrock response was truncated in the middle of a tool call")
-                    if stop_reason in ("end_turn", "max_tokens"):
-                        if required_tool and not any(
-                            step["tool"] == required_tool and not step["is_error"] for step in trace
-                        ):
-                            raise BedrockError(
-                                "Agent ended before calculating the incident plans"
-                                if required_tool == "investigate_incident" else
-                                f"Agent ended before calling {required_tool}"
-                            )
-                        answer = "\n".join(
-                            block["text"] for block in assistant_message.get("content", []) if "text" in block
-                        ).strip()
-                        if not answer:
-                            raise BedrockError("Bedrock returned an empty explanation")
-                        if evaluate is not None:
-                            evaluations.append({"attempt": len(evaluations) + 1, **evaluate(answer, trace)})
-                            if (not evaluations[-1]["passed"] and len(evaluations) == 1 and turn + 1 < max_turns
-                                    and (revise_until is None or asyncio.get_running_loop().time() < revise_until)):
-                                messages.append({"role": "user", "content": [{"text": revision_request(evaluations[-1], closing)}]})
-                                continue
-                        answer, spoken = split_spoken(answer)
-                        result = {"answer": answer, "spoken": spoken, "tool_trace": trace, "usage": usage, "skill": loaded}
-                        if evaluations:
-                            result.update(evaluations=evaluations, grounded=evaluations[-1]["passed"])
-                        if stop_reason == "max_tokens":
-                            result["truncated"] = True
-                        return result
-                    if stop_reason != "tool_use":
-                        raise BedrockError(f"Bedrock stopped unexpectedly: {stop_reason}")
-                    tool_uses = [
-                        block["toolUse"] for block in assistant_message.get("content", []) if "toolUse" in block
-                    ]
-                    if not tool_uses:
-                        raise BedrockError("Bedrock requested tool use without a tool call")
-                    results = []
-                    for use in tool_uses:
-                        name = use.get("name")
-                        if name not in tools:
-                            raise BedrockError(f"Bedrock requested a disallowed tool: {name}")
-                        arguments = use.get("input", {})
-                        if not isinstance(arguments, dict):
-                            raise BedrockError("Bedrock tool input must be an object")
-                        requested = arguments.get("shipment_id")
-                        if requested is not None and str(requested).strip().upper() not in shipments:
-                            raise BedrockError("Bedrock requested a different shipment")
-                        result = await session.call_tool(name, arguments)
-                        payload = result.structuredContent
-                        if payload is None:
-                            payload = {"text": "\n".join(part.text for part in result.content if part.type == "text")}
-                        trace.append({
-                            "tool": name, "input": arguments, "output": payload,
-                            "is_error": bool(result.isError),
-                        })
-                        results.append({
-                            "toolResult": {
-                                "toolUseId": use["toolUseId"],
-                                "content": [{"json": payload}],
-                                "status": "error" if result.isError else "success",
-                            }
-                        })
-                    messages.append({"role": "user", "content": results})
-    raise BedrockError(f"Agent exceeded {max_turns} Converse turns")
+                return await run_agent(
+                    client=client, session=session, tools=offered, allowed=tools,
+                    shipments=shipments, skill=skill, skill_info=loaded, system=system, first_message=first_message,
+                    required_tool=required_tool, max_turns=max_turns, evaluate=evaluate, revise_until=revise_until, closing=closing,
+                    trace_attributes={"logiops.required_tool": required_tool or "", "logiops.shipments": ",".join(sorted(shipments))},
+                )
 
 
 def revision_request(evaluation: dict[str, Any], closing: str = "") -> str:

@@ -211,7 +211,10 @@ least 18 of the 50 seconds remain; an answer that still fails is returned with
 (one per attempt) and `grounded`. For a
 deterministic rehearsal, launch the server with `LOGIOPS_AGENT_MODE=replay`;
 the response says `mode: replay` and reports zero tokens. Normal mode is
-`bedrock`. It calls Converse through boto3 with SDK retries, and a run stops
+`bedrock`. The tool loop runs on Strands Agents (`logiops/strands_runtime.py`):
+a model provider over the same Converse client (boto3 with SDK retries), one
+agent tool per allowed MCP tool on the in-process session, and hooks that keep
+the loop's guards. A run stops
 with a clear error after 50 seconds so it always answers before CloudFront's
 60-second origin timeout. Live calls share a daily budget for the whole demo
 (`LOGIOPS_DAILY_MODEL_CALLS`): when a run no longer fits, the response says
