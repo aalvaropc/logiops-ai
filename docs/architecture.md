@@ -14,8 +14,10 @@ transaction, and the rebuild is logged and recorded as `schema_migrated` events
 (the data is synthetic, so it is reseeded rather than converted). `logiops/tools.py` exposes read-only shipment, order,
 inventory, and carrier lookups. `logiops/service.py` runs investigation,
 approval, execution, and operational verification in SQLite transactions;
-it records source versions and audit events. `logiops/api.py` exposes this
-workflow through FastAPI and Swagger. `logiops/mcp_server.py` exposes real MCP
+it records source versions and audit events. `logiops/api.py` resolves the
+settings, builds the stores and clients and mounts one FastAPI router per area
+(`logiops/routes/`: pages, incidents, account, agent, scenario, bookings) with
+Swagger. `logiops/mcp_server.py` exposes real MCP
 tools over Streamable HTTP at `/mcp`. `logiops/agent.py` runs the Bedrock
 Converse tool loop through that MCP endpoint on Strands Agents
 (`logiops/strands_runtime.py`: a model provider over the Converse client, one
