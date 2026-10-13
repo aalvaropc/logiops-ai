@@ -29,7 +29,7 @@ from .mcp_models import (
     ShipmentId, Stock,
 )
 from .preferences import PreferenceStore, preference_for
-from .scenario import INCIDENT_IDS
+from .scenario import incident_ids
 from .service import LogiOpsService, WorkflowError
 from .skill import SKILL_MIME_TYPE, SKILL_NAME, SKILL_TEXT, SKILL_URI
 from .tools import inventory_hint, inventory_view, order_view, orders_hint, shipment_view
@@ -57,7 +57,11 @@ and call book_carrier with the exact total only after an explicit yes; payment i
 Delivery is projected, not physically confirmed. Times are Lima time (UTC-05:00).
 All data is synthetic. The Agent Skill at skill://logiops-exception-desk/SKILL.md is the full playbook."""
 
-OPEN_INCIDENTS = "Incidents: " + ", ".join(INCIDENT_IDS) + "."
+
+
+def open_incidents() -> str:
+    return "Incidents: " + ", ".join(incident_ids()) + "."
+
 SHIPMENT_NUMBER = re.compile(r"^(?:ship(?:ment)?|case|incident)?[\s#_-]*(\d+)$", re.I)
 READ = ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=False)
 
@@ -102,7 +106,7 @@ def create_mcp_server(
         try:
             return service.get(normalized_incident(shipment_id))
         except WorkflowError as exc:
-            raise fail(exc, f"use one of the open incidents from list_incidents. {OPEN_INCIDENTS}") from exc
+            raise fail(exc, f"use one of the open incidents from list_incidents. {open_incidents()}") from exc
 
     def panel_url(ctx: Context, incident: str) -> str:
         if public_host:
@@ -155,7 +159,7 @@ def create_mcp_server(
     @server.tool(title="Get customer order", annotations=READ)
     async def get_order(order_id: OrderId) -> Order:
         """Read a customer order (quantity, priority, due time); order ids look like ORD-421."""
-        states = [service.get(item)["state"] for item in INCIDENT_IDS]
+        states = [service.get(item)["state"] for item in incident_ids()]
         for state in states:
             order = order_view(state, order_id)
             if order is not None:
@@ -174,7 +178,7 @@ def create_mcp_server(
         if shipment_id is not None:
             candidates = [snapshot_of(shipment_id)["state"]]
         else:
-            candidates = [service.get(item)["state"] for item in INCIDENT_IDS]
+            candidates = [service.get(item)["state"] for item in incident_ids()]
         for state in candidates:
             stock = inventory_view(state, warehouse_id, sku)
             if stock is not None:
@@ -247,7 +251,7 @@ def create_mcp_server(
         try:
             return service.execute(incident, plan_id, source_version)
         except WorkflowError as exc:
-            plan = awaiting_approval(incident, plan_id, source_version) if incident in INCIDENT_IDS else None
+            plan = awaiting_approval(incident, plan_id, source_version) if incident in incident_ids() else None
             if plan is None:
                 raise fail(exc, "a person approves the exact plan and version in the operator panel; no tool can approve") from exc
             raise approval_elicitation(ctx, incident, plan, source_version, "run", "No tool can approve.") from exc
@@ -329,8 +333,8 @@ def create_mcp_server(
     )
     def incident_record(shipment_id: str) -> str:
         incident = normalized_incident(shipment_id)
-        if incident not in INCIDENT_IDS:
-            raise ValueError(f"Unknown incident: {shipment_id}. {OPEN_INCIDENTS}")
+        if incident not in incident_ids():
+            raise ValueError(f"Unknown incident: {shipment_id}. {open_incidents()}")
         snapshot = service.get(incident)
         version = snapshot["source_version"]
         return json.dumps({
@@ -373,8 +377,8 @@ def create_mcp_server(
         shipment_id: Annotated[str, Field(description="Incident id, such as SHIP-433 or 433.")],
     ) -> list[UserMessage]:
         incident = normalized_incident(shipment_id)
-        if incident not in INCIDENT_IDS:
-            raise ValueError(f"Unknown incident: {shipment_id}. {OPEN_INCIDENTS}")
+        if incident not in incident_ids():
+            raise ValueError(f"Unknown incident: {shipment_id}. {open_incidents()}")
         return [skill_message(), UserMessage(
             f"What's happening with {incident}, and which plan should we choose? Follow the logiops-exception-desk "
             "skill above: read the facts, call investigate_incident, and recommend exactly one plan by its label with "

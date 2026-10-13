@@ -67,6 +67,7 @@ More detail in `docs/architecture.md`.
 | `LOGIOPS_TRUST_CLOUDFRONT` | identify viewers by `CloudFront-Viewer-Address` | off |
 | `LOGIOPS_AGENT_LIMIT_PER_MINUTE` | paid agent calls per viewer per minute | `10` |
 | `LOGIOPS_MCP_LIMIT_PER_MINUTE` | MCP and memory requests per viewer per minute | `60` |
+| `LOGIOPS_SCENARIO_PACK` | path of a JSON scenario pack to register at start (see *Bring your own incidents*) | unset |
 | `LOGIOPS_DAILY_MODEL_CALLS` | live model calls per day (Lima time) for the whole demo; each request reserves its run's maximum and releases what it did not use, and a run that no longer fits answers from replay with `fallback: "daily_budget"` | `150` |
 | `AWS_REGION`, `BEDROCK_MODEL_ID` | Bedrock region and model profile | `us-east-1`, `global.anthropic.claude-sonnet-4-6` |
 | `LOGIOPS_VOICE` | `polly` (Amazon Polly) or `browser` (the browser's own voice) | `polly` with `bedrock`, `browser` with `replay` |
@@ -85,6 +86,23 @@ approvals, executions and audit events never mix with another's. A replay mode
 runs the same MCP calls without AWS charges. A browser interface is available
 at `/demo`. See `docs/hackathon/decisions.md` for decisions and
 `docs/demo-scenario.md` for the synthetic data.
+
+### Bring your own incidents
+
+The four built-in incidents are a scenario pack like any other.
+`GET /scenario/packs/builtin` returns them in pack form as a template:
+`{"version": 1, "incidents": [{"id", "kind", "kind_label", "title", "shipment",
+"orders", "inventory", "carriers", "options"}, ...]}`. `POST /scenario/packs`
+(operator) validates a pack of your own — ids like `SHIP-470` and `ORD-470A`,
+ISO timestamps in Lima time (`-05:00`), at most one local warehouse, carriers
+with capacity and cost, options in the playbook form — and registers its
+incidents: they join the inbox, the briefing, the MCP tools, resources and
+completions, the alerts and the metrics, and their plans are calculated by the
+same code as the built-ins. A pack with one bad incident registers nothing and
+answers 422 with every problem and its path. Uploaded incidents live in the
+process until it restarts; `LOGIOPS_SCENARIO_PACK=/path/pack.json` loads a pack
+at every start (a bad file stops the start). `tests/fixtures/scenario_pack.json`
+is a worked example: a dock strike at Paita holding frozen seafood for Piura.
 
 Operator preferences (`GET`/`PUT`/`DELETE /operator/preferences`) persist in
 the same SQLite file across sessions and restarts; fixed rules turn them into a

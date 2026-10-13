@@ -87,6 +87,13 @@ LOGIOPS_AGENT_MODE=replay uv run uvicorn logiops.api:app --host 127.0.0.1 --port
    each plan card shows every order's delay. SHIP-421 keeps its own conversation
    and state. SHIP-452 (customs hold) and SHIP-460 (two orders competing for
    stock) work the same way; see `docs/demo-scenario.md`.
+   **Your own incidents:** `GET /scenario/packs/builtin` is the template; `POST
+   /scenario/packs` (with the operator token or a signed-in operator) registers a
+   pack of yours, for example `tests/fixtures/scenario_pack.json` (a dock strike at
+   Paita). The new incident appears in the inbox and the briefing, can be
+   investigated, approved, executed and booked like the built-ins, and raises
+   alerts; it lives until the process restarts (`LOGIOPS_SCENARIO_PACK` loads a
+   pack at every start).
 9. **Briefing and preferences.** Ask "Any delays today?": the agent reads the inbox
    with `list_incidents` and briefs the open incidents in its order (most critical
    units at risk first), and the one to start with, SHIP-433, is marked "Start here". Say "remember my spend cap is $250", then open SHIP-433

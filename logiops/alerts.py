@@ -16,7 +16,7 @@ from pathlib import Path
 from typing import Any, Callable, ContextManager
 
 from .preferences import PreferenceStore, preference_for
-from .scenario import INCIDENT_IDS, best_plan
+from .scenario import best_plan, incident_ids
 from .service import LogiOpsService, WorkflowError
 from .storage import connect
 
@@ -70,7 +70,7 @@ class AlertWatcher:
 
     def scan(self) -> list[dict[str, Any]]:
         """New alerts for every incident whose plans went stale; repeating a scan adds nothing."""
-        return [alert for incident_id in INCIDENT_IDS if (alert := self.check(incident_id))]
+        return [alert for incident_id in incident_ids() if (alert := self.check(incident_id))]
 
     def check(self, incident_id: str) -> dict[str, Any] | None:
         snapshot = self.service.get(incident_id)
