@@ -68,6 +68,7 @@ More detail in `docs/architecture.md`.
 | `LOGIOPS_AGENT_LIMIT_PER_MINUTE` | paid agent calls per viewer per minute | `10` |
 | `LOGIOPS_MCP_LIMIT_PER_MINUTE` | MCP and memory requests per viewer per minute | `60` |
 | `LOGIOPS_SCENARIO_PACK` | path of a JSON scenario pack to register at start (see *Bring your own incidents*) | unset |
+| `LOGIOPS_OTEL` | `1` exports the agent's OpenTelemetry spans (Strands Agents) to `OTEL_EXPORTER_OTLP_ENDPOINT` when set, to the console otherwise; `/healthz` reports `telemetry` | unset |
 | `LOGIOPS_DAILY_MODEL_CALLS` | live model calls per day (Lima time) for the whole demo; each request reserves its run's maximum and releases what it did not use, and a run that no longer fits answers from replay with `fallback: "daily_budget"` | `150` |
 | `AWS_REGION`, `BEDROCK_MODEL_ID` | Bedrock region and model profile | `us-east-1`, `global.anthropic.claude-sonnet-4-6` |
 | `LOGIOPS_VOICE` | `polly` (Amazon Polly) or `browser` (the browser's own voice) | `polly` with `bedrock`, `browser` with `replay` |

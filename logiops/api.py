@@ -38,6 +38,7 @@ from .presentation import customer_text, shown_run
 from .replay import ReplayConverse
 from .scenario import INCIDENT_ID, PACK_VERSION, ScenarioPackError, builtin_incidents, incident_ids, known_figures, load_scenario_pack, register_pack, scenario_clock
 from .security import SANDBOX_PATH, install_security
+from .telemetry import telemetry_from_env
 from .voice import PollyVoice
 
 logger = logging.getLogger(__name__)
@@ -172,6 +173,7 @@ def create_app(
         scenario_day = scenario_clock(os.environ.get("LOGIOPS_SCENARIO_ANCHOR"))
     except ValueError as exc:
         raise RuntimeError(str(exc)) from exc
+    telemetry = telemetry_from_env() or "off"
     pack_path = os.environ.get("LOGIOPS_SCENARIO_PACK", "").strip()
     if pack_path:
         try:
@@ -302,7 +304,7 @@ def create_app(
 
     @app.get("/healthz")
     async def health() -> dict[str, str]:
-        return {"status": "ok"}
+        return {"status": "ok", "telemetry": telemetry}
 
     @app.post("/demo/reset")
     async def reset(request: ResetRequest | None = None) -> dict[str, Any]:
