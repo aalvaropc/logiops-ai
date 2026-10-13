@@ -133,7 +133,10 @@ async def _converse_loop(
                     client=client, session=session, tools=offered, allowed=tools,
                     shipments=shipments, skill=skill, skill_info=loaded, system=system, first_message=first_message,
                     required_tool=required_tool, max_turns=max_turns, evaluate=evaluate, revise_until=revise_until, closing=closing,
-                    trace_attributes={"logiops.required_tool": required_tool or "", "logiops.shipments": ",".join(sorted(shipments))},
+                    trace_attributes={
+                        "logiops.required_tool": required_tool or "", "logiops.shipments": ",".join(sorted(shipments)),
+                        "logiops.client": type(client).__name__,
+                    },
                 )
 
 
