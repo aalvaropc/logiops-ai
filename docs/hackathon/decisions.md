@@ -47,10 +47,10 @@ bottom.
 ## Release checklist (before tagging `amazon-v1.0`)
 
 - [x] Everything on `main` (PR #9, 2026-10-07). From then on every change is its own pull request to `main` (CI job `pr-targets-main`).
-- [ ] `scripts/clean_room.sh main` passes on a clean clone (tests, Docker build, `check_mcp.py`, `rehearse_api.py`).
-- [ ] `gitleaks git` over the full history reports no leaks (CI also runs it).
-- [ ] Test count recorded: ____ passed. Commit: ____.
-- [ ] README Submission table lists the repository, the tag and the video.
+- [x] `scripts/clean_room.sh main` passes on a clean clone (tests, Docker build, `check_mcp.py`, `rehearse_api.py`): 2026-10-13 on `3a49be3`, 385 passed.
+- [x] `gitleaks git` over the full history reports no leaks: the CI `gitleaks` job passes on every pull request (last: #63, 2026-10-13); re-run before the repository goes public.
+- [x] Test count recorded: 385 passed (plus 8 browser walkthroughs). Commit: `3a49be3`, deployed as D3 on 2026-10-13 and verified live (`check_oauth.py` 4/4, `check_mcp.py`, `verify_remote.py`, device and console walkthrough on CloudFront).
+- [ ] README Submission table lists the repository, the tag and the video (the open-source library and the tag name are in; the Devpost link and the video come with the tag).
 - [ ] Repository public, or the reviewers from the rules invited (`rules-verification.md` 6).
 - [ ] Tag `amazon-v1.0` on that commit and a GitHub Release created.
 - [ ] Submitted at least one day before the deadline (target 22 Oct; deadline 23 Oct, 14:00 Peru).
