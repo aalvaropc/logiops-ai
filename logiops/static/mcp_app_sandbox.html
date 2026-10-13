@@ -63,7 +63,7 @@
       if (loads > 1 && view === frame) {
         frame.remove();
         view = null;
-        toHost({ jsonrpc: "2.0", method: "logiops/sandbox-view-removed", params: { reason: "navigated" } });
+        toHost({ jsonrpc: "2.0", method: "ui/notifications/sandbox-view-removed", params: { reason: "navigated" } });
       }
     });
     const body = html.replace(/^\s*<!doctype[^>]*>/i, "");
