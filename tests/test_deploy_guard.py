@@ -52,8 +52,8 @@ def test_the_release_packages_static_subdirectories(tmp_path, monkeypatch):
     import scripts.deploy_ec2 as deploy
 
     monkeypatch.setattr(deploy, "ROOT", tmp_path)
-    for path in ("pyproject.toml", "uv.lock", "logiops/api.py", "logiops/static/demo.js", "logiops/static/app/api.js",
-                 "skills/x/SKILL.md"):
+    for path in ("pyproject.toml", "uv.lock", "logiops/api.py", "logiops/routes/__init__.py", "logiops/routes/pages.py",
+                 "logiops/__pycache__/api.cpython-312.pyc", "logiops/static/demo.js", "logiops/static/app/api.js", "skills/x/SKILL.md"):
         (tmp_path / path).parent.mkdir(parents=True, exist_ok=True)
         (tmp_path / path).write_text(path)
     (tmp_path / "logiops" / "static" / "empty").mkdir()
@@ -65,6 +65,8 @@ def test_the_release_packages_static_subdirectories(tmp_path, monkeypatch):
     with tarfile.open(archive, "r:gz") as release:
         names = set(release.getnames())
     assert "logiops/static/app/api.js" in names and "logiops/static/demo.js" in names
+    assert "logiops/routes/pages.py" in names and "logiops/routes/__init__.py" in names
+    assert not any("__pycache__" in name for name in names)
     assert not any(name.endswith("/empty") for name in names)
 
 
