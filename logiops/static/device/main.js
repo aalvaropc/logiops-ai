@@ -17,6 +17,7 @@ import {
 import { welcomeText as greeting } from "../app/greeting.js";
 import { checkBadge, checkNote, fallbackNote, traceSummary, executionSummary } from "../app/run-badges.js";
 import { renderMarkdown } from "../app/markdown-dom.js";
+import { sessionFigures, incidentTimes } from "../app/metrics.js";
 import { SURFACES, createSurfaces, shortSpoken, homeCards, displayPlan, chipsFor } from "./surfaces.js";
 import { createCarousel } from "./carousel.js";
 import {
@@ -44,7 +45,7 @@ const store = createStore({
   token: "", snapshot: null, selectedPlanId: null, busy: false, conversation: [], app: null, lastRun: null,
   awaitingExecute: false, pendingApproval: null, incidentId: hashIncident(), inbox: [], conversations: {}, selections: {},
   briefingPick: null, cardTheme: "dark", voice: { engine: "browser", voice: null, fillers: [] }, auth: { enabled: false }, session: null,
-  memoryIncident: null, approver: "demo-operator",
+  memoryIncident: null, approver: "demo-operator", metrics: null,
 });
 const state = store.state;
 const surfaces = createSurfaces(location.hash ? "incident" : "home");
@@ -322,7 +323,7 @@ function paintSurface(shown = surfaces.current()) {
   const section = sections[shown.name];
   const snapshot = state.snapshot;
   if (shown.name === "home") {
-    renderHome(section, { greeting: welcomeText(), lead: shown.payload.lead });
+    renderHome(section, { greeting: welcomeText(), lead: shown.payload.lead, session: state.metrics ? sessionFigures(state.metrics.session) : null });
     carousel.update(homeCards(state.inbox, shown.payload.pick ?? state.briefingPick), state.incidentId);
   } else if (shown.name === "incident" && snapshot) {
     renderIncident(section, { snapshot, plan: currentPlan(), summary: summaryOf(), route });
@@ -339,6 +340,7 @@ function paintSurface(shown = surfaces.current()) {
     const execution = snapshot.executions[0];
     renderResult(section, {
       snapshot, execution, plan: snapshot.plans.find((plan) => plan.id === execution.plan_id), booking: (snapshot.bookings || []).at(-1) || null,
+      times: incidentTimes(state.metrics?.incidents.find((item) => item.incident_id === state.incidentId)),
     });
   }
   renderChips(shown.name);
@@ -409,6 +411,12 @@ async function refresh() {
     history.replaceState(null, "", `#${encodeURIComponent(state.incidentId)}`);
   }
   render(await request(incidentPath()));
+  loadMetrics().catch(() => {});
+}
+
+async function loadMetrics() {
+  state.metrics = await request("/metrics");
+  if (["home", "result"].includes(surfaces.current().name)) paintSurface();
 }
 
 async function selectIncident(id) {

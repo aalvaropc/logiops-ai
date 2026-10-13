@@ -15,6 +15,7 @@ import {
 import { welcomeText as greeting } from "./app/greeting.js";
 import { checkBadge, checkNote, fallbackNote, traceSummary, executionSummary } from "./app/run-badges.js";
 import { renderMarkdown } from "./app/markdown-dom.js";
+import { sessionFigures } from "./app/metrics.js";
 
 const $ = (id) => document.getElementById(id);
 const DEFAULT_INCIDENT = "SHIP-421";
@@ -448,6 +449,23 @@ async function refresh() {
     history.replaceState(null, "", `#${encodeURIComponent(state.incidentId)}`);
   }
   render(await request(incidentPath()));
+  loadMetrics().catch(() => {});
+}
+
+async function loadMetrics() {
+  const metrics = await request("/metrics");
+  const box = $("metrics");
+  box.replaceChildren();
+  for (const [value, label] of sessionFigures(metrics.session)) {
+    const item = document.createElement("li");
+    const figure = document.createElement("strong");
+    figure.textContent = value;
+    const caption = document.createElement("span");
+    caption.textContent = label;
+    item.append(figure, caption);
+    box.append(item);
+  }
+  box.hidden = false;
 }
 
 async function selectIncident(id) {

@@ -31,11 +31,12 @@ from .service import APPROVER_MAX_LENGTH, LogiOpsService, WorkflowError
 from .identity import actor_of, profile_of
 from .mcp_server import create_mcp_server
 from .memory import MemoryService
+from .metrics import incident_metrics, session_metrics
 from .oauth import OAuthSettings, install_oauth
 from .preferences import COST_LIMIT, NOTE_LIMIT, RULES, PreferenceStore, preference_for, with_preference_figures
 from .presentation import customer_text, shown_run
 from .replay import ReplayConverse
-from .scenario import INCIDENT_ID, INCIDENT_IDS, known_figures, scenario_clock
+from .scenario import INCIDENT_ID, INCIDENT_IDS, incident_ids, known_figures, scenario_clock
 from .security import SANDBOX_PATH, install_security
 from .voice import PollyVoice
 
@@ -373,6 +374,12 @@ def create_app(
     async def list_incidents() -> dict[str, Any]:
         """The incident inbox: open first, then by critical units at risk, priority and due time."""
         return {"incidents": service.list_incidents()}
+
+    @app.get("/metrics")
+    async def metrics() -> dict[str, Any]:
+        """Outcome metrics from the recorded events and bookings, per incident and for the session. Nothing is estimated."""
+        items = [incident_metrics(service.get(incident_id), bookings.for_incident(incident_id)) for incident_id in incident_ids()]
+        return {"incidents": items, "session": session_metrics(items)}
 
     @app.get("/incidents/{incident_id}")
     async def get_incident(incident_id: str, request: Request) -> dict[str, Any]:

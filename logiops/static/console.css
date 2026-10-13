@@ -2,6 +2,11 @@
 .console-head h1 { margin: 10px 0 8px; font-size: 40px; letter-spacing: -.04em; }
 .console-head p { max-width: 640px; margin: 0; color: #a4b8bb; font-size: 15px; line-height: 1.65; }
 .console-head .account-row { margin: 0; }
+.metrics-strip { list-style: none; display: flex; flex-wrap: wrap; gap: 10px; margin: 18px 0 0; padding: 0; }
+.metrics-strip[hidden] { display: none; }
+.metrics-strip li { display: grid; gap: 2px; min-width: 120px; padding: 10px 14px; border: 1px solid #294249; border-radius: 10px; background: #142329; }
+.metrics-strip strong { font-size: 18px; letter-spacing: -.02em; }
+.metrics-strip span { color: #8fa4a9; font-size: 11px; }
 .page-link { color: #9ff0dc; text-decoration: none; }
 .page-link:hover { text-decoration: underline; }
 .developer { margin-top: 18px; padding: 16px 20px; border: 1px dashed #4f7f76; border-radius: 14px; background: #0f1d22; }
