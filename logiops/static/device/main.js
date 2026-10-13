@@ -442,7 +442,7 @@ async function selectIncident(id) {
   history.replaceState(null, "", `#${encodeURIComponent(id)}`);
   hideMcpApp("incident changed");
   surfaces.show("incident");
-  await act(refresh, "");
+  await act(async () => {}, "");
   renderAlertBell();
 }
 
@@ -657,7 +657,7 @@ if (resumed) {
   state.approver = resumed.username || "demo-operator";
 }
 setInterval(() => { checkAlerts().catch(() => {}); }, 5000);
-loadAuth().then(finishSignIn).catch(() => {}).then(() => act(refresh, "").catch(() => {})).then(() => {
+loadAuth().then(finishSignIn).catch(() => {}).then(() => act(async () => {}, "").catch(() => {})).then(() => {
   if (state.signInNote) say("assistant", state.signInNote);
   loadVoice();
   recallMemory();
