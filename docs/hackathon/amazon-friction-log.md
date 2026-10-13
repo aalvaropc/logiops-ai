@@ -160,3 +160,39 @@ workaround, suggestion. Real friction only, logged as it happens (rules 3.17).
   `ListEvents`.
 - **Suggestion:** allow `ListEvents` by actor with a time filter, or a "latest
   sessions with their last events" call.
+
+## 2026-10-12 — Strands Agents: `MCPClient` deadlocks with an in-process MCP server
+
+- **Technology:** `strands-agents` 1.59/1.60, `strands.tools.mcp.MCPClient`.
+- **Task:** run the agent loop on Strands over the project's MCP server, which
+  the API talks to in-process through an ASGI transport (no network hop).
+- **Steps:** built an `MCPClient` on a `streamable_http_client` bound to the
+  ASGI app and listed its tools from the request's event loop.
+- **Expected:** the client to use the running loop, as the official MCP
+  `ClientSession` does.
+- **Actual:** `MCPClient` starts its own thread and event loop and blocks the
+  calling thread while the server coroutine needs that same loop; the request
+  never returns.
+- **Severity:** medium: it rules out the SDK's own MCP integration for an
+  in-process server.
+- **Workaround:** one `AgentTool` subclass per allowed tool that calls
+  `session.call_tool` on the session already open in the request's loop
+  (`logiops/strands_runtime.py`).
+- **Suggestion:** an `MCPClient` mode that accepts an existing `ClientSession`
+  or runs on the caller's loop.
+
+## 2026-10-12 — botocore: `NoRegionError` while refreshing `aws login` credentials
+
+- **Technology:** boto3 / botocore with an `aws login` session.
+- **Task:** call Bedrock locally from the API with
+  `boto3.client("bedrock-runtime", region_name="us-east-1")`.
+- **Expected:** the explicit `region_name` to be enough.
+- **Actual:** the login credential provider refreshes its credentials through a
+  client of its own that reads the default region, and raises `NoRegionError:
+  You must specify a region` even though the Bedrock client has one.
+- **Severity:** low, once understood; the error names the wrong client.
+- **Workaround:** export `AWS_DEFAULT_REGION=us-east-1` (or configure the
+  profile's region).
+- **Suggestion:** resolve the refresh client's region from the calling
+  client's `region_name`, or name the credential provider in the error.
+
