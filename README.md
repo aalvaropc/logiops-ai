@@ -1,20 +1,56 @@
 # LogiOps AI
 
-An agent that investigates and resolves logistics exceptions from an incident
-inbox: a delayed truck, a carrier that stopped departures, an import held at
-customs, two orders competing for the same stock. For each one it queries
-orders, inventory and routes, compares alternatives by cost, ETA and order
-priority, requests human approval, executes the chosen plan, and verifies the
-result.
+**An operations desk you talk to.** LogiOps AI investigates and resolves
+logistics exceptions from an incident inbox — a delayed truck, a carrier that
+stopped departures, an import held at customs, two orders competing for the
+same stock — on a simulated Alexa+ device. For each incident it reads orders,
+inventory and carrier quotes through MCP tools, calculates every feasible plan,
+recommends one by cost, ETA and order priority, and reads it back; a person
+approves with one "yes", the agent executes and verifies the result, and can
+book and pay the carriers after reading the price back. Every answer is checked
+against the incident's data before it is shown.
 
-It behaves like an assistant you talk to, not a form: ask "any delays today?"
-for a briefing on the whole queue, say "remember my spend cap is $250" and that
-preference steers every later pick (it never approves anything), and each reply
-ends in one short spoken line for a voice assistant to read aloud.
+![The simulated Alexa+ device: home card with the incident inbox as a carousel](docs/img/device-home.png)
+
+| The plans, with the interactive MCP App card inside the device | Approve with one yes | The result, verified |
+|---|---|---|
+| ![Plans card](docs/img/device-plans.png) | ![Confirmation card](docs/img/device-confirm.png) | ![Result card](docs/img/device-result.png) |
+
+| The operator console: the same incident in full, with the session's metrics | The device on a phone |
+|---|---|
+| ![Operator console](docs/img/console.png) | ![The device on a phone](docs/img/device-phone.png) |
+
+**Who it is for (illustrative):** the exceptions desk of a mid-size Peruvian
+distributor that ships electronics and medical supplies from Lima and Callao to
+hospitals and stores in Arequipa, Cusco and Trujillo. Today a person opens three
+systems per incident; here they say "any delays today?", "what's happening with
+SHIP-433?", "approve the recommended plan", "yes", "execute it", "book it".
+
+**What the agent decides, and what it never does.** The agent reads, calculates,
+compares and recommends; it never approves. An approval names the exact plan and
+data version, a stock change invalidates it and raises a proactive alert, execution
+is idempotent and verified, and a payment is read back with its IGV and charged
+once. The audit trail records every step.
+
+**Measured on the deployed demo (2026-10-12, live Amazon Bedrock through
+Strands Agents):** a grounded recommendation for a two-order carrier outage in
+13.6 s with 5 MCP calls and 5,872 tokens; from the first investigation to the
+approval in 10.0 s and to the verified execution in 10.8 s; 12 critical units on
+time and 18 standard units late for $390 extra; a $466.10 booking charged once
+with its receipt. The same day's SHIP-421 run read 5,818 tokens from the prompt
+cache (the Agent Skill and the prompt are cached after the first turn).
+`GET /metrics` reports these figures from the recorded events, per incident and
+per session.
+
+**Bring your own incidents.** The four built-in incidents are a scenario pack
+like any other: `GET /scenario/packs/builtin` is the template, `POST
+/scenario/packs` (or the console's Developer drawer) registers yours, and they
+run through the same agent, tools, device and console.
 
 Built for the **Amazon Developer Hackathon**, Alexa+ track (self-hosted MCP
-server, Streamable HTTP) + AWS Builder Mini Challenge. Runtime: Amazon
-Bedrock.
+server, Streamable HTTP, MCP Apps, Agent Skill, OAuth 2.1) + AWS Builder Mini
+Challenge (Amazon Bedrock, AgentCore Memory, Strands Agents) + Open Source Mini
+Challenge. Runtime: Amazon Bedrock.
 
 ## Submission
 
@@ -26,29 +62,36 @@ Bedrock.
 
 No AWS account is needed: `docker compose up --build` (or `uv sync --extra dev` and
 the replay command in `docs/hackathon/testing-instructions.md`) runs the whole demo.
-`uv run python scripts/rehearse_api.py` walks through it headless and prints PASS or FAIL.
+Open <http://127.0.0.1:8000/demo> for the device and <http://127.0.0.1:8000/console>
+for the operator console. `uv run python scripts/rehearse_api.py` walks through it
+headless and prints PASS or FAIL.
 
 ## Architecture
 
 ```text
- Browser (/demo): Alexa+ device screen, conversation, voice, inbox, preferences, MCP App card
-        |  REST (approve, execute, preferences)    |  MCP over Streamable HTTP (/mcp)
-        v                                          v
- +--------------------------------------------------------------+
- |  FastAPI app: bearer token, rate limits, no-store            |
- |  +-----------------------+   +----------------------------+  |
- |  | MCP server (12 tools, |   | Workflow core + SQLite     |  |
- |  | no approval tool,     |-->| versioned plans, approvals |  |
- |  | Agent Skill resource) |   | bound to plan + version,   |  |
- |  +-----------------------+   | idempotent execution,      |  |
- |        ^                     | audit events; operator     |  |
- |        | in-process MCP      | preferences (fixed rules)  |  |
- |  +-----------------------+   +----------------------------+  |
- |  | Agent: Bedrock        |                                   |
- |  | Converse tool loop:   |  (replay mode: scripted model)    |
- |  | investigate, ask,     |                                   |
- |  | briefing              |                                   |
- +--+-----------------------+-----------------------------------+
+ /demo  simulated Alexa+ device: one card at a time (home carousel, incident, plans
+        with the MCP App inside, confirm, receipt, alert, result), voice, "More"
+ /console  operator console: inbox, plans, Approve, Execute, bookings, preferences,
+        audit trail, metrics, Developer drawer (token, stock, reset, pack import)
+        |  REST (routes/: pages, incidents, account, agent, scenario, bookings)
+        |  MCP over Streamable HTTP (/mcp) · OAuth 2.1 (Cognito) or bearer token
+        v
+ +------------------------------------------------------------------------------+
+ |  FastAPI app: token or sign-in, scopes, per-viewer limits, no-store          |
+ |  +--------------------------+   +-----------------------------------------+ |
+ |  | MCP server: 12 tools, 2  |   | Workflow core + SQLite: incident        | |
+ |  | prompts, incident:// and |-->| registry (built-ins + scenario packs),  | |
+ |  | receipt:// templates,    |   | versioned plans, approvals bound to     | |
+ |  | MCP App view, Agent      |   | plan + version, idempotent execution,   | |
+ |  | Skill, URL elicitation   |   | bookings, alerts, preferences, metrics  | |
+ |  +--------------------------+   +-----------------------------------------+ |
+ |        ^ in-process MCP                                                      |
+ |  +--------------------------+   +-----------------------------------------+ |
+ |  | Agent on Strands Agents: |   | AWS: Bedrock Converse (+ prompt cache), | |
+ |  | investigate, ask, brief; |   | AgentCore Memory, Polly, Cognito;       | |
+ |  | data check + 1 revision  |   | replay mode: scripted model, 0 tokens   | |
+ |  +--------------------------+   +-----------------------------------------+ |
+ +------------------------------------------------------------------------------+
 ```
 
 More detail in `docs/architecture.md`.
@@ -80,12 +123,13 @@ More detail in `docs/architecture.md`.
 
 ## Status
 
-Four synthetic incidents (see `docs/demo-scenario.md`), the MCP Streamable
-HTTP endpoint, the Bedrock Converse tool loop, the approval gate, and
-operational verification run locally. Each incident is isolated: its plans,
-approvals, executions and audit events never mix with another's. A replay mode
-runs the same MCP calls without AWS charges. A browser interface is available
-at `/demo`. See `docs/hackathon/decisions.md` for decisions and
+Four built-in synthetic incidents (see `docs/demo-scenario.md`) plus any
+scenario pack, the MCP Streamable HTTP endpoint, the agent loop on Strands
+Agents, the approval gate, operational verification, bookings, alerts, memory
+and metrics run locally. Each incident is isolated: its plans, approvals,
+executions and audit events never mix with another's. A replay mode runs the
+same MCP calls without AWS charges. The device is at `/demo` and the operator
+console at `/console`. See `docs/hackathon/decisions.md` for decisions and
 `docs/demo-scenario.md` for the synthetic data.
 
 ### Bring your own incidents
@@ -237,8 +281,8 @@ the loop's guards. A run stops
 with a clear error after 50 seconds so it always answers before CloudFront's
 60-second origin timeout. Live calls share a daily budget for the whole demo
 (`LOGIOPS_DAILY_MODEL_CALLS`): when a run no longer fits, the response says
-`mode: replay` with `fallback: "daily_budget"`, and the page says so above the
-conversation until midnight, Lima time.
+`mode: replay` with `fallback: "daily_budget"`, and the page says so until
+midnight, Lima time.
 
 ### Follow-up questions
 
@@ -403,7 +447,7 @@ In the demo, "book it" (or the "Book and pay" chip) reads the plan and the full
 price back before anything happens. If the plan is not approved yet, a single
 "yes" approves it and pays, because the read-back named both. The reply gives
 the written confirmation and speaks the number character by character. The
-receipt shows in the execute panel and on the device screen. Other commands:
+receipt is a card on the device and a panel on the console. Other commands:
 - "no" drops the purchase;
 - a bare "yes" with nothing pending does nothing;
 - the idempotency key is chosen at read-back, so a retry after a network error
@@ -561,7 +605,7 @@ skill to Bedrock as the first system block, before the task prompt, followed by
 a `cachePoint`, so later turns of a run read the tools, skill and prompt from
 the prompt cache (`usage` reports `cacheReadInputTokens` and
 `cacheWriteInputTokens`). The run reports which skill it loaded (`skill`: name,
-URI and SHA-256), and the device screen lists it before the tool steps. In
+URI and SHA-256), and the device's "More" sheet lists it before the tool steps. In
 replay mode the skill is loaded the same way, but the scripted model does not
 read it. Tests check the frontmatter rules, that every tool it names exists,
 and that the file, the MCP resource and the system block are byte-identical.
@@ -583,8 +627,8 @@ Beyond tools, the MCP server offers what a host needs to start a conversation:
   version, the current approval and the executions.
 - **URL elicitation.** `execute_approved_plan` on a current plan that no person
   has approved returns the MCP error `-32042` (URL elicitation required). It
-  carries the operator panel's URL and a message that names the plan by its
-  label. A host that supports URL elicitation can open the panel; any other
+  carries the operator console's URL and a message that names the plan by its
+  label. A host that supports URL elicitation can open the console; any other
   client still gets a message that explains what to do. A stale or unknown plan
   is an ordinary tool error with a next step.
 

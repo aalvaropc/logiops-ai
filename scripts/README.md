@@ -13,6 +13,8 @@
 - `verify_remote.py` — resets the demo, checks the inbox, and runs the
   complete synthetic Bedrock, approval, and execution flow on SHIP-421 against
   the HTTPS demo endpoint.
+- `screenshots.py` — captures the README screenshots (`docs/img/`) from a replay
+  server it starts itself, headless; needs the `browser` extra and Chromium.
 - `rehearse.sh [port]` — frees the port (by port, never by process name),
   starts the demo in replay mode (zero tokens) and prints the phrases for a
   rehearsal or a recording take.

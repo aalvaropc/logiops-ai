@@ -1,0 +1,137 @@
+"""Capture the README screenshots from a replay server, headless; needs the `browser` extra and Chromium.
+
+    uv sync --extra dev --extra browser && uv run playwright install --only-shell chromium
+    uv run python scripts/screenshots.py                     # starts its own replay server
+    uv run python scripts/screenshots.py --url http://127.0.0.1:8000 --out docs/img
+
+Zero model calls: the server runs in replay mode. The demo data is reset before and after.
+"""
+
+from __future__ import annotations
+
+import argparse
+import os
+import socket
+import subprocess
+import sys
+import time
+import urllib.request
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
+DESKTOP = {"width": 1440, "height": 900}
+PHONE = {"width": 390, "height": 844}
+
+
+def free_port() -> int:
+    with socket.socket() as probe:
+        probe.bind(("127.0.0.1", 0))
+        return probe.getsockname()[1]
+
+
+def start_server(db_path: Path) -> tuple[subprocess.Popen, str]:
+    port = free_port()
+    env = {name: value for name, value in os.environ.items() if not name.startswith(("LOGIOPS_", "AWS_"))}
+    env.update(LOGIOPS_AGENT_MODE="replay", LOGIOPS_AGENT_LIMIT_PER_MINUTE="60", LOGIOPS_DB_PATH=str(db_path))
+    process = subprocess.Popen([sys.executable, "-m", "uvicorn", "logiops.api:app", "--host", "127.0.0.1", "--port", str(port)],
+                               cwd=ROOT, env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    url = f"http://127.0.0.1:{port}"
+    for _ in range(100):
+        try:
+            with urllib.request.urlopen(f"{url}/healthz", timeout=1):
+                return process, url
+        except OSError:
+            time.sleep(0.2)
+    process.terminate()
+    raise SystemExit("the replay server did not start")
+
+
+def say(page, text: str) -> None:
+    page.fill("#ask-input", text)
+    page.click("#ask")
+    page.wait_for_function("""(t) => document.querySelector("#device-heard").textContent === t && !document.querySelector("#ask").disabled""",
+                           arg=text, timeout=30000)
+
+
+def card_ready(page) -> None:
+    for _ in range(50):
+        outer = next((frame for frame in page.frames if "/mcp-app/sandbox.html" in frame.url), None)
+        inner = outer.child_frames[0] if outer and outer.child_frames else None
+        if inner:
+            try:
+                if inner.evaluate("""document.querySelectorAll(".plan.pick").length"""):
+                    return
+            except Exception:
+                pass
+        page.wait_for_timeout(200)
+
+
+def capture(base: str, out: Path) -> list[Path]:
+    from playwright.sync_api import sync_playwright
+
+    out.mkdir(parents=True, exist_ok=True)
+    shots: list[Path] = []
+
+    def shot(page, name: str, **options) -> None:
+        path = out / f"{name}.png"
+        page.wait_for_timeout(400)
+        page.screenshot(path=str(path), **options)
+        shots.append(path)
+
+    with sync_playwright() as playwright:
+        browser = playwright.chromium.launch()
+        page = browser.new_page(viewport=DESKTOP)
+        page.request.post(f"{base}/demo/reset")
+        page.goto(f"{base}/demo")
+        page.wait_for_function("document.querySelector('#connection').textContent === 'Connected'")
+        page.wait_for_selector(".session-strip")
+        shot(page, "device-home")
+        page.click('.incident-card[data-incident="SHIP-433"]')
+        page.wait_for_selector('[data-surface="incident"] #device-map')
+        shot(page, "device-incident")
+        say(page, "What's happening with SHIP-433, and which plan should we choose?")
+        card_ready(page)
+        page.wait_for_timeout(600)
+        shot(page, "device-plans")
+        say(page, "approve the recommended plan")
+        shot(page, "device-confirm")
+        page.click("#confirm-yes")
+        page.wait_for_function("!document.querySelector('#ask').disabled && document.querySelector('#plans-state').textContent.includes('Approved')")
+        say(page, "execute it")
+        page.wait_for_selector(".result-card .times")
+        shot(page, "device-result")
+        page.goto(f"{base}/console#SHIP-433")
+        page.wait_for_function("document.querySelector('#connection').textContent === 'Connected'")
+        page.wait_for_selector("#metrics:not([hidden])")
+        shot(page, "console", clip={"x": 0, "y": 0, "width": DESKTOP["width"], "height": 900})
+        phone = browser.new_page(viewport=PHONE)
+        phone.goto(f"{base}/demo#SHIP-433")
+        phone.wait_for_function("document.querySelector('#connection').textContent === 'Connected'")
+        shot(phone, "device-phone")
+        page.request.post(f"{base}/demo/reset")
+        browser.close()
+    return shots
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument("--url", help="a replay server that already runs (the demo data is reset)")
+    parser.add_argument("--out", default=str(ROOT / "docs" / "img"), help="folder for the PNG files")
+    args = parser.parse_args()
+    process = None
+    base = args.url
+    if base is None:
+        import tempfile
+
+        process, base = start_server(Path(tempfile.mkdtemp(prefix="logiops-shots-")) / "replay.sqlite3")
+    try:
+        for path in capture(base, Path(args.out)):
+            print(f"{path.relative_to(ROOT) if path.is_relative_to(ROOT) else path}  {path.stat().st_size // 1024} KB")
+    finally:
+        if process is not None:
+            process.terminate()
+            process.wait(timeout=10)
+
+
+if __name__ == "__main__":
+    main()
