@@ -5,7 +5,7 @@ export function createMcpAppHost({
   window: win = globalThis.window, sandboxOrigin, hostOrigin, proxyPath = "/mcp-app/sandbox.html", slot, mcp,
   uriPrefix = "ui://", mime = MCP_APP_MIME, protocol = MCP_APPS_PROTOCOL, hostInfo = { name: "MCP Apps web host", version: "1.0.0" },
   hostContext = () => ({}), onMessage = () => false, onHide = () => {}, frameTitle = "MCP App", frameId = "mcp-app-frame",
-  minHeight = 80, maxHeight = 640, teardownTimeout = 500,
+  minHeight = 80, maxHeight = 640, teardownTimeout = 500, rejectMessage = "The host did not accept the message",
 } = {}) {
   const doc = win.document;
   const resources = new Map();
@@ -96,7 +96,7 @@ export function createMcpAppHost({
     const reply = (payload) => { if (msg.id !== undefined) post({ id: msg.id, ...payload }); };
     if (msg.method === "ui/notifications/sandbox-proxy-ready") {
       post({ method: "ui/notifications/sandbox-resource-ready", params: { html: current.resource.html, csp: current.resource.csp } });
-    } else if (msg.method === "logiops/sandbox-view-removed") {
+    } else if (msg.method === "ui/notifications/sandbox-view-removed") {
       teardown("view navigated");
     } else if (msg.method === "ui/initialize") {
       reply({ result: { protocolVersion: protocol, hostInfo, hostCapabilities: {}, hostContext: hostContext() } });
@@ -108,7 +108,7 @@ export function createMcpAppHost({
       const height = Number(msg.params?.height);
       if (Number.isFinite(height)) target.style.height = `${Math.min(Math.max(height, minHeight), maxHeight)}px`;
     } else if (msg.method === "ui/message") {
-      reply(onMessage(msg.params) ? { result: {} } : { error: { code: -32000, message: "Unknown or unavailable plan, or the operator panel is busy" } });
+      reply(onMessage(msg.params) ? { result: {} } : { error: { code: -32000, message: rejectMessage } });
     } else {
       reply({ error: { code: -32601, message: "Method not supported by this host" } });
     }

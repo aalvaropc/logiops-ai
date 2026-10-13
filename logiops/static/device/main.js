@@ -208,7 +208,7 @@ function hostContext() {
 const mcpHost = createMcpAppHost({
   sandboxOrigin: SANDBOX_ORIGIN, hostOrigin: location.origin, proxyPath: MCP_APP.proxyPath, slot: $("mcp-app-slot"),
   mcp: mcpClient, uriPrefix: MCP_APP.uriPrefix, hostInfo: { name: "LogiOps Alexa+ device (simulated)", version: "2.0.0" },
-  hostContext, frameTitle: "Resolution options (MCP App)",
+  hostContext, frameTitle: "Resolution options (MCP App)", rejectMessage: "Unknown or unavailable plan, or the device is busy",
   onMessage: (params) => selectFromApp(params),
   onHide: () => { $("mcp-app").hidden = true; $("plans").hidden = false; },
 });

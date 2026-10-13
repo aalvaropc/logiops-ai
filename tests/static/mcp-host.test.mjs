@@ -124,7 +124,7 @@ test("size changes are clamped and ui/message goes to the host's handler", async
   fromView({ jsonrpc: "2.0", id: 8, method: "ui/message", params: { role: "user", content: { type: "text", text: "Select plan nope" } } });
   assert.deepEqual(frame.sent.map((item) => item.message), [
     { jsonrpc: "2.0", id: 7, result: {} },
-    { jsonrpc: "2.0", id: 8, error: { code: -32000, message: "Unknown or unavailable plan, or the operator panel is busy" } },
+    { jsonrpc: "2.0", id: 8, error: { code: -32000, message: "The host did not accept the message" } },
   ]);
   assert.equal(seen.length, 2);
 });
@@ -166,7 +166,7 @@ test("teardown asks an initialized view first and removes the frame on its reply
 
 test("a view that navigates away is torn down", async () => {
   const { fromView, host, hidden } = await shown();
-  fromView({ jsonrpc: "2.0", method: "logiops/sandbox-view-removed" });
+  fromView({ jsonrpc: "2.0", method: "ui/notifications/sandbox-view-removed" });
   assert.equal(host.isShowing(), false);
   assert.deepEqual(hidden, ["view navigated"]);
 });
