@@ -26,10 +26,10 @@ def routes_of(app):
         for route in items:
             if isinstance(route, APIRoute):
                 found.update((method, route.path) for method in route.methods)
-            elif hasattr(route, "routes"):
+            elif hasattr(route, "original_router"):
+                walk(route.original_router.routes)
+            elif hasattr(route, "routes") and not hasattr(route, "app"):
                 walk(route.routes)
-            elif hasattr(route, "router"):
-                walk(route.router.routes)
 
     walk(app.routes)
     return found
@@ -39,7 +39,7 @@ def test_every_route_is_still_there_and_each_router_owns_its_area(tmp_path):
     app = create_app(tmp_path / "routes.sqlite3")
     assert routes_of(app) == EXPECTED
     areas = {
-        pages: {"/demo", "/console", "/healthz", "/assets/{name:path}", "/auth/config", "/mcp-app/sandbox.html"},
+        pages: {"/demo", "/console", "/healthz", "/assets/{name:path}", "/auth/config", "SANDBOX_PATH"},
         incidents: {"/incidents", "/incidents/{incident_id}", "/metrics", "/alerts", "/demo/reset"},
         account: {"/operator/preferences", "/memory", "/voice/speech"},
         agent: {"/agent/briefing", "/incidents/{incident_id}/agent/ask"},
