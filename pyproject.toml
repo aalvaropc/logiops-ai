@@ -9,6 +9,7 @@ dependencies = [
     "mcp==1.28.1",
     "pydantic==2.13.4",
     "pyjwt[crypto]>=2.10",
+    "strands-agents==1.60.0",
     "uvicorn>=0.30,<1",
 ]
 
