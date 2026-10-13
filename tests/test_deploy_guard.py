@@ -66,3 +66,12 @@ def test_the_release_packages_static_subdirectories(tmp_path, monkeypatch):
         names = set(release.getnames())
     assert "logiops/static/app/api.js" in names and "logiops/static/demo.js" in names
     assert not any(name.endswith("/empty") for name in names)
+
+
+def test_the_release_caps_live_model_calls_and_documents_it():
+    variables = (ROOT / "infra" / "amazon" / "variables.tf").read_text()
+    assert 'variable "daily_model_calls" {\n  type    = number\n  default = 40\n}' in variables
+    readme = (ROOT / "README.md").read_text()
+    row = next(line for line in readme.splitlines() if line.startswith("| `LOGIOPS_DAILY_MODEL_CALLS` |"))
+    assert row.endswith("| `40` |")
+    assert "daily budget of 40 model calls" in readme and "mcp-apps-web-host" in readme

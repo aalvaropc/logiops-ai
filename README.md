@@ -54,9 +54,13 @@ Challenge. Runtime: Amazon Bedrock.
 
 ## Submission
 
-| Tag | Devpost | Live demo |
-|---|---|---|
-| _pending_ | _pending_ | Deployed on AWS; URL and token in the Devpost testing instructions (hosting is optional, D-AMZ-1) |
+| Tag | Devpost | Live demo | Open-source library |
+|---|---|---|---|
+| `amazon-v1.0` (to be tagged on 2026-10-21) | _pending_ | Deployed on AWS; URL, demo user and token in the private testing instructions (hosting is optional, D-AMZ-1) | [`aalvaropc/mcp-apps-web-host`](https://github.com/aalvaropc/mcp-apps-web-host), MIT: the MCP Apps host bridge and sandbox proxy used here (public from 2026-10-20) |
+
+The live demo shares a daily budget of 40 model calls (`LOGIOPS_DAILY_MODEL_CALLS`);
+when it is spent, replies come from the scripted replay until midnight, Lima time,
+and say so.
 
 ## For judges
 
@@ -112,7 +116,7 @@ More detail in `docs/architecture.md`.
 | `LOGIOPS_MCP_LIMIT_PER_MINUTE` | MCP and memory requests per viewer per minute | `60` |
 | `LOGIOPS_SCENARIO_PACK` | path of a JSON scenario pack to register at start (see *Bring your own incidents*) | unset |
 | `LOGIOPS_OTEL` | `1` exports the agent's OpenTelemetry spans (Strands Agents) to `OTEL_EXPORTER_OTLP_ENDPOINT` when set, to the console otherwise; `/healthz` reports `telemetry` | unset |
-| `LOGIOPS_DAILY_MODEL_CALLS` | live model calls per day (Lima time) for the whole demo; each request reserves its run's maximum and releases what it did not use, and a run that no longer fits answers from replay with `fallback: "daily_budget"` | `150` |
+| `LOGIOPS_DAILY_MODEL_CALLS` | live model calls per day (Lima time) for the whole demo; each request reserves its run's maximum and releases what it did not use, and a run that no longer fits answers from replay with `fallback: "daily_budget"` | `40` |
 | `AWS_REGION`, `BEDROCK_MODEL_ID` | Bedrock region and model profile | `us-east-1`, `global.anthropic.claude-sonnet-4-6` |
 | `LOGIOPS_VOICE` | `polly` (Amazon Polly) or `browser` (the browser's own voice) | `polly` with `bedrock`, `browser` with `replay` |
 | `LOGIOPS_POLLY_VOICE`, `LOGIOPS_POLLY_ENGINE` | Polly voice and engine | `Ruth`, `generative` |

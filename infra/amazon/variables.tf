@@ -30,7 +30,7 @@ variable "config_parameter_path" {
 
 variable "daily_model_calls" {
   type    = number
-  default = 150
+  default = 40
 }
 
 variable "extra_oauth_callback_urls" {
