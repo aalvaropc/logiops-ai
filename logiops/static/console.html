@@ -121,6 +121,9 @@
             <label for="stock-input" class="stock-label">Simulate a stock change <span id="stock-scope">(this incident's warehouse; invalidates approvals)</span></label>
             <div class="token-row"><input id="stock-input" type="number" min="0" max="20" step="1" value="11"><button id="set-stock" type="button" class="secondary">Apply</button></div>
             <button id="reset" type="button" class="quiet">↺ Reset all incidents and preferences</button>
+            <label for="pack-file" class="stock-label">Bring your own incidents <span>(a JSON scenario pack; the built-ins below are the template)</span></label>
+            <div class="token-row"><input id="pack-file" type="file" accept="application/json,.json"><button id="import-pack" type="button" class="secondary">Import</button></div>
+            <p id="pack-result" class="developer-links" role="status" aria-live="polite"></p>
             <p class="developer-links"><a href="/mcp">MCP endpoint</a> · <a href="/docs">REST API</a> · <a href="/scenario/packs/builtin">Built-in incidents (JSON)</a></p>
           </details>
         </aside>

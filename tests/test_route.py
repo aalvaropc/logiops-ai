@@ -88,3 +88,15 @@ def test_the_module_never_touches_the_page():
     script = ROUTE.read_text()
     assert "document" not in script and "innerHTML" not in script and "fetch(" not in script
     assert script.rstrip().endswith('})(typeof window === "undefined" ? globalThis : window);')
+
+
+def test_a_pack_incident_off_the_map_still_becomes_legs_with_every_unit():
+    pack = json.loads((Path(__file__).resolve().parent / "fixtures" / "scenario_pack.json").read_text())["incidents"][0]
+    state = {"incident_id": pack["id"], "shipment": pack["shipment"], "orders": pack["orders"], "inventory": pack["inventory"], "carriers": pack["carriers"]}
+    plan = {"allocations": [
+        {"source": "piura-stock", "units": 30, "order_id": "ORD-470", "arrival_eta": "2026-10-13T08:00:00-05:00"},
+        {"source": "refrigerated-truck", "units": 20, "order_id": "ORD-470", "arrival_eta": "2026-10-14T08:00:00-05:00"},
+    ]}
+    legs = route(f"m.legsFor({json.dumps(state)}, {json.dumps(plan)})")
+    assert [(leg["type"], leg["units"], leg["from"], leg["to"]) for leg in legs] == [("local", 30, None, None), ("unknown", 20, None, None)]
+    assert legs[1]["label"] == "refrigerated-truck" and route('[m.cityOf("Paita"), m.cityOf("Lima").name]') == [None, "Lima"]

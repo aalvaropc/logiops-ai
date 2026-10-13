@@ -26,8 +26,7 @@ def free_port() -> int:
         return probe.getsockname()[1]
 
 
-@pytest.fixture(scope="session")
-def replay_server(tmp_path_factory: pytest.TempPathFactory):
+def start_replay_server(tmp_path_factory: pytest.TempPathFactory):
     """A replay-mode API on a free port with a fresh database; no model or speech call is ever made."""
     port = free_port()
     env = {name: value for name, value in os.environ.items() if not name.startswith(("LOGIOPS_", "AWS_"))}
@@ -53,6 +52,17 @@ def replay_server(tmp_path_factory: pytest.TempPathFactory):
         process.terminate()
         process.wait(timeout=10)
         log.close()
+
+
+@pytest.fixture(scope="session")
+def replay_server(tmp_path_factory: pytest.TempPathFactory):
+    yield from start_replay_server(tmp_path_factory)
+
+
+@pytest.fixture
+def fresh_replay_server(tmp_path_factory: pytest.TempPathFactory):
+    """A server of its own for a test that changes the process, such as registering a scenario pack."""
+    yield from start_replay_server(tmp_path_factory)
 
 
 @pytest.fixture

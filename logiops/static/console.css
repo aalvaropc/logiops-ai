@@ -16,4 +16,7 @@
 .developer .quiet { margin-top: 14px; }
 .developer-links { margin: 14px 0 0; color: #80989c; font-size: 12px; }
 .developer-links a { color: #9ff0dc; }
+.developer input[type=file] { padding: 8px 10px; color: #c7d7d7; }
+.developer input[type=file]::file-selector-button { margin-right: 10px; padding: 6px 10px; border: 1px solid #44726d; border-radius: 6px; background: #1b3939; color: #d9eee9; font: inherit; font-size: 12px; cursor: pointer; }
+#pack-result.failed { color: #ffd1bd; }
 @media (max-width: 760px) { .console-head { grid-template-columns: minmax(0, 1fr); align-items: start; padding: 28px 0 18px; } .console-head h1 { font-size: 30px; } }
