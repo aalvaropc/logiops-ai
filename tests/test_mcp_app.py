@@ -117,7 +117,7 @@ def test_sandbox_host_must_be_a_different_bare_hostname(tmp_path, monkeypatch, v
 def test_proxy_and_host_follow_the_sandbox_contract(tmp_path):
     app = create_app(tmp_path / "contract.sqlite3")
     proxy = get(app, "/mcp-app/sandbox.html", "localhost:8000").text
-    script = get(app, "/assets/demo.js", "127.0.0.1:8000").text
+    script = get(app, "/assets/device/main.js", "127.0.0.1:8000").text
     host = get(app, "/assets/app/mcp-host.js", "127.0.0.1:8000").text
     assert "ui/notifications/sandbox-proxy-ready" in proxy and "ui/notifications/sandbox-resource-ready" in proxy
     assert "`<!doctype html>${meta}${body}`" in proxy
@@ -128,7 +128,8 @@ def test_proxy_and_host_follow_the_sandbox_contract(tmp_path):
     assert 'element.setAttribute("sandbox", "allow-scripts allow-same-origin")' in host
     assert "event.origin !== sandboxOrigin" in host and "srcdoc" not in host and "srcdoc" not in script
     assert "ui/resource-teardown" in host and "hostCapabilities: {}" in host
-    assert "url.origin !== location.origin" in script and 'import { createMcpAppHost } from "./app/mcp-host.js";' in script
+    assert "url.origin !== location.origin" in script and 'import { createMcpAppHost } from "../app/mcp-host.js";' in script
+    assert "createMcpAppHost" not in get(app, "/assets/console.js", "127.0.0.1:8000").text
 
 
 def test_release_archive_includes_the_view():
@@ -143,7 +144,7 @@ def test_the_card_highlights_the_same_pick_as_the_panel():
     from pathlib import Path
 
     static = Path(__file__).resolve().parents[1] / "logiops" / "static"
-    card, script = (static / "resolution_options.html").read_text(), (static / "demo.js").read_text()
+    card, script = (static / "resolution_options.html").read_text(), (static / "device" / "main.js").read_text()
     assert '_meta: { "logiops/recommended_plan_id": recommendedPlan(state.snapshot)?.id || null }' in script
     assert 'const hinted = result?._meta?.["logiops/recommended_plan_id"];' in card
     assert 'hinted === pick ? "Agent pick" : "Default pick"' in card and ".plan.pick {" in card
@@ -168,12 +169,12 @@ def test_the_view_follows_the_host_context():
 
 def test_the_demo_host_negotiates_mcp_and_sends_its_context(tmp_path):
     app = create_app(tmp_path / "host.sqlite3")
-    script = get(app, "/assets/demo.js", "127.0.0.1:8000").text
+    script = get(app, "/assets/device/main.js", "127.0.0.1:8000").text
     client = get(app, "/assets/app/mcp.js", "127.0.0.1:8000").text
     page = get(app, "/demo", "127.0.0.1:8000").text
     assert 'method: "initialize"' in client and 'method: "notifications/initialized"' in client
     assert 'headers["MCP-Protocol-Version"] = version' in client and 'MCP_VERSION = "2025-11-25"' in client
-    assert 'import { createMcpClient } from "./app/mcp.js";' in script
+    assert 'import { createMcpClient } from "../app/mcp.js";' in script
     host = get(app, "/assets/app/mcp-host.js", "127.0.0.1:8000").text
     assert "hostContext: hostContext()" in host and '"ui/notifications/host-context-changed"' in host
     assert "theme: state.cardTheme" in script and "safeAreaInsets" in script and "containerDimensions" in script

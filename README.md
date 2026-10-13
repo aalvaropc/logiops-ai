@@ -66,6 +66,7 @@ More detail in `docs/architecture.md`.
 | `LOGIOPS_SANDBOX_HOST` | second hostname that serves only the MCP Apps sandbox proxy | `127.0.0.1`/`localhost` pair locally |
 | `LOGIOPS_TRUST_CLOUDFRONT` | identify viewers by `CloudFront-Viewer-Address` | off |
 | `LOGIOPS_AGENT_LIMIT_PER_MINUTE` | paid agent calls per viewer per minute | `10` |
+| `LOGIOPS_MCP_LIMIT_PER_MINUTE` | MCP and memory requests per viewer per minute | `60` |
 | `LOGIOPS_DAILY_MODEL_CALLS` | live model calls per day (Lima time) for the whole demo; each request reserves its run's maximum and releases what it did not use, and a run that no longer fits answers from replay with `fallback: "daily_budget"` | `150` |
 | `AWS_REGION`, `BEDROCK_MODEL_ID` | Bedrock region and model profile | `us-east-1`, `global.anthropic.claude-sonnet-4-6` |
 | `LOGIOPS_VOICE` | `polly` (Amazon Polly) or `browser` (the browser's own voice) | `polly` with `bedrock`, `browser` with `replay` |
@@ -125,33 +126,41 @@ any other credentials in its default chain) and ensure
 `global.anthropic.claude-sonnet-4-6` is accessible in `us-east-1`. Start the
 same server without `LOGIOPS_AGENT_MODE=replay`.
 
-Open the browser demo at <http://127.0.0.1:8000/demo>. It opens on a
-simulated Alexa+ screen (an Echo Show-style device): a voice orb that shows
-Ready, Listening, Thinking (with the real seconds elapsed) and Speaking; what was
-heard and the short spoken reply in large type; chips for the incident, its
-critical units at risk and the plan on screen; the plan's legs on a map of Peru;
-each order's promise against its projected arrival; and, after each reply, the
-recorded tool trace replayed step by step with the result of the data check.
-Below it, the operator view shows the same incident in full. The inbox
-lists the four incidents, open ones first, then by critical units at risk
-(units of critical orders that nothing on hand delivers on time), priority and
-due time; pick one (or link to it, as in
-`/demo#SHIP-433`, or just name it: "what about SHIP-452?"). Each incident keeps
-its own conversation. The demo simulates the Alexa+ experience as a
-conversation: ask "What's happening with SHIP-421?" by text, or by voice in browsers with speech recognition (Chrome, Edge), and
-optionally have replies read aloud. Say "approve the recommended plan"; the
-assistant reads the plan back (price, delay, any critical order left late) and
-approves only after "yes". Then say "execute it". Those requests use the same
-REST approval and execution endpoints as the buttons, so the version checks are
-identical. The plan cards, timeline, and a stock-change control show how a data
-change invalidates an earlier approval. A chat message acts only when the whole
-message comes from a closed grammar: a verb and words that name a plan by kind,
-price or pick ("approve the split plan", "approve the cheapest plan", "approve
-the $240 plan", "ok, execute it"). Questions, negations ("please don't execute it
-yet"), commands buried in a longer sentence and any other word ("approve
-nothing", "execute it tomorrow") go to the agent and never act. On the public deployment, paste the
-operator token into the page to connect. It is kept for that browser tab only
-(`sessionStorage`), so a reload does not ask again and closing the tab forgets it.
+Open the browser demo at <http://127.0.0.1:8000/demo>. It is a simulated
+Alexa+ device (an Echo Show-style screen, full-screen on a phone) that shows
+one card at a time: the home card with the incident inbox as a carousel (open
+ones first, then by critical units at risk, priority and due time; "Start
+here" marks the briefing's pick); the incident card with its ETAs, local stock,
+the plan's legs on a map of Peru and each order's promise against its projected
+arrival; the plans card with the interactive MCP App; a confirmation card that
+reads an approval or a price back with Yes / No; the receipt; a proactive
+alert; and the result card after execution. Below the card, the device shows
+what it heard and the short spoken reply in large type, a voice orb (Ready,
+Listening, Thinking with the seconds elapsed, Speaking), suggestion chips, the
+microphone (Chrome, Edge) and a text field; "More" opens the whole
+conversation with the recorded tool trace and the data-check badge. Open an
+incident by tapping its card, by linking to it (`/demo#SHIP-433`) or by naming
+it ("what about SHIP-452?"); each incident keeps its own conversation.
+
+Ask "What's happening with SHIP-421?" and say "approve the recommended plan":
+the assistant reads the plan back (price, delay, any critical order left late)
+and approves only after "yes" (spoken, typed or tapped on the card). Then say
+"execute it". Those requests use the same REST approval and execution
+endpoints as the operator console's buttons, so the version checks are
+identical. A message acts only when the whole message comes from a closed
+grammar: a verb and words that name a plan by kind, price or pick ("approve
+the split plan", "approve the cheapest plan", "approve the $240 plan", "ok,
+execute it"). Questions, negations ("please don't execute it yet"), commands
+buried in a longer sentence and any other word ("approve nothing", "execute it
+tomorrow") go to the agent and never act.
+
+The operator console at <http://127.0.0.1:8000/console> shows the same
+incident in full: inbox, plan cards with the Approve button, execution,
+bookings, preferences, the audit trail and a Developer drawer (operator token,
+stock-change control that invalidates an earlier approval, reset, links to the
+MCP endpoint). On the public deployment, paste the operator token there to
+connect; it is kept for that browser tab only (`sessionStorage`), so a reload
+does not ask again and closing the tab forgets it.
 
 The API reference is at <http://127.0.0.1:8000/docs>. The MCP endpoint is
 <http://127.0.0.1:8000/mcp> and negotiates MCP protocol version 2025-11-25

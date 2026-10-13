@@ -34,16 +34,14 @@ def test_the_console_has_the_operator_view_without_the_device_or_the_hero():
         assert marker in console, marker
     for absent in ('id="device"', "A delay is a decision", 'id="mcp-app"', "logiops-sandbox-origin", "/assets/device.js", "/assets/route.js"):
         assert absent not in console, absent
-    assert '<script src="/assets/demo.js" type="module"></script>' in console
-    assert console.index("/assets/intent.js") < console.index("/assets/demo.js")
+    assert '<script src="/assets/console.js" type="module"></script>' in console
+    assert console.index("/assets/intent.js") < console.index("/assets/console.js")
     assert 'href="/console"' in demo and 'id="mcp-app"' in demo
     assert set(re.findall(r'/assets/([\w./-]+)', console)) <= {path.relative_to(STATIC).as_posix() for path in STATIC.rglob("*") if path.is_file()}
 
 
-def test_the_page_script_works_without_the_card_or_the_device():
-    script = (STATIC / "demo.js").read_text()
-    assert 'const mcpHost = $("mcp-app-slot") && createMcpAppHost({' in script
-    assert "if (!step || !mcpHost) return;" in script and "if (mcpHost) mcpHost.hide(reason);" in script
-    assert '$("mcp-app-theme")?.addEventListener' in script
-    assert 'returnTo: location.pathname === "/console" ? "/console" : null' in script
-    assert 'if (outcome.path.startsWith("/console")) {' in script
+def test_the_console_script_has_no_card_and_signs_in_through_the_device_page():
+    script, device = (STATIC / "console.js").read_text(), (STATIC / "device" / "main.js").read_text()
+    assert "createMcpAppHost" not in script and "LogiOpsDevice" not in script and "mcp-app" not in script
+    assert 'returnTo: "/console"' in script and "finishSignIn" not in script
+    assert 'if (outcome.path.startsWith("/console")) {' in device and "location.replace(outcome.path);" in device
