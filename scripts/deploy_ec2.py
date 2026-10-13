@@ -24,7 +24,7 @@ def package() -> tuple[Path, str]:
     files = [
         ROOT / "pyproject.toml",
         ROOT / "uv.lock",
-        *sorted((ROOT / "logiops").glob("*.py")),
+        *sorted(path for path in (ROOT / "logiops").rglob("*.py") if "__pycache__" not in path.parts and "static" not in path.parts),
         *sorted(path for path in (ROOT / "logiops" / "static").rglob("*") if path.is_file()),
         *sorted(path for path in (ROOT / "skills").rglob("*") if path.is_file()),
     ]
