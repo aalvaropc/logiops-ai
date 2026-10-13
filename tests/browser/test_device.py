@@ -40,8 +40,12 @@ def test_device_walkthrough(page, replay_server, page_errors, reset_demo, width)
     expect(home).to_be_visible()
     expect(home).to_contain_text("Hi, I'm LogiOps")
     expect(home.locator(".incident-card")).to_have_count(4)
+    card = home.locator('.incident-card[data-incident="SHIP-433"]')
+    page.evaluate("document.querySelector('#inbox .incident-card').dataset.marker = 'before-metrics'")
+    expect(home.locator(".session-strip")).to_be_visible()
+    assert page.evaluate("document.querySelector('#inbox .incident-card').dataset.marker") == "before-metrics", "metrics must not rebuild the carousel"
 
-    home.locator('.incident-card[data-incident="SHIP-433"]').click()
+    card.click()
     incident = page.locator('[data-surface="incident"]')
     expect(incident).to_be_visible()
     expect(incident.locator(".incident-id")).to_have_text("SHIP-433")

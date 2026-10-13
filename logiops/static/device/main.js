@@ -299,6 +299,14 @@ function welcomeText() {
 }
 
 const carousel = createCarousel({ root: $("inbox"), onOpen: (id) => selectIncident(id).catch(() => {}), reducedMotion });
+let carouselKey = "";
+
+function updateCarousel(cards) {
+  const key = JSON.stringify([cards.map((card) => [card.incident_id, card.status, card.critical_units_at_risk, card.startHere]), state.incidentId]);
+  if (key === carouselKey) return;
+  carouselKey = key;
+  carousel.update(cards, state.incidentId);
+}
 
 function renderPlansSurface() {
   const snapshot = state.snapshot;
@@ -324,7 +332,7 @@ function paintSurface(shown = surfaces.current()) {
   const snapshot = state.snapshot;
   if (shown.name === "home") {
     renderHome(section, { greeting: welcomeText(), lead: shown.payload.lead, session: state.metrics ? sessionFigures(state.metrics.session) : null });
-    carousel.update(homeCards(state.inbox, shown.payload.pick ?? state.briefingPick), state.incidentId);
+    updateCarousel(homeCards(state.inbox, shown.payload.pick ?? state.briefingPick));
   } else if (shown.name === "incident" && snapshot) {
     renderIncident(section, { snapshot, plan: currentPlan(), summary: summaryOf(), route });
   } else if (shown.name === "plans") {
@@ -416,7 +424,9 @@ async function refresh() {
 
 async function loadMetrics() {
   state.metrics = await request("/metrics");
-  if (["home", "result"].includes(surfaces.current().name)) paintSurface();
+  const shown = surfaces.current();
+  if (shown.name === "home") renderHome(sections.home, { greeting: welcomeText(), lead: shown.payload.lead, session: sessionFigures(state.metrics.session) });
+  else if (shown.name === "result") paintSurface();
 }
 
 async function selectIncident(id) {
