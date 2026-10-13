@@ -14,6 +14,7 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = ["httpx>=0.27,<1", "pygments==2.20.0", "pytest>=8,<10"]
+browser = ["axe-playwright-python>=0.1.8,<1", "playwright==1.62.0", "pytest-playwright>=0.7,<1"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
