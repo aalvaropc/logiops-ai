@@ -128,7 +128,7 @@ def create_app(
     *,
     followup_client: ConverseClient | None = None,
     access_token: str | None = None,
-    mcp_limit_per_minute: int = 60,
+    mcp_limit_per_minute: int | None = None,
     agent_limit_per_minute: int | None = None,
     voice: PollyVoice | None = None,
     oauth: OAuthSettings | None = None,
@@ -188,6 +188,8 @@ def create_app(
     internal_key = secrets.token_hex(32)
     if agent_limit_per_minute is None:
         agent_limit_per_minute = int(os.environ.get("LOGIOPS_AGENT_LIMIT_PER_MINUTE", "10"))
+    if mcp_limit_per_minute is None:
+        mcp_limit_per_minute = int(os.environ.get("LOGIOPS_MCP_LIMIT_PER_MINUTE", "60"))
     install_security(
         app, access_token,
         internal_key=internal_key,

@@ -19,11 +19,11 @@ def test_demo_assets_are_public_but_actions_require_token(tmp_path):
                 transport=httpx.ASGITransport(app=app), base_url="http://127.0.0.1:8000"
             ) as client:
                 page = await client.get("/demo")
-                script = await client.get("/assets/demo.js")
-                style = await client.get("/assets/demo.css")
+                script = await client.get("/assets/device/main.js")
+                style = await client.get("/assets/device.css")
                 assert page.status_code == script.status_code == style.status_code == 200
-                assert "Simulated Alexa+ experience" in page.text
-                assert "approve selected plan" in page.text.lower()
+                assert 'id="device" class="device"' in page.text and "Alexa+" in page.text
+                assert "only you approve" in page.text.lower()
                 assert (await client.get("/incidents/SHIP-421")).status_code == 401
                 assert (await client.post("/demo/reset")).status_code == 401
 
@@ -34,7 +34,8 @@ def test_release_archive_contains_browser_demo():
     archive, _ = package()
     with tarfile.open(archive, "r:gz") as release:
         names = set(release.getnames())
-    assert {"logiops/static/demo.html", "logiops/static/demo.css", "logiops/static/demo.js"} <= names
+    assert {"logiops/static/demo.html", "logiops/static/device.css", "logiops/static/device/main.js",
+            "logiops/static/console.html", "logiops/static/console.js", "logiops/static/demo.css"} <= names
 
 
 def _intent(script: str) -> str:
@@ -103,8 +104,7 @@ def test_buying_declining_and_resuming_are_closed_commands():
 
 
 def test_a_purchase_is_read_back_and_paid_once():
-    static = Path(__file__).resolve().parents[1] / "logiops" / "static"
-    script, purchase = (static / "demo.js").read_text(), (static / "app" / "purchase.js").read_text()
+    purchase = _static("app", "purchase.js")
     commands = _static("app", "commands.js")
     assert 'command === "confirm" && pendingPurchase' in commands and "await purchase.confirm(pendingPurchase);" in commands
     assert "Say “yes” to approve and pay, or “no”." in purchase and "Say “yes” to pay, or “no”." in purchase
@@ -149,20 +149,21 @@ def test_the_agent_pick_follows_the_shared_grounding_cases():
 
 
 def test_demo_routes_utterances_through_the_intent_module(tmp_path):
-    script, commands = _static("demo.js"), _static("app", "commands.js")
-    assert "intent.parseCommand(text)" in commands and "intent: window.LogiOpsIntent" in script
-    assert "pickRecommended(snapshot, window.LogiOpsIntent)" in script and "intent.recommendedPlanId(" in _static("app", "selectors.js")
+    script, console, commands = _static("device", "main.js"), _static("console.js"), _static("app", "commands.js")
+    assert "intent.parseCommand(text)" in commands and "const intent = window.LogiOpsIntent;" in script
+    assert "pickRecommended(snapshot, intent)" in script and "intent.recommendedPlanId(" in _static("app", "selectors.js")
+    assert "pickRecommended(snapshot, window.LogiOpsIntent)" in console and "intent: window.LogiOpsIntent" in console
     assert "test(lower)) {" not in script and "test(lower)) {" not in commands
     assert "was already executed" in commands
     assert "That plan isn't available for the current data" in commands
-    assert "Number.parseInt" not in script and "Number.isInteger(available)" in script
+    assert "Number.parseInt" not in console and "Number.isInteger(available)" in console
 
     async def run():
         app = create_app(tmp_path / "intent.sqlite3")
         async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
             page = (await client.get("/demo")).text
             asset = await client.get("/assets/intent.js")
-        assert page.index("/assets/intent.js") < page.index("/assets/demo.js")
+        assert page.index("/assets/intent.js") < page.index("/assets/device/main.js")
         assert asset.status_code == 200 and "parseCommand" in asset.text
         assert asset.headers["cache-control"] == "no-cache"
 
@@ -174,31 +175,33 @@ def test_demo_routes_utterances_through_the_intent_module(tmp_path):
 
 def test_judges_see_why_and_what_to_do_next():
     root = Path(__file__).resolve().parents[1] / "logiops" / "static"
-    script, html, api = (root / "demo.js").read_text(), (root / "demo.html").read_text(), (root / "app" / "api.js").read_text()
+    script, html, api = (root / "console.js").read_text(), (root / "console.html").read_text(), (root / "app" / "api.js").read_text()
     assert 'id="state-banner"' in html and 'id="banner-reset"' in html
     assert '$("state-banner").hidden = !execution;' in script
     assert "needs the access token from the testing instructions" in api
     assert "That access token was not accepted" in api
     assert "per-minute question limit" in api
     assert 'textContent = "Locked"' in script
+    assert "Open the operator console, paste it under Developer" in _static("device", "main.js")
     assert "vault.set(TOKEN_KEY, token || null);" in api and "globalThis.sessionStorage" in api
     assert not [path for path in root.rglob("*.js") if "localStorage" in path.read_text()]
-    assert '<link rel="icon" href="data:,">' in html
+    assert '<link rel="icon" href="data:,">' in html and '<link rel="icon" href="data:,">' in _static("demo.html")
 
 
 def test_demo_has_basic_accessibility_hooks():
     root = Path(__file__).resolve().parents[1] / "logiops" / "static"
-    script, style = (root / "demo.js").read_text(), (root / "demo.css").read_text()
-    assert "prefers-reduced-motion: reduce" in style
+    script, style, markdown = (root / "device" / "main.js").read_text(), (root / "device.css").read_text(), (root / "app" / "markdown-dom.js").read_text()
+    assert "prefers-reduced-motion: reduce" in style and "prefers-reduced-motion: reduce" in (root / "demo.css").read_text()
     assert "grid-template-columns: minmax(0, 1fr)" in style
     assert 'aria-label="Conversation" tabindex="0"' in (root / "demo.html").read_text()
     assert 'box.setAttribute("role", success || !text ? "status" : "alert")' in script
-    assert 'container.setAttribute("role", "radiogroup")' in script
+    assert 'container.setAttribute("role", "radiogroup")' in (root / "console.js").read_text()
     html = (root / "demo.html").read_text()
     assert 'lang="en"' in html and 'aria-live="polite"' in html and 'frameTitle: "Resolution options (MCP App)"' in script
-    assert 'node.setAttribute("role", "region")' in script and "node.tabIndex = 0" in script
-    assert 'document.createElement(empty ? "td" : "th")' in script
-    assert "Math.min(6, previous + 1, 3 + block.level - top)" in script
+    assert 'aria-roledescription", "carousel"' in (root / "device" / "carousel.js").read_text()
+    assert 'node.setAttribute("role", "region")' in markdown and "node.tabIndex = 0" in markdown
+    assert 'doc.createElement(empty ? "td" : "th")' in markdown
+    assert "Math.min(6, previous + 1, 3 + block.level - top)" in markdown
 
 
 def _node(script: str, module: str = "markdown.js") -> str:
@@ -231,9 +234,9 @@ def test_markdown_never_produces_html_and_speech_drops_the_markup():
     assert '"t":"strong"' in parts and '"v":"<img src=x onerror=alert(1)>"' in parts
     assert _node("console.log(m.plainText('## 📦 Status\\n\\n**Plan approved:** `split-express:v1`\\n\\n| S | U |\\n|---|---|\\n| Local | 12 |'))") \
         == "📦 Status. Plan approved: split-express:v1. Local, 12"
-    script = (Path(__file__).resolve().parents[1] / "logiops" / "static" / "demo.js").read_text()
-    assert "innerHTML" not in script and "insertAdjacentHTML" not in script
-    assert "LogiOpsMarkdown.plainText(text)" in script
+    root = Path(__file__).resolve().parents[1] / "logiops" / "static"
+    assert not [path for path in root.rglob("*.js") if "innerHTML" in path.read_text() or "insertAdjacentHTML" in path.read_text()]
+    assert "LogiOpsMarkdown.plainText(text)" in _static("console.js") and "markdown.plainText(text)" in _static("device", "main.js")
 
 
 def test_markdown_asset_is_served_and_shipped(tmp_path):
@@ -251,7 +254,7 @@ def test_markdown_asset_is_served_and_shipped(tmp_path):
 
 
 def test_a_card_that_cannot_load_says_why():
-    script, commands = _static("demo.js"), _static("app", "commands.js")
+    script, commands = _static("device", "main.js"), _static("app", "commands.js")
     assert "function showMcpAppNote(" in script and "could not be loaded" in commands
     assert "showMcpApp(run).catch(() => hideMcpApp())" not in commands
 
@@ -266,21 +269,25 @@ def test_execute_never_runs_a_plan_other_than_the_one_named():
 
 def test_the_demo_is_an_inbox_of_incidents():
     root = Path(__file__).resolve().parents[1] / "logiops" / "static"
-    script, html = (root / "demo.js").read_text(), (root / "demo.html").read_text()
-    assert '<ul id="inbox" class="inbox"' in html and 'id="incident-id"' in html
-    assert "/incidents/SHIP-421" not in script
+    script, html = (root / "console.js").read_text(), (root / "console.html").read_text()
+    device, page = (root / "device" / "main.js").read_text(), (root / "demo.html").read_text()
+    assert '<ul id="inbox" class="inbox"' in html and 'id="incident-id"' in html and '<div id="inbox"></div>' in page
+    assert "/incidents/SHIP-421" not in script and "/incidents/SHIP-421" not in device
     assert "inventory.arequipa" not in script and "SHIP-421" not in html.split("<main>")[1].split('id="incident-id">')[0]
-    assert "state.app.incidentId !== snapshot.state.incident_id" in script
+    assert "SHIP-4" not in page
+    assert "state.app.incidentId !== snapshot.state.incident_id" in device
     assert 'card.setAttribute("aria-pressed", String(item.incident_id === state.incidentId));' in script
+    assert 'button.setAttribute("aria-pressed", String(card.incident_id === selectedId));' in (root / "device" / "carousel.js").read_text()
     assert "intent.mentionedIncident(text," in _static("app", "commands.js")
 
 
 def test_the_inbox_and_the_greeting_name_the_critical_units_at_risk():
     root = Path(__file__).resolve().parents[1] / "logiops" / "static"
-    script, style = (root / "demo.js").read_text(), (root / "demo.css").read_text()
+    script, style = (root / "console.js").read_text(), (root / "demo.css").read_text()
     assert 'tag("at-risk", `${item.critical_units_at_risk} critical units at risk`)' in script
+    assert 'tag("at-risk", `${card.critical_units_at_risk} critical units at risk`)' in (root / "device" / "carousel.js").read_text()
     assert "critical units nothing on hand delivers in time" in (root / "app" / "greeting.js").read_text()
-    assert ".incident-card .at-risk {" in style
+    assert ".incident-card .at-risk {" in style and ".incident-top .at-risk {" in (root / "device.css").read_text()
 
 
 def test_sentences_open_incidents_and_name_the_new_plan_kinds():
@@ -318,15 +325,20 @@ def test_remember_saves_a_preference_and_never_acts():
 
 def test_the_demo_shows_preferences_briefings_and_speaks_the_short_line():
     root = Path(__file__).resolve().parents[1] / "logiops" / "static"
-    script, html = (root / "demo.js").read_text(), (root / "demo.html").read_text()
+    script, html = (root / "console.js").read_text(), (root / "console.html").read_text()
+    device, surfaces = (root / "device" / "main.js").read_text(), (root / "device" / "surfaces.js").read_text()
     view = (root / "resolution_options.html").read_text()
     assert 'id="pref-form"' in html and 'id="preference-line"' in html and "Any delays today?" in html
+    assert "Any delays today?" in surfaces and "Approve the recommended plan" in surfaces
     assert 'value="cheapest_unless_critical_late"' in html
     commands = _static("app", "commands.js")
     assert commands.index("intent.parsePreference(text)") < commands.index("intent.parseCommand(text)")
     assert 'request("/agent/briefing", "POST"' in commands and 'tag("start-here", "Start here")' in script
+    assert 'tag("start-here", "Start here")' in (root / "device" / "carousel.js").read_text()
     assert '"Your preference", "badge preference"' in script and "never approve" in script
-    assert "if (speaking) speak(spoken || window.LogiOpsMarkdown.plainText(text));" in script
+    assert '"badge preference", "Your preference"' in (root / "device" / "render.js").read_text()
+    assert "if (speechOn()) speak(spoken || window.LogiOpsMarkdown.plainText(text));" in script
+    assert "if (speaking) speak(spoken || markdown.plainText(text));" in device
     assert "const utterance = new win.SpeechSynthesisUtterance(line);" in (Path(__file__).resolve().parents[1] / "logiops" / "static" / "app" / "voice.js").read_text()
     assert "run.spoken, badges.checkBadge(run));" in commands
     assert "operator_preferences" in view and '"Your preference"' in view
@@ -334,11 +346,12 @@ def test_the_demo_shows_preferences_briefings_and_speaks_the_short_line():
 
 def test_replies_show_whether_they_passed_the_data_check():
     root = Path(__file__).resolve().parents[1] / "logiops" / "static"
-    script, style, badges = (root / "demo.js").read_text(), (root / "demo.css").read_text(), (root / "app" / "run-badges.js").read_text()
+    script, style, badges = (root / "console.js").read_text(), (root / "demo.css").read_text(), (root / "app" / "run-badges.js").read_text()
     assert "export function checkBadge(run)" in badges and '"Checked against the data"' in badges
     assert "Did not pass the data check: ${issue}" in badges and "badges.noteCheck(run);" in _static("app", "commands.js")
-    assert "check: checkBadge(agentEvent.data)" in script
+    assert "check: checkBadge(agentEvent.data)" in script and "check: checkBadge(agentEvent.data)" in _static("device", "main.js")
     assert ".turn .check-badge {" in style and ".turn .check-badge.failed {" in style
+    assert ".turn .check-badge {" in _static("device.css") and ".turn .check-badge.failed {" in _static("device.css")
 
 
 def test_assets_come_from_one_allowlist_route(tmp_path):
@@ -355,7 +368,8 @@ def test_assets_come_from_one_allowlist_route(tmp_path):
         return served, refused
 
     served, refused = asyncio.run(run())
-    assert {"demo.css", "demo.js", "markdown.js", "intent.js", "route.js", "device.js"} <= set(DEMO_ASSETS)
+    assert {"demo.css", "console.js", "device.css", "device/main.js", "device/render.js", "markdown.js", "intent.js", "route.js"} <= set(DEMO_ASSETS)
+    assert "device.js" not in DEMO_ASSETS and "demo.js" not in DEMO_ASSETS
     assert all(not name.startswith("/") and ".." not in name and name.rsplit(".", 1)[1] in ("css", "js", "svg", "png") for name in DEMO_ASSETS)
     assert {name: (r.status_code, r.headers["content-type"].split(";")[0]) for name, r in served.items()} == {
         name: (200, {"css": "text/css", "js": "text/javascript", "svg": "image/svg+xml", "png": "image/png"}[name.rsplit(".", 1)[1]])
@@ -363,40 +377,48 @@ def test_assets_come_from_one_allowlist_route(tmp_path):
     assert [response.status_code for response in refused] == [404] * 8
     page = (Path(__file__).resolve().parents[1] / "logiops" / "static" / "demo.html").read_text()
     assert set(re.findall(r'/assets/([\w./-]+)', page)) <= set(DEMO_ASSETS)
-    assert '<script src="/assets/demo.js" type="module"></script>' in page
+    assert '<script src="/assets/device/main.js" type="module"></script>' in page
 
 
-
-def test_the_device_view_sits_above_the_operator_view():
+def test_the_device_page_is_the_full_screen_alexa_experience():
     root = Path(__file__).resolve().parents[1] / "logiops" / "static"
-    html, script, device, style = ((root / name).read_text() for name in ("demo.html", "demo.js", "device.js", "demo.css"))
-    above, below = html.split("<main>")
+    html, script, render, style = (root / "demo.html").read_text(), (root / "device" / "main.js").read_text(), \
+        (root / "device" / "render.js").read_text(), (root / "device.css").read_text()
     for marker in ('id="device"', 'id="device-orb"', 'id="device-state" class="orb-label" role="status"', 'id="device-heard"',
-                   'id="device-spoken"', 'id="device-chips"', 'id="device-map" viewBox="0 0 240 300" role="img"', 'id="device-bars"'):
-        assert marker in above, marker
-    assert "SHIP-4" not in above and 'class="operator-label">Operator view' in below
-    order = [html.index(f"/assets/{name}") for name in ("markdown.js", "intent.js", "route.js", "device.js", "demo.js")]
+                   'id="device-spoken" class="spoken" aria-live="polite"', 'data-surface="home"', 'data-surface="incident"',
+                   'data-surface="plans"', 'data-surface="confirm"', 'data-surface="receipt"', 'data-surface="alert"', 'data-surface="result"',
+                   'id="mcp-app-slot"', 'id="console-link" href="/console"', 'id="more"', 'role="dialog" aria-modal="true"'):
+        assert marker in html, marker
+    assert "SHIP-4" not in html and "ui://" not in html and "Operator view" not in html and '<header class="device-bar" role="banner">' in html
+    order = [html.index(f"/assets/{name}") for name in ("markdown.js", "intent.js", "route.js", "device/main.js")]
     assert order == sorted(order)
-    assert "innerHTML" not in device and "insertAdjacentHTML" not in device and "document.createElementNS(SVG" in device
+    assert "createElementNS(SVG" in render and 'viewBox: "0 0 240 300", role: "img"' in render
     for hook in ('device("voice", "request")', 'device("voice", "error")', 'device("voice", "listen-start")',
                  'device("voice", "listen-end")', 'device("reply", text, spoken, speaking)', 'device("heard", text)',
-                 "showOnDevice(snapshot);", 'device("mount");'):
+                 'onSurface: (name, payload) => showSurface(name, payload)', 'onReadback: (pending, plan) => showSurface("confirm"',
+                 'onBooking: (booking) => showSurface("receipt", { booking })', 'showSurface("alert", { alert });'):
         assert hook in script, hook
+    commands = _static("app", "commands.js")
+    for hook in ('onSurface("home")', 'onSurface("confirm", { kind: "approval", plan })', 'onSurface("plans")', 'onSurface("result")', 'onSurface("dismiss")'):
+        assert hook in commands, hook
     voice = (root / "app" / "voice.js").read_text()
     assert 'device("voice", "speech-end")' in voice and "current.speechTimer = setTimeout(done, SPEECH_TIMEOUT_MS)" in voice
-    assert "@media (prefers-reduced-motion: reduce) { .orb { animation: none !important; } }" in style
-    assert "@media (max-width: 650px) { .device-screen" in style
+    assert ".orb { animation: none !important; }" in style and "@media (max-width: 900px)" in style
+    console = (root / "console.html").read_text()
+    assert 'id="device-orb"' not in console and "data-surface" not in console
 
 
 def test_the_device_replays_the_recorded_tool_trace_and_the_check():
     root = Path(__file__).resolve().parents[1] / "logiops" / "static"
-    html, script, device = ((root / name).read_text() for name in ("demo.html", "demo.js", "device.js"))
+    html, script, render = (root / "demo.html").read_text(), (root / "device" / "main.js").read_text(), (root / "device" / "render.js").read_text()
     assert 'id="device-elapsed" class="device-elapsed" aria-hidden="true"' in html
-    assert 'aria-label="Steps the agent took, from the recorded tool trace"' in html and 'id="device-check"' in html
+    assert 'aria-label="Steps the agent took, from the recorded tool trace"' in html and 'class="device-check"' in html
     assert script.count("device,") == 1 and _static("app", "commands.js").count('device("trace", run);') == 1
-    assert "From the recorded tool trace · ${steps.length} MCP call" in device
-    assert 'matchMedia("(prefers-reduced-motion: reduce)")' in device and "answered in ${" in device
-    assert '"Checked against the data after one revision"' in device and '"Did not pass the data check"' in device
+    assert "From the recorded tool trace · ${steps.length} MCP call" in render
+    assert 'matchMedia("(prefers-reduced-motion: reduce)")' in script and "answered in ${" in script
+    badges = _static("app", "run-badges.js")
+    assert '"Checked against the data after one revision"' in badges and "Did not pass the data check" in badges
+    assert "check: state.lastRun ? checkBadge(state.lastRun) : null" in script
 
 
 def test_help_and_start_over_follow_the_alexa_guidelines():
@@ -411,7 +433,7 @@ def test_help_and_start_over_follow_the_alexa_guidelines():
         "clear the conversation": (False, True), "help me approve the split plan": (False, False),
         "start over with SHIP-421": (False, False),
     }
-    script, commands = _static("demo.js"), _static("app", "commands.js")
+    script, commands = _static("device", "main.js"), _static("app", "commands.js")
     assert commands.index("isStartOver(text)") < commands.index("const pending = state.pendingApproval;")
     assert "Nothing was changed or approved." in commands and "export const CAPABILITIES_SPOKEN" in _static("app", "capabilities.js")
     assert "agentEvent.data.display_answer || agentEvent.data.answer" in script
@@ -420,13 +442,13 @@ def test_help_and_start_over_follow_the_alexa_guidelines():
 
 
 def test_replies_speak_with_polly_and_stop_when_the_person_talks():
-    script = (Path(__file__).resolve().parents[1] / "logiops" / "static" / "demo.js").read_text()
+    script = _static("device", "main.js")
     voice = (Path(__file__).resolve().parents[1] / "logiops" / "static" / "app" / "voice.js").read_text()
     assert 'fetcher("/voice/speech", { method: "POST", headers, body: JSON.stringify({ text: line }), cache: "no-store" })' in voice
     assert "browserSpeak(line, done);" in voice and 'if (turn !== current.turn) return "dropped";' in voice
     assert _static("app", "commands.js").index("if (!text || state.busy) return;\n    stopSpeaking();") > 0
     assert '$("ask-input").addEventListener("input", () => stopSpeaking());' in script
-    assert "stopSpeaking();\n    mic.textContent = \"Listening…\";" in script
+    assert "stopSpeaking();\n    mic.setAttribute(\"aria-pressed\", \"true\");" in script
     assert "startFiller();" in script and "}, FILLER_DELAY_MS);" in voice and "stop({ quiet: true });" in voice
     assert 'state.voice = await request("/voice/config");' in script and '$("speak-replies").checked = true;' in script
 
@@ -435,7 +457,7 @@ def test_link_account_uses_pkce_s256_and_a_checked_state():
     import json
 
     static = Path(__file__).resolve().parents[1] / "logiops" / "static"
-    script, api = (static / "demo.js").read_text(), (static / "app" / "api.js").read_text()
+    script, api = (static / "device" / "main.js").read_text(), (static / "app" / "api.js").read_text()
     assert "const verifier = randomText(48);" in api and 'randomness().subtle.digest("SHA-256", new TextEncoder().encode(verifier))' in api
     assert 'code_challenge_method: "S256"' in api and "params.get(\"state\") !== pending.state" in api
     assert "vault.remove(OAUTH_KEY);" in api and 'path: `${pending?.returnTo || SIGN_IN_PATH}${pending?.hash || hash}`' in api
@@ -453,7 +475,7 @@ def test_link_account_uses_pkce_s256_and_a_checked_state():
 def test_memory_commands_and_hooks():
     import json
 
-    script = (Path(__file__).resolve().parents[1] / "logiops" / "static" / "demo.js").read_text()
+    script = _static("device", "main.js")
     assert "if (!id || !allowed()) return false;" in (Path(__file__).resolve().parents[1] / "logiops" / "static" / "app" / "memory.js").read_text()
     assert 'if (!state.forgetting && !String(meta || "").startsWith("welcome back")) remember(' in script
     assert "state.forgetting = intent.isForgetMe(text);" in _static("app", "commands.js")

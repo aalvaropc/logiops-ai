@@ -1,0 +1,281 @@
+import { dollars, bookingRows } from "../app/purchase.js";
+import { formatDate, allocationSummary } from "../app/selectors.js";
+import { incidentFacts, confirmDetails, resultFigures, alertDetails } from "./surfaces.js";
+
+const SVG = "http://www.w3.org/2000/svg";
+const WHEN = new Intl.DateTimeFormat("en-US", { timeZone: "America/Lima", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
+const STEP_NAMES = {
+  get_shipment: "Shipment", get_order: "Order", get_inventory: "Stock", find_alternative_carriers: "Carrier quotes",
+  investigate_incident: "Plans calculated", get_execution_status: "Execution status", list_incidents: "Inbox",
+};
+
+export function el(tag, className, text, doc = globalThis.document) {
+  const node = doc.createElement(tag);
+  if (className) node.className = className;
+  if (text !== undefined) node.textContent = text;
+  return node;
+}
+
+function svg(tag, attributes, text, doc = globalThis.document) {
+  const node = doc.createElementNS(SVG, tag);
+  for (const [name, value] of Object.entries(attributes || {})) node.setAttribute(name, String(value));
+  if (text !== undefined) node.textContent = text;
+  return node;
+}
+
+function when(iso) {
+  const time = Date.parse(iso);
+  return Number.isNaN(time) ? "—" : WHEN.format(new Date(time));
+}
+
+function button(text, className, onClick, doc = globalThis.document) {
+  const node = el("button", className, text, doc);
+  node.type = "button";
+  node.addEventListener("click", onClick);
+  return node;
+}
+
+export function renderHome(section, { greeting, lead }, doc = globalThis.document) {
+  section.querySelector(".home-head")?.remove();
+  const head = el("div", "home-head", undefined, doc);
+  head.append(el("p", "label", "Alexa+ · LogiOps", doc), el("p", "lead", lead || greeting, doc));
+  if (lead) head.append(el("p", "sub", greeting, doc));
+  section.prepend(head);
+}
+
+function drawCity(layer, city, role, doc) {
+  const right = city.x < 170;
+  layer.append(
+    svg("circle", { cx: city.x, cy: city.y, r: role ? 3.2 : 2, class: `city${role ? ` city-${role}` : ""}` }, undefined, doc),
+    svg("text", { x: city.x + (right ? 6 : -6), y: city.y + 3, "text-anchor": right ? "start" : "end", class: "city-label" }, city.name, doc),
+  );
+}
+
+export function drawMap(map, caption, snapshot, plan, route, doc = globalThis.document) {
+  map.replaceChildren(
+    svg("title", { id: "device-map-title" }, "Plan route on a map of Peru", doc),
+    svg("path", { d: route.linePath(route.OUTLINE), class: "map-land" }, undefined, doc),
+  );
+  caption.replaceChildren();
+  const shipment = snapshot?.state?.shipment;
+  if (!shipment) return;
+  const origin = route.cityOf(shipment.origin);
+  const destination = route.cityOf(shipment.destination);
+  const legs = route.legsFor(snapshot.state, plan);
+  const layer = svg("g", { class: "legs" }, undefined, doc);
+  const lifts = [0.22, -0.22, 0.42, -0.42];
+  let travelling = 0;
+  if (!legs.length && origin && destination) layer.append(svg("path", { d: route.arc(origin, destination, 0.22), class: "leg leg-delayed" }, undefined, doc));
+  for (const leg of legs) {
+    const className = `leg leg-${leg.type}${leg.late ? " late" : ""}`;
+    if (leg.from && leg.to && leg.from.name === leg.to.name) {
+      layer.append(svg("circle", { cx: leg.to.x, cy: leg.to.y, r: 8, class: className }, undefined, doc));
+    } else if (leg.from && leg.to) {
+      layer.append(svg("path", { d: route.arc(leg.from, leg.to, lifts[travelling % lifts.length]), class: className }, undefined, doc));
+      travelling += 1;
+    }
+  }
+  const cities = svg("g", { class: "cities" }, undefined, doc);
+  const shown = new Set();
+  for (const [city, role] of [[origin, "origin"], [destination, "destination"], ...legs.map((leg) => [leg.from, "source"])]) {
+    if (city && !shown.has(city.name)) {
+      shown.add(city.name);
+      drawCity(cities, city, role, doc);
+    }
+  }
+  map.append(layer, cities);
+  if (!origin || !destination) caption.append(el("span", "muted", `${shipment.origin} → ${shipment.destination} (off the map).`, doc));
+  if (!legs.length) {
+    caption.append(el("span", "muted", origin && destination ? "Delayed route. Investigate to see a plan's legs." : "Investigate to see the plan.", doc));
+    return;
+  }
+  const list = el("ul", "legend", undefined, doc);
+  for (const leg of legs) {
+    const item = el("li", `leg-${leg.type}${leg.late ? " late" : ""}`, undefined, doc);
+    const where = leg.from && leg.to && leg.from.name !== leg.to.name ? `${leg.from.name} → ${leg.to.name}` : `at ${leg.to ? leg.to.name : shipment.destination}`;
+    item.append(el("span", "swatch", undefined, doc), el("span", "", `${leg.label}: ${leg.units} units ${where}, ${when(leg.arrival_eta)}${leg.late ? " · late" : ""}`, doc));
+    list.append(item);
+  }
+  caption.append(list);
+}
+
+export function drawBars(list, plan, route, doc = globalThis.document) {
+  list.replaceChildren();
+  const bars = route.promiseBars(plan);
+  if (!bars.length) {
+    list.append(el("li", "muted", "No plan yet. Ask what's happening with this incident.", doc));
+    return;
+  }
+  for (const bar of bars) {
+    const item = el("li", `promise${bar.on_time ? " on-time" : " late"}`, undefined, doc);
+    const who = el("span", "who", `${bar.customer} · ${bar.quantity} units`, doc);
+    if (bar.priority === "critical") who.append(" ", el("span", "critical-tag", "critical", doc));
+    const track = el("span", "track", undefined, doc);
+    track.setAttribute("aria-hidden", "true");
+    const fill = el("span", "fill", undefined, doc);
+    fill.style.width = `${Math.max(bar.on_time ? 0 : 6, Math.round(bar.ratio * 100))}%`;
+    track.append(fill);
+    const verdict = bar.on_time
+      ? `On time · promised ${when(bar.due_eta)}`
+      : `+${bar.delay_hours} h · ${bar.late_units} units late · promised ${when(bar.due_eta)}`;
+    item.append(who, track, el("span", "verdict", verdict, doc));
+    list.append(item);
+  }
+}
+
+export function renderIncident(section, { snapshot, plan, summary, route }, doc = globalThis.document) {
+  const facts = incidentFacts(snapshot);
+  const head = el("div", "incident-head", undefined, doc);
+  const title = el("h2", "", undefined, doc);
+  title.append(el("span", "incident-id", facts.id, doc), " ", el("span", "status-chip", facts.status, doc));
+  head.append(el("p", "label", summary?.kind_label || "Incident", doc), title, el("p", "incident-title", facts.title, doc),
+    el("p", "incident-route", `${facts.route} · ${facts.units} units of ${facts.sku} · ${facts.orders === 1 ? "1 order" : `${facts.orders} orders`}`, doc));
+  const chips = el("div", "device-chips", undefined, doc);
+  if (summary?.critical_units_at_risk > 0) chips.append(el("span", "device-chip chip-risk", `${summary.critical_units_at_risk} critical units at risk`, doc));
+  if (plan) chips.append(el("span", "device-chip chip-plan", `${plan.label} · $${plan.incremental_cost_usd}`, doc));
+  if (chips.childElementCount) head.append(chips);
+  const facts3 = el("div", "facts", undefined, doc);
+  const fact = (label, value, note, className = "") => {
+    const box = el("div", `fact ${className}`.trim(), undefined, doc);
+    box.append(el("span", "", label, doc), el("strong", "", value, doc), el("small", "", note, doc));
+    return box;
+  };
+  facts3.append(fact("Original ETA", facts.originalEta, facts.promiseLabel), fact("Delayed ETA", facts.delayedEta, `+${facts.delayHours} hours`, "warning"),
+    fact("Local stock", facts.stock ? `${facts.stock.available} units` : "None", facts.stock ? facts.stock.name : "No local warehouse"));
+  const figure = el("figure", "device-map", undefined, doc);
+  const map = svg("svg", { id: "device-map", viewBox: "0 0 240 300", role: "img", "aria-labelledby": "device-map-title" }, undefined, doc);
+  const caption = el("figcaption", "", undefined, doc);
+  caption.id = "device-map-caption";
+  figure.append(map, caption);
+  drawMap(map, caption, snapshot, plan, route, doc);
+  const promise = el("div", "device-promise", undefined, doc);
+  const bars = el("ol", "promise-list", undefined, doc);
+  bars.id = "device-bars";
+  promise.append(el("p", "label", "Promise vs projection", doc), bars);
+  drawBars(bars, plan, route, doc);
+  const grid = el("div", "incident-grid", undefined, doc);
+  grid.append(figure, promise);
+  section.replaceChildren(head, facts3, grid);
+}
+
+export function renderPlanList(container, { plans, selectedId, recommendedId, preferredId, locked, onSelect }, doc = globalThis.document) {
+  container.replaceChildren();
+  container.setAttribute("role", "list");
+  for (const plan of plans) {
+    const item = el("div", `plan${plan.id === selectedId ? " selected" : ""}${plan.id === recommendedId ? " recommended" : ""}`, undefined, doc);
+    item.setAttribute("role", "listitem");
+    const description = el("div", "", undefined, doc);
+    const title = el("strong", "", plan.label, doc);
+    if (plan.id === recommendedId) title.append(el("span", "badge", "Agent pick", doc));
+    if (plan.id === preferredId) title.append(el("span", "badge preference", "Your preference", doc));
+    if (plan.projected_customer_delay_hours === 0) title.append(el("span", "badge", "Zero delay", doc));
+    description.append(title, el("small", "", allocationSummary(plan), doc));
+    const figures = el("div", "plan-figures", undefined, doc);
+    figures.append(el("strong", "", `$${plan.incremental_cost_usd}`, doc), el("small", "", `${plan.projected_customer_delay_hours} h delay · ${formatDate(plan.projected_completion_eta)}`, doc));
+    item.append(description, figures);
+    if (!locked) item.append(button(plan.id === selectedId ? "Selected" : "Select", "plan-select", () => onSelect(plan), doc));
+    container.append(item);
+  }
+}
+
+export function renderConfirm(section, payload, { onYes, onNo }, doc = globalThis.document) {
+  const details = confirmDetails(payload);
+  const card = el("div", `confirm-card ${details.kind}`, undefined, doc);
+  card.append(el("p", "label", details.kind === "purchase" ? "Purchase · nothing charged yet" : "Approval · you decide", doc),
+    el("h2", "", details.title, doc), el("p", "lead", details.lead, doc));
+  const rows = el("dl", "rows", undefined, doc);
+  for (const [term, value] of details.rows) rows.append(el("dt", "", term, doc), el("dd", "", value, doc));
+  card.append(rows);
+  if (details.warning) card.append(el("p", "warning", details.warning, doc));
+  card.append(el("p", "note", details.note, doc));
+  const actions = el("div", "confirm-actions", undefined, doc);
+  const yes = button(details.yes, "primary", onYes, doc);
+  yes.id = "confirm-yes";
+  const no = button(details.no, "secondary", onNo, doc);
+  no.id = "confirm-no";
+  actions.append(yes, no);
+  card.append(actions);
+  section.replaceChildren(card);
+}
+
+export function renderReceipt(section, { booking, onOpen }, doc = globalThis.document) {
+  const card = el("div", "receipt-card", undefined, doc);
+  card.append(el("p", "label", "Receipt · simulated payment", doc), el("h2", "", `Booked ${booking.number}`, doc),
+    el("p", "receipt-total", dollars(booking.total_usd), doc), el("p", "lead", booking.plan_label, doc));
+  const rows = el("dl", "rows", undefined, doc);
+  for (const [term, value] of bookingRows(booking)) rows.append(el("dt", "", term, doc), el("dd", "", value, doc));
+  card.append(rows, el("p", "note", `${String(booking.payment?.method || "").replace(/\s*\(simulated\)$/i, "")} · charged once · delivery is projected, not confirmed`, doc));
+  card.append(button("Open printable receipt", "secondary", onOpen, doc));
+  section.replaceChildren(card);
+}
+
+export function renderAlert(section, alert, doc = globalThis.document) {
+  const details = alertDetails(alert);
+  const card = el("div", "alert-card", undefined, doc);
+  card.append(el("p", "label", details.invalidated ? "Proactive alert · approval invalidated" : "Proactive alert · nothing approved", doc),
+    el("h2", "", details.title, doc), el("p", "lead", details.text, doc));
+  if (details.plan) card.append(el("p", "new-plan", details.plan, doc));
+  section.replaceChildren(card);
+}
+
+export function renderResult(section, { snapshot, execution, plan, booking }, doc = globalThis.document) {
+  const card = el("div", "result-card", undefined, doc);
+  card.append(el("p", "label", "Executed · operationally verified", doc), el("h2", "", plan?.label || execution.plan_id, doc),
+    el("p", "lead", `${snapshot.state.incident_id} · ${snapshot.state.title}`, doc));
+  const figures = el("div", "figures", undefined, doc);
+  for (const item of resultFigures(snapshot, execution)) {
+    const box = el("div", "figure", undefined, doc);
+    box.append(el("strong", "", item.value, doc), el("span", "", item.label, doc));
+    if (item.note) box.append(el("small", "", item.note, doc));
+    figures.append(box);
+  }
+  card.append(figures);
+  if (booking) card.append(el("p", "note", `Booked ${booking.number} · ${dollars(booking.total_usd)} charged once.`, doc));
+  card.append(el("p", "note", "Delivery is projected from synthetic quotes, not physically confirmed.", doc));
+  section.replaceChildren(card);
+}
+
+export function stepLabel(step) {
+  const input = step.input || {};
+  const output = step.output || {};
+  let detail = input.shipment_id || input.order_id || (input.warehouse_id ? `${input.warehouse_id} warehouse` : "");
+  if (step.tool === "investigate_incident" && Array.isArray(output.plans)) detail = `${output.plans.length} plans`;
+  if (step.tool === "list_incidents" && Array.isArray(output.incidents)) detail = `${output.incidents.length} incidents`;
+  if (step.tool === "find_alternative_carriers" && output && !step.is_error) detail = `${Object.keys(output).length} quotes`;
+  return `${STEP_NAMES[step.tool] || step.tool}${detail ? ` · ${detail}` : ""}${step.is_error ? " · error" : ""}`;
+}
+
+export function renderTrace(box, run, { check, reducedMotion = false, setTimeout: schedule = globalThis.setTimeout } = {}, doc = globalThis.document) {
+  const steps = run?.tool_trace || [];
+  box.hidden = !steps.length;
+  const title = box.querySelector(".trace-title");
+  const badge = box.querySelector(".device-check");
+  const list = box.querySelector("ol");
+  list.replaceChildren();
+  title.textContent = `From the recorded tool trace · ${steps.length} MCP call${steps.length === 1 ? "" : "s"}`;
+  badge.textContent = check ? check.text : "";
+  badge.className = `device-check${check ? (check.passed ? " passed" : " failed") : ""}`;
+  badge.hidden = !check;
+  const timers = [];
+  if (run?.skill?.name) list.append(el("li", "skill", `Agent Skill · ${run.skill.name}`, doc));
+  steps.forEach((step, index) => {
+    const item = el("li", step.is_error ? "error" : "", stepLabel(step), doc);
+    if (reducedMotion) list.append(item);
+    else timers.push(schedule(() => list.append(item), index * 220));
+  });
+  return timers;
+}
+
+export function renderTranscript(list, turns, renderMarkdown, doc = globalThis.document) {
+  list.replaceChildren();
+  for (const entry of turns) {
+    const item = el("li", `turn ${entry.role}`, undefined, doc);
+    item.append(el("span", "turn-role", entry.role === "user" ? "You" : "LogiOps", doc));
+    if (entry.role === "assistant") item.append(renderMarkdown(entry.text));
+    else item.append(el("p", "", entry.text, doc));
+    if (entry.check) item.append(el("span", `check-badge${entry.check.passed ? "" : " failed"}`, entry.check.text, doc));
+    if (entry.meta) item.append(el("small", "", entry.meta, doc));
+    list.append(item);
+  }
+  list.scrollTop = list.scrollHeight;
+}

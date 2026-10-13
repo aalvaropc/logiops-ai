@@ -134,7 +134,7 @@
     select.type = "button";
     select.addEventListener("click", () => {
       request("ui/message", { role: "user", content: { type: "text", text: `Select plan ${plan.id}` } })
-        .then(() => { select.textContent = "Selected — approve it in the operator panel"; })
+        .then(() => { select.textContent = "Selected — your host asks you to confirm"; })
         .catch(() => { select.textContent = "The host did not accept the selection"; });
     });
     item.append(text, figures, select);

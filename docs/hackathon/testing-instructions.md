@@ -40,17 +40,23 @@ LOGIOPS_AGENT_MODE=replay uv run uvicorn logiops.api:app --host 127.0.0.1 --port
    through a sandbox proxy that must live on a *different origin*, so the page pairs
    `127.0.0.1` with `localhost`. On any other name (`[::1]`, a LAN IP, a tunnel) the
    card is not shown (it fails closed) and the rest of the demo still works.
-3. **The device screen.** The page opens on a simulated Alexa+ screen above the
-   operator view. Every request below also plays there: the orb moves from
-   Listening (voice) to Thinking (with elapsed seconds) to Speaking or Ready; the
-   heard and spoken lines update; the map draws the plan's legs (late legs in
-   red) with a text legend; the bars compare each order's promise with its
-   projection; the agent's Agent Skill (`logiops-exception-desk`, read over MCP) is listed
-   first, then the steps of the recorded tool trace appear one by one with
-   "Checked against the data". Picking another plan in the operator view
-   redraws the map and bars. The MCP App card highlights the same plan as the
-   panel ("Agent pick"). "Light card" switches the card's theme through the MCP
-   Apps host context, without reloading it.
+3. **The device screen.** `/demo` is a simulated Alexa+ device that shows one
+   card at a time: home (the inbox as a carousel; arrows, swipe or the arrow
+   keys move it, and a tap opens an incident), the incident (ETAs, local stock,
+   the plan's legs on a map of Peru with late legs in red and a text legend, and
+   each order's promise against its projection), the plans (the MCP App card,
+   or a plain list when no second origin is available), a confirmation (Yes /
+   No), the receipt, a proactive alert and the result. Every request below plays
+   on the device: the orb moves from Listening (voice) to Thinking (with elapsed
+   seconds) to Speaking or Ready, and the heard and spoken lines update. "More"
+   opens the whole conversation with the Agent Skill (`logiops-exception-desk`,
+   read over MCP) listed first, then the steps of the recorded tool trace one by
+   one and the "Checked against the data" badge. The MCP App card highlights the
+   same plan as the operator console ("Agent pick"); "Light card" switches the
+   card's theme through the MCP Apps host context, without reloading it. The
+   operator console at `/console` shows the same incident in full (the Approve
+   and Execute buttons, bookings, preferences, the audit trail and the Developer
+   drawer); the link in the top bar of each page keeps the incident.
 4. **Ask.** Type, or speak in Chrome or Edge: "What's happening with SHIP-421?". With
    "Read replies aloud" on, the deployed demo speaks with Amazon Polly (the local replay
    uses the browser's voice), and typing or the microphone cuts it off. The

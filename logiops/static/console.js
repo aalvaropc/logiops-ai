@@ -1,8 +1,6 @@
 "use strict";
 
 import { createApi, createStorage, explainError as explain } from "./app/api.js";
-import { createMcpClient } from "./app/mcp.js";
-import { createMcpAppHost } from "./app/mcp-host.js";
 import { createVoice } from "./app/voice.js";
 import { createMemory } from "./app/memory.js";
 import { describePreferences, mergedPreferences, preferenceLine, preferenceEffect as effectOf } from "./app/preferences.js";
@@ -16,12 +14,13 @@ import {
 } from "./app/selectors.js";
 import { welcomeText as greeting } from "./app/greeting.js";
 import { checkBadge, checkNote, fallbackNote, traceSummary, executionSummary } from "./app/run-badges.js";
+import { renderMarkdown } from "./app/markdown-dom.js";
 
 const $ = (id) => document.getElementById(id);
 const DEFAULT_INCIDENT = "SHIP-421";
 const hashIncident = () => decodeURIComponent(location.hash.slice(1)).trim().toUpperCase() || DEFAULT_INCIDENT;
 const store = createStore({
-  token: "", snapshot: null, selectedPlanId: null, busy: false, conversation: [], speaking: false, app: null,
+  token: "", snapshot: null, selectedPlanId: null, busy: false, conversation: [], speaking: false,
   awaitingExecute: false, pendingApproval: null, incidentId: hashIncident(), inbox: [], conversations: {}, selections: {}, stockFor: null,
   briefingPick: null, prefsShown: undefined, cardTheme: "dark",
   voice: { engine: "browser", voice: null, fillers: [] }, speechTurn: 0, auth: { enabled: false }, session: null,
@@ -29,18 +28,6 @@ const store = createStore({
 });
 const state = store.state;
 const incidentPath = (suffix = "") => `/incidents/${encodeURIComponent(state.incidentId)}${suffix}`;
-const device = (method, ...args) => {
-  const api = window.LogiOpsDevice;
-  if (api && typeof api[method] === "function") api[method](...args);
-};
-const MCP_APP = { uriPrefix: "ui://logiops/resolution-options", proxyPath: "/mcp-app/sandbox.html" };
-const SANDBOX_ORIGIN = (() => {
-  const value = document.querySelector('meta[name="logiops-sandbox-origin"]')?.content || "";
-  try {
-    const url = new URL(value);
-    return /^https?:$/.test(url.protocol) && url.origin !== location.origin ? url.origin : null;
-  } catch (_) { return null; }
-})();
 function message(text, success = false) {
   const box = $("message");
   box.textContent = text;
@@ -69,12 +56,10 @@ const api = createApi({
   },
   onAgentCall: (phase) => {
     if (phase === "request") {
-      device("voice", "request");
       startFiller();
       return;
     }
     voice.cancelFiller();
-    if (phase === "error") device("voice", "error");
   },
 });
 const { request, storedToken, storeToken, readSession, keepSession, signOut, randomText } = api;
@@ -122,113 +107,12 @@ async function linkAccount() {
     say("assistant", "Sign-in isn't set up on this server, so the demo already acts as the operator.");
     return;
   }
-  const url = await api.beginSignIn({ hash: location.hash, returnTo: location.pathname === "/console" ? "/console" : null });
+  const url = await api.beginSignIn({ hash: location.hash, returnTo: "/console" });
   if (!url) {
     say("assistant", "This browser blocks session storage, so I can't sign you in here.");
     return;
   }
   location.assign(url);
-}
-async function finishSignIn() {
-  const outcome = await api.finishSignIn({ search: location.search, hash: location.hash });
-  if (!outcome) return;
-  if (outcome.path.startsWith("/console")) {
-    location.replace(outcome.path);
-    return new Promise(() => {});
-  }
-  history.replaceState(null, "", outcome.path);
-  state.signInNote = outcome.note;
-}
-
-const mcpClient = createMcpClient({ getToken: () => state.token });
-const mcpRequest = (method, params) => mcpClient.request(method, params);
-
-function hostContext() {
-  const slot = $("mcp-app-slot");
-  const width = Math.round(slot?.clientWidth || window.innerWidth);
-  return {
-    theme: state.cardTheme, displayMode: "inline", availableDisplayModes: ["inline"],
-    containerDimensions: { width, maxHeight: 640 }, locale: navigator.language || "en-US", timeZone: "America/Lima",
-    platform: "web", deviceClass: width < 480 ? "compact" : "regular",
-    deviceCapabilities: { touch: matchMedia("(pointer: coarse)").matches, hover: matchMedia("(hover: hover)").matches },
-    safeAreaInsets: { top: 0, right: 0, bottom: 0, left: 0 },
-  };
-}
-
-const mcpHost = $("mcp-app-slot") && createMcpAppHost({
-  sandboxOrigin: SANDBOX_ORIGIN, hostOrigin: location.origin, proxyPath: MCP_APP.proxyPath, slot: $("mcp-app-slot"),
-  mcp: mcpClient, uriPrefix: MCP_APP.uriPrefix, hostInfo: { name: "LogiOps Alexa+-style demo", version: "1.0.0" },
-  hostContext, frameTitle: "Resolution options (MCP App)",
-  onMessage: (params) => selectFromApp(params),
-  onHide: () => { $("mcp-app").hidden = true; },
-});
-
-async function showMcpApp(run) {
-  const step = run.tool_trace?.find((item) => item.tool === "investigate_incident" && !item.is_error);
-  if (!step || !mcpHost) return;
-  if (!SANDBOX_ORIGIN) {
-    console.info("MCP App not shown: no sandbox origin separate from this page is configured.");
-    showMcpAppNote("The interactive card needs a second origin for its sandbox, and none is available on this address. "
-      + "Open the demo on 127.0.0.1 or localhost, or on the deployed hostname. The plans are listed below.");
-    return;
-  }
-  const wanted = { incidentId: state.incidentId, version: step.output.source_version };
-  const resource = await mcpHost.show({
-    toolName: "investigate_incident", input: step.input,
-    result: {
-      content: [{ type: "text", text: JSON.stringify(step.output) }], structuredContent: step.output,
-      _meta: { "logiops/recommended_plan_id": recommendedPlan(state.snapshot)?.id || null },
-    },
-    stillWanted: () => Boolean(state.snapshot) && String(step.input?.shipment_id || "").trim().toUpperCase() === state.incidentId
-      && wanted.version === visibleVersion(state.snapshot),
-  });
-  if (!resource) return;
-  state.app = wanted;
-  $("mcp-app-uri").textContent = resource.uri;
-  $("mcp-app-status").textContent = resource.invoked ? `· ${resource.invoked}` : "";
-  $("mcp-app").classList.toggle("borderless", !resource.prefersBorder);
-  $("mcp-app").hidden = false;
-}
-
-function hideMcpApp(reason = "hidden") {
-  state.app = null;
-  if (mcpHost) mcpHost.hide(reason);
-}
-
-function showMcpAppNote(text) {
-  state.app = null;
-  if (!mcpHost) return;
-  mcpHost.hide("note");
-  const note = document.createElement("p");
-  note.className = "mcp-app-note";
-  note.textContent = text;
-  $("mcp-app-slot").replaceChildren(note);
-  $("mcp-app-status").textContent = "";
-  $("mcp-app").hidden = false;
-}
-
-$("mcp-app-theme")?.addEventListener("click", () => {
-  state.cardTheme = state.cardTheme === "dark" ? "light" : "dark";
-  $("mcp-app-theme").setAttribute("aria-pressed", String(state.cardTheme === "light"));
-  mcpHost.notifyContext();
-});
-let contextTimer = 0;
-window.addEventListener("resize", () => {
-  clearTimeout(contextTimer);
-  contextTimer = setTimeout(() => mcpHost?.notifyContext(), 200);
-});
-
-function selectFromApp(params) {
-  const text = params?.content?.type === "text" ? String(params.content.text) : "";
-  const match = text.match(/^Select plan (\S+)$/);
-  if (!match || !state.snapshot || state.busy) return false;
-  const plan = visiblePlans(state.snapshot).find((item) => item.id === match[1]);
-  if (!plan || visibleApproval(state.snapshot) || state.snapshot.executions.length) return false;
-  state.selectedPlanId = plan.id;
-  renderPlans(state.snapshot);
-  renderControls();
-  message(`“${plan.label}” selected from the MCP App. Approve it with the operator button below.`, true);
-  return true;
 }
 
 function recommendedPlan(snapshot) {
@@ -268,7 +152,6 @@ function renderPlans(snapshot) {
     radio.addEventListener("change", () => {
       state.selectedPlanId = plan.id;
       renderPlans(snapshot);
-      showOnDevice(snapshot);
       renderControls();
     });
     const description = document.createElement("div");
@@ -362,61 +245,6 @@ function renderTimeline(events) {
   $("event-count").textContent = `${events.length} event${events.length === 1 ? "" : "s"}`;
 }
 
-function inlineNodes(parts) {
-  return parts.map((part) => {
-    if (part.t === "text") return document.createTextNode(part.v);
-    const node = document.createElement(part.t === "strong" ? "strong" : part.t === "em" ? "em" : "code");
-    node.textContent = part.v;
-    return node;
-  });
-}
-
-function renderMarkdown(source) {
-  const box = document.createElement("div");
-  box.className = "markdown";
-  const blocks = window.LogiOpsMarkdown.parseBlocks(source);
-  const top = Math.min(...blocks.filter((block) => block.type === "h").map((block) => block.level));
-  let previous = 2;
-  for (const block of blocks) {
-    let node;
-    if (block.type === "hr") node = document.createElement("hr");
-    else if (block.type === "h") {
-      const level = Math.min(6, previous + 1, 3 + block.level - top);
-      previous = level;
-      node = document.createElement(`h${level}`);
-      node.append(...inlineNodes(block.inline));
-    }
-    else if (block.type === "quote") { node = document.createElement("blockquote"); node.append(...inlineNodes(block.inline)); }
-    else if (block.type === "ul" || block.type === "ol") {
-      node = document.createElement(block.type);
-      for (const item of block.items) { const li = document.createElement("li"); li.append(...inlineNodes(item)); node.append(li); }
-    } else if (block.type === "table") {
-      node = document.createElement("div");
-      node.className = "table-scroll";
-      node.tabIndex = 0;
-      node.setAttribute("role", "region");
-      node.setAttribute("aria-label", "Table from the agent's answer");
-      const table = document.createElement("table");
-      node.append(table);
-      const head = table.createTHead().insertRow();
-      for (const cell of block.head) {
-        const empty = cell.every((part) => !part.v.trim());
-        const th = document.createElement(empty ? "td" : "th");
-        if (!empty) th.scope = "col";
-        th.append(...inlineNodes(cell));
-        head.append(th);
-      }
-      const body = table.createTBody();
-      for (const row of block.rows) {
-        const tr = body.insertRow();
-        for (const cell of row) tr.insertCell().append(...inlineNodes(cell));
-      }
-    } else { node = document.createElement("p"); node.append(...inlineNodes(block.inline)); }
-    box.append(node);
-  }
-  return box;
-}
-
 function renderConversation() {
   const list = $("conversation");
   list.replaceChildren();
@@ -471,20 +299,15 @@ function say(role, text, meta, spoken, check) {
   state.conversation.push({ role, text, meta, check });
   renderConversation();
   if (!state.forgetting && !String(meta || "").startsWith("welcome back")) remember(role, role === "assistant" ? (spoken || window.LogiOpsMarkdown.plainText(text)) : text);
-  if (role !== "assistant") {
-    device("heard", text);
-    return;
-  }
-  const speaking = speechOn();
-  device("reply", text, spoken, speaking);
-  if (speaking) speak(spoken || window.LogiOpsMarkdown.plainText(text));
+  if (role !== "assistant") return;
+  if (speechOn()) speak(spoken || window.LogiOpsMarkdown.plainText(text));
 }
 
 function speechOn() {
   return $("speak-replies").checked && (state.voice.engine === "polly" || "speechSynthesis" in window);
 }
 
-const voice = createVoice({ getToken: () => state.token, getConfig: () => state.voice, isEnabled: speechOn, device });
+const voice = createVoice({ getToken: () => state.token, getConfig: () => state.voice, isEnabled: speechOn });
 const stopSpeaking = (options) => voice.stop(options);
 const speak = (line, options) => voice.speak(line, options);
 const startFiller = () => voice.startFiller();
@@ -500,11 +323,6 @@ async function loadVoice() {
     $("speak-replies").checked = true;
     $("speak-engine").textContent = ` (Amazon Polly · ${state.voice.voice})`;
   }
-}
-
-function showOnDevice(snapshot) {
-  const plan = visiblePlans(snapshot).find((item) => item.id === state.selectedPlanId) || null;
-  device("show", snapshot, plan, state.inbox.find((item) => item.incident_id === snapshot.state.incident_id));
 }
 
 function renderControls() {
@@ -560,7 +378,6 @@ function renderInbox() {
 
 function render(snapshot) {
   state.snapshot = snapshot;
-  if (state.app && (state.app.incidentId !== snapshot.state.incident_id || state.app.version !== visibleVersion(snapshot))) hideMcpApp();
   $("connection").textContent = "Connected";
   $("connection").className = "connection ready";
   renderInbox();
@@ -598,7 +415,6 @@ function render(snapshot) {
   renderPreferenceLine(snapshot);
   renderPreferences(snapshot);
   renderPlans(snapshot);
-  showOnDevice(snapshot);
   renderTimeline(snapshot.events);
   const execution = snapshot.executions[0];
   $("execution-state").textContent = execution ? "Operationally verified" : visibleApproval(snapshot) ? "Approved · ready" : "Waiting for approval";
@@ -645,7 +461,6 @@ async function selectIncident(id) {
   state.pendingApproval = null;
   purchase.take();
   history.replaceState(null, "", `#${encodeURIComponent(id)}`);
-  hideMcpApp("incident changed");
   await act(refresh, "");
   renderAlertBell();
 }
@@ -698,7 +513,6 @@ function showBooking(booking) {
   if (!booking) {
     box.hidden = true;
     box.replaceChildren();
-    device("receipt", null);
     return;
   }
   const head = document.createElement("p");
@@ -720,7 +534,6 @@ function showBooking(booking) {
   open.addEventListener("click", () => openReceipt(booking.number).catch((error) => message(error.message || String(error))));
   box.replaceChildren(head, list, open);
   box.hidden = false;
-  device("receipt", booking);
 }
 
 async function openReceipt(number) {
@@ -743,7 +556,7 @@ const commands = createCommands({
   selectors: { visiblePlans, visibleApproval, namedPlanKinds, latestAgentEvent, visibleVersion, planFromUtterance: (text) => planFromUtterance(text) },
   badges: { checkBadge, traceSummary, executionSummary, noteCheck, noteFallback },
   preferences: { describe: describePreferences, effect: effectOf },
-  say, act, device, stopSpeaking, selectIncident, hideMcpApp, showMcpApp, showMcpAppNote, onInbox: () => renderInbox(),
+  say, act, stopSpeaking, selectIncident, onInbox: () => renderInbox(),
   approvePlan, executeApproved, savePreferences, linkAccount, signOut,
 });
 
@@ -769,7 +582,6 @@ function setUpVoice() {
   recognition.addEventListener("end", () => {
     mic.textContent = "Speak";
     mic.setAttribute("aria-pressed", "false");
-    device("voice", "listen-end");
   });
   recognition.addEventListener("error", (event) => {
     if (event.error !== "no-speech" && event.error !== "aborted") message(`Voice input unavailable: ${event.error}`);
@@ -782,7 +594,6 @@ function setUpVoice() {
     stopSpeaking();
     mic.textContent = "Listening…";
     mic.setAttribute("aria-pressed", "true");
-    device("voice", "listen-start");
     recognition.start();
   });
 }
@@ -801,7 +612,6 @@ $("reset").addEventListener("click", () => act(async () => {
     selectedPlanId: null, conversation: [], conversations: {}, selections: {}, stockFor: null,
     briefingPick: null, prefsShown: undefined,
   });
-  hideMcpApp();
 }, "Every synthetic incident was reset, and the saved preferences were cleared.").catch(() => {}));
 $("pref-form").addEventListener("submit", (event) => {
   event.preventDefault();
@@ -820,7 +630,6 @@ $("banner-reset").addEventListener("click", () => act(async () => {
   forgetPurchase();
   await request("/demo/reset", "POST", { incident_id: state.incidentId });
   store.set({ selectedPlanId: null, conversation: [], stockFor: null });
-  hideMcpApp();
 }, "This incident was reset.").catch(() => {}));
 window.addEventListener("hashchange", () => {
   const id = hashIncident();
@@ -861,7 +670,6 @@ $("approve").addEventListener("click", () => act(
 ).catch(() => {}));
 $("execute").addEventListener("click", () => act(executeApproved, "Execution was operationally verified.").catch(() => {}));
 
-device("mount");
 setUpVoice();
 renderConversation();
 state.token = storedToken();
@@ -871,8 +679,7 @@ if (resumed) {
   state.token = resumed.access;
 }
 setInterval(() => { checkAlerts().catch(() => {}); }, 5000);
-loadAuth().then(finishSignIn).catch(() => {}).then(() => act(refresh, "").catch(() => {})).then(() => {
-  if (state.signInNote) say("assistant", state.signInNote);
+loadAuth().catch(() => {}).then(() => act(refresh, "").catch(() => {})).then(() => {
   if (state.session) $("approver").value = state.session.username;
   loadVoice();
   recallMemory();

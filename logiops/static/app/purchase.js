@@ -38,7 +38,10 @@ export function bookingRows(booking) {
   ];
 }
 
-export function createPurchase({ storage, request, api, selectors, crypto: webCrypto, now = () => Date.now(), snapshot, incidentId, say, act, approvePlan, onBooking = () => {} }) {
+export function createPurchase({
+  storage, request, api, selectors, crypto: webCrypto, now = () => Date.now(), snapshot, incidentId, say, act, approvePlan,
+  onBooking = () => {}, onReadback = () => {},
+}) {
   let pending = null;
 
   function stored() {
@@ -101,6 +104,7 @@ export function createPurchase({ storage, request, api, selectors, crypto: webCr
     keep(purchase);
     const read = readback(purchase, plan);
     say("assistant", read.text, "price read-back · nothing charged yet", read.spoken);
+    onReadback(purchase, plan);
     return purchase;
   }
 
@@ -165,6 +169,7 @@ export function createPurchase({ storage, request, api, selectors, crypto: webCr
     keep(parked);
     const read = readback(parked, plan);
     say("assistant", read.text, "price read-back · nothing charged yet", read.spoken);
+    onReadback(parked, plan);
     return parked;
   }
 

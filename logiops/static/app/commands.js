@@ -10,7 +10,7 @@ export function approvalReadback(plan) {
 export function createCommands({
   store, intent, request, purchase, selectors, badges, preferences, say, act, device = () => {}, stopSpeaking = () => {},
   selectIncident, hideMcpApp = () => {}, showMcpApp = async () => {}, showMcpAppNote = () => {}, onInbox = () => {},
-  approvePlan, executeApproved, savePreferences, linkAccount = async () => {}, signOut = () => {}, onRun = () => {},
+  approvePlan, executeApproved, savePreferences, linkAccount = async () => {}, signOut = () => {}, onRun = () => {}, onSurface = () => {},
 }) {
   const state = store.state;
   const incidentPath = (suffix = "") => `/incidents/${encodeURIComponent(state.incidentId)}${suffix}`;
@@ -41,6 +41,7 @@ export function createCommands({
       hideMcpApp();
       say("assistant", "Okay, starting over. Nothing was changed or approved. Ask about your queue, or about an incident.",
         undefined, "Okay, starting over. Nothing was changed.");
+      onSurface("home");
       return;
     }
     if (intent.isCapabilities(text)) {
@@ -76,6 +77,7 @@ export function createCommands({
         onInbox();
         say("assistant", run.answer, `briefing · ${badges.traceSummary(run)}`, run.spoken, badges.checkBadge(run));
         runNotes(run);
+        onSurface("home", { lead: run.spoken || run.answer, pick: run.start_with });
       } catch (error) {
         say("assistant", `I couldn't do that: ${error.message || error}`);
       }
@@ -101,6 +103,7 @@ export function createCommands({
         state.conversation = [];
         hideMcpApp();
         say("assistant", `Done. ${id} is back to its original state.`);
+        onSurface("incident");
       } else if (command === "book") {
         await purchase.start(lower);
       } else if (command === "confirm" && pendingPurchase) {
@@ -112,6 +115,7 @@ export function createCommands({
         } else {
           say("assistant", pending ? "Okay, nothing was approved." : "Okay. Ask me anything else about the queue or this incident.");
         }
+        onSurface("dismiss");
       } else if (command === "forget_me") {
         if (state.auth.enabled && !state.session) {
           say("assistant", "I don't remember guests, so there's nothing to forget.");
@@ -159,6 +163,7 @@ export function createCommands({
         }
         state.pendingApproval = { planId: plan.id, sourceVersion: plan.source_version };
         say("assistant", `${approvalReadback(plan)} Say “yes” to approve it, or ask me anything else.`);
+        onSurface("confirm", { kind: "approval", plan });
       } else if (command === "confirm" && pending) {
         const plan = selectors.visiblePlans(state.snapshot)
           .find((item) => item.id === pending.planId && item.source_version === pending.sourceVersion);
@@ -174,6 +179,7 @@ export function createCommands({
         }
         say("assistant", `Approved “${plan.label}” for version ${plan.source_version}. Say “execute it” when you're ready.`);
         state.awaitingExecute = true;
+        onSurface("plans");
       } else if (command === "execute" || (command === "confirm" && awaitingExecute && selectors.visibleApproval(state.snapshot))) {
         const approval = selectors.visibleApproval(state.snapshot);
         const approved = approval && state.snapshot.plans.find((plan) => plan.id === approval.plan_id);
@@ -190,6 +196,7 @@ export function createCommands({
         await act(executeApproved, "");
         const execution = state.snapshot.executions[0];
         say("assistant", `The plan was executed. ${badges.executionSummary(state.snapshot, execution)} Delivery is projected, not physically confirmed.`);
+        onSurface("result");
       } else if (command === "confirm") {
         say("assistant", "Nothing is waiting for a “yes” right now. Say “approve the recommended plan” or “book it”, and I'll read it back first.");
       } else {
@@ -211,6 +218,7 @@ export function createCommands({
         say("assistant", run.answer, `${fresh ? "investigation" : "follow-up"} · ${badges.traceSummary(run)}`, run.spoken, badges.checkBadge(run));
         runNotes(run);
         if (fresh) {
+          onSurface("plans");
           showMcpApp(run).catch((error) => {
             showMcpAppNote(`The interactive card could not be loaded (${error?.message || error}). The plans are listed below.`);
           });
