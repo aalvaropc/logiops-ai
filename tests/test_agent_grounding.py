@@ -147,7 +147,8 @@ def test_a_follow_up_may_quote_the_question_and_the_record(tmp_path, monkeypatch
     assert claimed["grounded"] is False and "I executed" in claimed["evaluations"][0]["issues"][0]
 
 
-def test_the_briefing_is_checked_against_every_incident(tmp_path):
+def test_the_briefing_is_checked_against_every_incident(tmp_path, monkeypatch):
+    monkeypatch.setenv("LOGIOPS_SCENARIO_ANCHOR", "fixed")
     good = ("SHIP-433 first: 12 critical units at risk for ORD-433A, due Oct 13, 12:00 Lima time, +24 h. "
             "SHIP-460 next: 45 units.\n\nStart with: SHIP-433\nSpoken: Start with SHIP-433.")
     model = Replies(good.replace("SHIP-460 next", "SHIP-999 next"), good, briefing=True)
