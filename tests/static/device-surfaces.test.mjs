@@ -59,7 +59,7 @@ test("confirmation cards read back exactly what a yes would do", () => {
   assert.equal(approval.yes, "Yes, approve");
   const late = confirmDetails({ kind: "approval", plan: { ...plans[0], orders: [{ ...plans[0].orders[0], priority: "critical" }] } });
   assert.equal(late.warning, "It leaves the critical order for store late.");
-  const quote = { plan_label: plans[1].label, base_usd: 120, service_fee_usd: 5, igv_usd: 22.5, total_usd: 147.5, payment_method: "Corporate card ending 4242 (simulated)" };
+  const quote = { plan_label: plans[1].label, base_usd: 120, service_fee_usd: 5, tax_label: "Tax 18%", tax_usd: 22.5, total_usd: 147.5, payment_method: "Corporate card ending 4242 (simulated)" };
   const pay = confirmDetails({ kind: "purchase", purchase: { approve: true, quote }, plan: plans[1] });
   assert.equal(pay.title, "Approve and pay?");
   assert.deepEqual(pay.rows.at(-1), ["Total", "$147.50"]);

@@ -1,28 +1,10 @@
 (function (root) {
-  const VIEW = { width: 240, height: 300 };
-  const BOUNDS = { west: -81.6, east: -68.4, north: 0.2, south: -18.6 };
+  const VIEW = { width: 240, height: 210 };
+  const ROW = { top: 54, bottom: VIEW.height - 54 };
 
-  function project(lat, lon) {
-    const x = 10 + ((lon - BOUNDS.west) / (BOUNDS.east - BOUNDS.west)) * (VIEW.width - 20);
-    const y = 10 + ((BOUNDS.north - lat) / (BOUNDS.north - BOUNDS.south)) * (VIEW.height - 20);
-    return { x: Math.round(x * 10) / 10, y: Math.round(y * 10) / 10 };
+  function round(value) {
+    return Math.round(value * 10) / 10;
   }
-
-  const CITIES = Object.fromEntries([
-    ["Lima", -12.05, -77.04],
-    ["Callao", -12.06, -77.15],
-    ["Arequipa", -16.41, -71.54],
-    ["Cusco", -13.53, -71.97],
-    ["Trujillo", -8.11, -79.03],
-  ].map(([name, lat, lon]) => [name, { name, lat, lon, ...project(lat, lon) }]));
-
-  const OUTLINE = [
-    [-3.4, -80.3], [-4.3, -81.3], [-5.1, -81.1], [-6.8, -79.9], [-8.1, -79.0], [-9.1, -78.6], [-11.1, -77.6],
-    [-12.1, -77.2], [-13.7, -76.2], [-15.4, -75.1], [-16.6, -72.7], [-17.6, -71.3], [-18.3, -70.4],
-    [-17.3, -69.5], [-16.2, -68.9], [-14.2, -68.9], [-12.5, -68.7], [-11.0, -69.6], [-10.0, -71.4],
-    [-9.4, -72.7], [-7.5, -73.9], [-5.2, -73.1], [-4.2, -70.0], [-2.4, -71.0], [-0.1, -75.2],
-    [-1.5, -76.7], [-2.6, -78.2], [-3.4, -80.3],
-  ].map(([lat, lon]) => project(lat, lon));
 
   const SHIPMENT_SOURCE = "delayed-shipment";
   const LEG_LABELS = {
@@ -40,9 +22,14 @@
     return "unknown";
   }
 
-  function cityOf(name) {
-    const key = String(name || "").toLowerCase();
-    return Object.values(CITIES).find((city) => city.name.toLowerCase() === key) || null;
+  function placeName(name) {
+    const text = String(name || "").trim();
+    return text && text === text.toLowerCase() ? text.charAt(0).toUpperCase() + text.slice(1) : text;
+  }
+
+  function shortName(name, limit = 14) {
+    const text = String(name || "");
+    return text.length > limit ? `${text.slice(0, limit - 1)}…` : text;
   }
 
   function legsFor(state, plan) {
@@ -52,11 +39,11 @@
     const legs = new Map();
     for (const item of plan.allocations || []) {
       const type = legType(item.source);
-      const from = type === "local" ? cityOf(item.source.replace(/-stock$/, "")) : cityOf(shipment.origin);
+      const from = { name: placeName(type === "local" ? item.source.replace(/-stock$/, "") : shipment.origin) };
       const late = Date.parse(item.arrival_eta) > Date.parse(dueBy[item.order_id]);
       const leg = legs.get(item.source) || {
         source: item.source, type, label: LEG_LABELS[type] || item.source,
-        from, to: cityOf(shipment.destination), units: 0, arrival_eta: item.arrival_eta, late: false, orders: [],
+        from, to: { name: placeName(shipment.destination) }, units: 0, arrival_eta: item.arrival_eta, late: false, orders: [],
       };
       leg.units += item.units;
       leg.late = leg.late || late;
@@ -65,6 +52,27 @@
       legs.set(item.source, leg);
     }
     return [...legs.values()];
+  }
+
+  function layout(shipment, legs) {
+    const key = (name) => String(name).toLowerCase();
+    const destinationName = placeName(shipment.destination);
+    const originName = placeName(shipment.origin);
+    const names = [];
+    for (const name of [originName, ...legs.map((leg) => leg.from.name)]) {
+      if (name && key(name) !== key(destinationName) && !names.some((known) => key(known) === key(name))) names.push(name);
+    }
+    const step = names.length > 1 ? (VIEW.width - 88) / (names.length - 1) : 0;
+    const places = names.map((name, index) => ({
+      name, role: key(name) === key(originName) ? "origin" : "source",
+      x: round(names.length > 1 ? 44 + index * step : VIEW.width / 2), y: ROW.top,
+    }));
+    const destination = { name: destinationName, role: "destination", x: VIEW.width / 2, y: ROW.bottom };
+    const find = (name) => places.find((place) => key(place.name) === key(name)) || destination;
+    return {
+      places, destination,
+      legs: legs.map((leg) => ({ ...leg, from: find(leg.from.name), to: destination, loop: key(leg.from.name) === key(destinationName) })),
+    };
   }
 
   function promiseBars(plan, scaleHours = 48) {
@@ -94,10 +102,6 @@
     return { state: next, label: VOICE_LABELS[next] || VOICE_LABELS.ready };
   }
 
-  function linePath(points) {
-    return points.map((point, index) => `${index ? "L" : "M"}${point.x} ${point.y}`).join(" ") + " Z";
-  }
-
   function arc(from, to, lift = 0.25) {
     if (!from || !to) return "";
     const midX = (from.x + to.x) / 2;
@@ -107,7 +111,7 @@
     return `M${from.x} ${from.y} Q${Math.round((midX - dy * lift) * 10) / 10} ${Math.round((midY + dx * lift) * 10) / 10} ${to.x} ${to.y}`;
   }
 
-  const api = { VIEW, CITIES, OUTLINE, LEG_LABELS, VOICE_LABELS, project, legType, cityOf, legsFor, promiseBars, voiceState, linePath, arc };
+  const api = { VIEW, LEG_LABELS, VOICE_LABELS, legType, placeName, shortName, legsFor, layout, promiseBars, voiceState, arc };
   if (typeof module === "object" && module.exports) module.exports = api;
   else root.LogiOpsRoute = api;
 })(typeof window === "undefined" ? globalThis : window);

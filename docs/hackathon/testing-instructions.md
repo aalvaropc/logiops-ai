@@ -44,7 +44,7 @@ LOGIOPS_AGENT_MODE=replay uv run uvicorn logiops.api:app --host 127.0.0.1 --port
 3. **The device screen.** `/demo` is a simulated Alexa+ device that shows one
    card at a time: home (the inbox as a carousel; arrows, swipe or the arrow
    keys move it, and a tap opens an incident), the incident (ETAs, local stock,
-   the plan's legs on a map of Peru with late legs in red and a text legend, and
+   the plan's legs on a route diagram with late legs in red and a text legend, and
    each order's promise against its projection), the plans (the MCP App card,
    or a plain list when no second origin is available), a confirmation (Yes /
    No), the receipt, a proactive alert and the result. Every request below plays
@@ -64,7 +64,7 @@ LOGIOPS_AGENT_MODE=replay uv run uvicorn logiops.api:app --host 127.0.0.1 --port
    agent calls the MCP tools and the reply lists three plans: wait ($0, 12 h late),
    reroute ($80, 3 h late), split + express ($120, on time). The plans card shows the
    **MCP App** with the three plans. What you read and hear names plans by their
-   label and times in Lima time; the exact plan ids stay in the audit trail. Say "what
+   label and times in local time; the exact plan ids stay in the audit trail. Say "what
    can you do?" for a summary of the commands, and "start over" to clear the
    conversation (it changes no data; "reset this incident" restores the incident).
 5. **Select, then approve.** "Select for approval" on the card reads that plan back
@@ -117,7 +117,7 @@ LOGIOPS_AGENT_MODE=replay uv run uvicorn logiops.api:app --host 127.0.0.1 --port
    `plan_id` and `source_version`: the response is identical and nothing is duplicated.
 12. **Book and pay by voice.** On SHIP-421, after the investigation, say or type "book it"
    (or press "Book and pay"). LogiOps reads back the plan, its delay and the price:
-   carriers and services, service fee, IGV 18% and total, and the card it goes to.
+   carriers and services, service fee, tax and total, and the card it goes to.
    Nothing is charged until you say "yes". That one "yes" approves the plan and pays:
    - you get a confirmation number, spoken character by character;
    - the receipt is a card on the device and a panel on the console, with "Open
@@ -150,7 +150,7 @@ LOGIOPS_AGENT_MODE=replay uv run uvicorn logiops.api:app --host 127.0.0.1 --port
    OAuth-capable client (PKCE S256).
 16. **Book and pay the carriers (API).** With a plan approved (for example SHIP-421's split +
    express), run `POST /incidents/SHIP-421/bookings/quote`. The quote reads "carriers
-   and services $120.00, service fee $5.00, IGV 18% $22.50, total $147.50". Confirm it
+   and services $120.00, service fee $5.00, Tax 18% $22.50, total $147.50". Confirm it
    with `POST /quotes/{quote_id}/confirm` and `{"confirmed_total_usd": 147.50,
    "idempotency_key": "judge-1"}`:
    - you get a confirmation number `LGO-…`, and `GET /bookings/{number}/receipt` is the
@@ -188,5 +188,5 @@ Run `aws login --region us-east-1` and start the server without
 `LOGIOPS_AGENT_MODE`; the meta line under each reply then says `bedrock mode` and
 shows real token counts. The live demo shares a daily budget of model calls: if a busy
 day has used it, replies say "replay mode · daily live budget used" and a note above the
-conversation explains it; live answers return after midnight, Lima time. The hosted deployment on AWS is listed in the
+conversation explains it; live answers return after midnight (UTC-05:00). The hosted deployment on AWS is listed in the
 submission's testing instructions, together with its access token.

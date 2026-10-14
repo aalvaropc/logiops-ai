@@ -36,7 +36,7 @@ def test_sqlite_recalls_the_previous_session_and_forgets(tmp_path):
     recalled = memory.recall(JUDGE, "s-today-1")
     assert [turn["text"] for turn in recalled["turns"]] == ["book it", "Booked “Fly the hospital order”. Confirmation number LGO-ABC234."]
     assert recalled["last_incident"] == "SHIP-433" and recalled["backend"] == "sqlite"
-    assert recalled["welcome"].startswith("Welcome back, judge. Last time (Oct 12, 14:05 Lima time) we were on SHIP-433 and you said “book it”.")
+    assert recalled["welcome"].startswith("Welcome back, judge. Last time (Oct 12, 14:05 local time) we were on SHIP-433 and you said “book it”.")
     assert memory.recall(JUDGE, "s-yesterday")["turns"][0]["text"] == "hi again"
     assert memory.forget(JUDGE) == 3 and memory.recall(JUDGE, "s-today-1")["turns"] == []
     assert memory.recall(OPERATOR, "s-other")["turns"][0]["text"] == "someone else"

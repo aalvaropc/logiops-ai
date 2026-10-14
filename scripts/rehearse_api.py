@@ -101,8 +101,8 @@ def walk(client: httpx.Client) -> None:
     check("executing it accounts for both orders (30 units)", done.status_code == 200 and done.json()["accounted_units"] == 30)
     quoted = post("/incidents/SHIP-433/bookings/quote")
     quote = quoted.json() if quoted.status_code == 200 else {}
-    check("booking its carriers is quoted with IGV: $390 + $5 fee + $71.10 = $466.10",
-          quote.get("total_usd") == 466.1 and "IGV 18% $71.10" in quote.get("summary", ""), quoted.text[:120])
+    check("booking its carriers is quoted with tax: $390 + $5 fee + $71.10 = $466.10",
+          quote.get("total_usd") == 466.1 and "Tax 18% $71.10" in quote.get("summary", ""), quoted.text[:120])
     wrong = post(f"/quotes/{quote.get('quote_id')}/confirm", confirmed_total_usd=400, idempotency_key="rehearsal-booking")
     check("a different amount is refused and nothing is charged", wrong.status_code == 409, str(wrong.status_code))
     paid = post(f"/quotes/{quote.get('quote_id')}/confirm", confirmed_total_usd=466.1, idempotency_key="rehearsal-booking")

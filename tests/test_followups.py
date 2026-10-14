@@ -195,7 +195,8 @@ def test_prompts_fix_what_the_live_test_found():
     from logiops.agent import FOLLOWUP_PROMPT, SYSTEM_PROMPT
 
     for prompt in (SYSTEM_PROMPT, FOLLOWUP_PROMPT):
-        assert "Lima local time (UTC-05:00, PET)" in prompt and "CST" in prompt
+        assert "local time" in prompt and "UTC-05:00" in prompt and "CST" in prompt
+        assert "Lima" not in prompt and "PET" not in prompt
     assert SYSTEM_PROMPT.rstrip().endswith("Recommended plan: <exact plan id>")
     assert "do not estimate new costs or\nETAs" in FOLLOWUP_PROMPT and "applying the stock change" in FOLLOWUP_PROMPT
     assert "physical delivery is still never\nconfirmed" in FOLLOWUP_PROMPT

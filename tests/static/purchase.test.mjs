@@ -7,7 +7,7 @@ const { createStorage } = await import(moduleUrl("app/api.js"));
 const selectors = await import(moduleUrl("app/selectors.js"));
 
 const quote = {
-  quote_id: "Q-1", plan_label: "Fulfill local stock and send the rest express", base_usd: 120, service_fee_usd: 5, igv_usd: 22.5, total_usd: 147.5,
+  quote_id: "Q-1", plan_label: "Fulfill local stock and send the rest express", base_usd: 120, service_fee_usd: 5, tax_label: "Tax 18%", tax_usd: 22.5, total_usd: 147.5,
   payment_method: "Corporate card ending 4242 (simulated)", expires_at: new Date(Date.now() + 600000).toISOString(), approved: false,
 };
 const plans = [
@@ -44,15 +44,15 @@ function setup({ snapshot: initial, responses = {}, approved = false, now } = {}
 test("the read-back lists the breakdown and asks for approval only when the plan needs it", () => {
   const unapproved = purchaseReadback({ approve: true, quote }, plans[1]);
   assert.equal(unapproved.text, "To approve “Fulfill local stock and send the rest express” (no delay) and book it: carriers and services $120.00, service fee $5.00, "
-    + "IGV 18% $22.50, total $147.50, charged to the corporate card ending 4242. Say “yes” to approve and pay, or “no”.");
+    + "Tax 18% $22.50, total $147.50, charged to the corporate card ending 4242. Say “yes” to approve and pay, or “no”.");
   const late = purchaseReadback({ approve: true, quote }, { ...plans[1], projected_customer_delay_hours: 8, orders: [{ priority: "critical", delay_hours: 8, customer: "the hospital" }] });
   assert.match(late.text, /\(8 hours of delay\) and book it: .* It leaves the critical order for the hospital late\. Say “yes”/);
   assert.equal(purchaseReadback({ approve: false, quote }, plans[1]).text, "To book “Fulfill local stock and send the rest express”: carriers and services $120.00, service fee $5.00, "
-    + "IGV 18% $22.50, total $147.50, charged to the corporate card ending 4242. Say “yes” to pay, or “no”.");
+    + "Tax 18% $22.50, total $147.50, charged to the corporate card ending 4242. Say “yes” to pay, or “no”.");
   assert.equal(dollars(1234.5), "$1,234.50");
   assert.equal(spelled("LGO-7K2M9Q"), "L G O 7 K 2 M 9 Q");
-  assert.deepEqual(bookingRows({ lines: [{ service: "Express", units: 8, cost_usd: 120 }, { service: "Stock", units: 12 }], base_usd: 120, service_fee_usd: 5, igv_usd: 22.5, total_usd: 147.5 }),
-    [["Express, 8 units", "$120.00"], ["Stock, 12 units", "included"], ["Carriers and services", "$120.00"], ["Service fee", "$5.00"], ["IGV 18%", "$22.50"], ["Total", "$147.50"]]);
+  assert.deepEqual(bookingRows({ lines: [{ service: "Express", units: 8, cost_usd: 120 }, { service: "Stock", units: 12 }], base_usd: 120, service_fee_usd: 5, tax_label: "Tax 18%", tax_usd: 22.5, total_usd: 147.5 }),
+    [["Express, 8 units", "$120.00"], ["Stock, 12 units", "included"], ["Carriers and services", "$120.00"], ["Service fee", "$5.00"], ["Tax 18%", "$22.50"], ["Total", "$147.50"]]);
 });
 
 test("book it quotes the named plan, keeps the purchase and reads it back; yes approves and pays once", async () => {

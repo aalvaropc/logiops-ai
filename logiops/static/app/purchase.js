@@ -17,7 +17,7 @@ export function purchaseReadback(purchase, plan) {
   const quote = purchase.quote;
   const card = String(quote.payment_method).replace(/\s*\(simulated\)$/i, "").toLowerCase();
   const breakdown = `carriers and services ${dollars(quote.base_usd)}, service fee ${dollars(quote.service_fee_usd)}, `
-    + `IGV 18% ${dollars(quote.igv_usd)}, total ${dollars(quote.total_usd)}, charged to the ${card}`;
+    + `${quote.tax_label} ${dollars(quote.tax_usd)}, total ${dollars(quote.total_usd)}, charged to the ${card}`;
   if (!purchase.approve) {
     const text = `To book “${quote.plan_label}”: ${breakdown}. Say “yes” to pay, or “no”.`;
     return { text, spoken: text };
@@ -34,7 +34,7 @@ export function bookingRows(booking) {
   return [
     ...booking.lines.map((line) => [`${line.service}, ${line.units} units`, "cost_usd" in line ? dollars(line.cost_usd) : "included"]),
     ["Carriers and services", dollars(booking.base_usd)], ["Service fee", dollars(booking.service_fee_usd)],
-    ["IGV 18%", dollars(booking.igv_usd)], ["Total", dollars(booking.total_usd)],
+    [booking.tax_label, dollars(booking.tax_usd)], ["Total", dollars(booking.total_usd)],
   ];
 }
 

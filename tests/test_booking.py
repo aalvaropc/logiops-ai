@@ -3,6 +3,7 @@
 import asyncio
 import re
 from datetime import datetime, timedelta, timezone
+from decimal import Decimal
 
 import httpx
 import pytest
@@ -11,6 +12,7 @@ from mcp.client.streamable_http import streamable_http_client
 from mcp.shared.exceptions import McpError
 from pydantic import AnyUrl
 
+from logiops import booking as booking_module
 from logiops.api import create_app
 from logiops.booking import BookingStore, breakdown, cents_of
 from logiops.identity import OPERATOR
@@ -43,20 +45,39 @@ def test_the_breakdown_adds_up_and_matches_the_spoken_summary(tmp_path):
     service, bookings = store(tmp_path)
     plan = approved(service)
     quote = bookings.quote("SHIP-421", None, OPERATOR)
-    assert (quote["base_usd"], quote["service_fee_usd"], quote["igv_usd"], quote["total_usd"]) == (120.0, 5.0, 22.5, 147.5)
-    assert round(quote["base_usd"] + quote["service_fee_usd"] + quote["igv_usd"], 2) == quote["total_usd"]
-    assert quote["plan_id"] == plan["id"] and quote["approved"] is True and quote["igv_rate"] == 0.18
+    assert (quote["base_usd"], quote["service_fee_usd"], quote["tax_usd"], quote["total_usd"]) == (120.0, 5.0, 22.5, 147.5)
+    assert round(quote["base_usd"] + quote["service_fee_usd"] + quote["tax_usd"], 2) == quote["total_usd"]
+    assert quote["plan_id"] == plan["id"] and quote["approved"] is True and quote["tax_rate"] == 0.18 and quote["tax_label"] == "Tax 18%"
     assert quote["lines"] == [{"service": "Express", "units": 8, "arrival_eta": quote["lines"][0]["arrival_eta"], "cost_usd": 120.0}]
-    for figure in ("$120.00", "$5.00", "IGV 18% $22.50", "total $147.50", "corporate card ending 4242", "Lima time"):
+    for figure in ("$120.00", "$5.00", "Tax 18% $22.50", "total $147.50", "corporate card ending 4242", "local time"):
         assert figure in quote["summary"], figure
     assert not PLAN_ID.search(quote["summary"])
     assert bookings.quote("SHIP-421", None, OPERATOR)["quote_id"] == quote["quote_id"], "an open quote is reused"
 
 
-@pytest.mark.parametrize("dollars, igv", [(80, 15.30), (150, 27.90), (240, 44.10), (390, 71.10), (350, 63.90), (300, 54.90)])
-def test_igv_is_18_percent_of_cost_plus_fee_rounded_to_cents(dollars, igv):
+@pytest.mark.parametrize("dollars, tax", [(80, 15.30), (150, 27.90), (240, 44.10), (390, 71.10), (350, 63.90), (300, 54.90)])
+def test_tax_is_18_percent_of_cost_plus_fee_rounded_to_cents(dollars, tax):
     price = breakdown({"incremental_cost_usd": dollars})
-    assert price["tax"] == round(igv * 100) and price["total"] == dollars * 100 + 500 + price["tax"]
+    assert price["tax"] == round(tax * 100) and price["total"] == dollars * 100 + 500 + price["tax"]
+
+
+def test_the_tax_rate_and_name_come_from_the_environment(monkeypatch):
+    monkeypatch.setenv("LOGIOPS_TAX_RATE", "0.0825")
+    assert booking_module._tax_rate() == Decimal("0.0825")
+    monkeypatch.delenv("LOGIOPS_TAX_RATE")
+    assert booking_module._tax_rate() == Decimal("0.18")
+    for bad in ("abc", "1", "-0.1", "NaN", ""):
+        monkeypatch.setenv("LOGIOPS_TAX_RATE", bad)
+        with pytest.raises(RuntimeError, match="LOGIOPS_TAX_RATE"):
+            booking_module._tax_rate()
+    assert [booking_module._tax_label(name, Decimal(rate)) for name, rate in (("Tax", "0.18"), ("VAT", "0.0825"), ("GST", "0.10"), ("Tax", "0"))] == [
+        "Tax 18%", "VAT 8.25%", "GST 10%", "Tax 0%"]
+
+
+def test_a_configured_rate_changes_the_price_and_the_label(monkeypatch):
+    monkeypatch.setattr(booking_module, "TAX_RATE", Decimal("0.10"))
+    price = breakdown({"incremental_cost_usd": 100})
+    assert price["tax"] == 1050 and price["total"] == 11550
 
 
 def test_paying_charges_the_quoted_total_once(tmp_path):
@@ -190,7 +211,7 @@ def test_the_rest_flow_returns_a_receipt_and_reset_forgets_bookings(tmp_path):
     assert paid.status_code == 200 and paid.json()["total_usd"] == 147.5
     assert receipt.status_code == 200 and receipt.headers["content-type"].startswith("text/html")
     assert "default-src 'none'" in receipt.headers["content-security-policy"]
-    for text in (paid.json()["number"], "$147.50", "IGV 18%", "$22.50", "Corporate card ending 4242 (simulated)"):
+    for text in (paid.json()["number"], "$147.50", "Tax 18%", "$22.50", "Corporate card ending 4242 (simulated)"):
         assert text in receipt.text, text
     assert not PLAN_ID.search(receipt.text)
     assert [item["number"] for item in incident["bookings"]] == [paid.json()["number"]]

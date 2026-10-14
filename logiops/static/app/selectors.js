@@ -25,7 +25,8 @@ export const PLAN_KEYWORDS = [
   [["wait"], /\bwait\b/],
 ];
 
-const DATE = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit", timeZone: "America/Lima" });
+export const TIME_ZONE = "America/Lima";
+const DATE = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit", timeZone: TIME_ZONE });
 
 export function formatDate(iso) {
   return DATE.format(new Date(iso));

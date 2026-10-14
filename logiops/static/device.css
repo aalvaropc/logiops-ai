@@ -80,11 +80,10 @@ button:focus-visible, input:focus-visible, a:focus-visible, .carousel-track:focu
 .fact.warning strong, .fact.warning small { color: #eab36e; }
 .incident-grid { display: grid; grid-template-columns: minmax(180px, .6fr) minmax(0, 1.4fr); gap: 20px; align-items: start; }
 .device-map { margin: 0; }
-.device-map svg { display: block; width: 100%; max-width: 200px; height: auto; }
-.map-land { fill: #0f2a33; stroke: #2d5866; stroke-width: 1; stroke-linejoin: round; }
-.city { fill: #6b8f99; }
-.city-origin, .city-destination, .city-source { fill: #e6f6fb; }
-.city-label { fill: #cfe3e8; font-size: 9px; font-weight: 600; }
+.device-map svg { display: block; width: 100%; max-width: 260px; height: auto; }
+.place { fill: #6b8f99; }
+.place-origin, .place-destination, .place-source { fill: #e6f6fb; }
+.place-label { fill: #cfe3e8; font-size: 12px; font-weight: 600; }
 .leg { fill: none; stroke-width: 2.4; stroke-linecap: round; }
 .leg-delayed { stroke: #e9ae63; stroke-dasharray: 4 4; }
 .leg-local { stroke: #62dcb6; }

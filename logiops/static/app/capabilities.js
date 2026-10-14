@@ -4,7 +4,7 @@ export const CAPABILITIES_TEXT = "I'm LogiOps, your operations desk for late or 
   + "- answer follow-ups from that investigation: “why not the cheaper one?”;\n"
   + "- remember preferences for every incident: “remember my spend cap is $250”;\n"
   + "- approve a plan after reading it back, then execute it: “approve the recommended plan”, “yes”, “execute it”;\n"
-  + "- book and pay a plan's carriers after reading back the price with IGV, with a receipt: “book it”, “yes”;\n"
+  + "- book and pay a plan's carriers after reading back the price with tax, with a receipt: “book it”, “yes”;\n"
   + "- start over at any time: “start over”.\n"
   + "Every answer is checked against the incident's data, and only you can approve.";
 

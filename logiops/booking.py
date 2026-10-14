@@ -1,7 +1,7 @@
 """Carrier bookings: a quote with its price breakdown, a simulated payment, and a receipt.
 
 A quote prices the paid carriers and services of one current plan: their cost, a fixed service
-fee and IGV (Peru's 18 % sales tax), valid for ten minutes. Confirming it charges the quoted
+fee and a sales tax (18 % by default, LOGIOPS_TAX_RATE), valid for ten minutes. Confirming it charges the quoted
 total exactly once, and only when every check passes at that moment:
 - the person confirmed the same total, recalculated now;
 - the quote has not expired;
@@ -15,6 +15,7 @@ from __future__ import annotations
 import hashlib
 import html
 import json
+import os
 import re
 import secrets
 import sqlite3
@@ -30,7 +31,26 @@ from .service import LogiOpsService, WorkflowError
 from .storage import connect
 
 SERVICE_FEE_CENTS = 500
-IGV_RATE = Decimal("0.18")
+
+
+def _tax_rate() -> Decimal:
+    raw = os.environ.get("LOGIOPS_TAX_RATE", "0.18")
+    try:
+        rate = Decimal(raw)
+    except ArithmeticError as exc:
+        raise RuntimeError("LOGIOPS_TAX_RATE must be a decimal such as 0.18") from exc
+    if not rate.is_finite() or not 0 <= rate < 1:
+        raise RuntimeError("LOGIOPS_TAX_RATE must be at least 0 and below 1, such as 0.18")
+    return rate
+
+
+def _tax_label(name: str, rate: Decimal) -> str:
+    return f"{name} {format((rate * 100).normalize(), 'f')}%"
+
+
+TAX_RATE = _tax_rate()
+TAX_NAME = os.environ.get("LOGIOPS_TAX_NAME", "").strip()[:24] or "Tax"
+TAX_LABEL = _tax_label(TAX_NAME, TAX_RATE)
 QUOTE_MINUTES = 10
 NUMBER_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
 BOOKING_NUMBER = re.compile(r"^LGO-[A-Z2-9]{6}$")
@@ -66,9 +86,9 @@ def cents_of(value: Any) -> int:
     return int(amount * 100)
 
 
-def lima_text(moment: datetime) -> str:
+def local_text(moment: datetime) -> str:
     local = moment.astimezone(LIMA)
-    return f"{local.strftime('%b')} {local.day}, {local.strftime('%H:%M')} Lima time"
+    return f"{local.strftime('%b')} {local.day}, {local.strftime('%H:%M')} local time"
 
 
 def service_name(source: str) -> str:
@@ -98,7 +118,7 @@ def paid_lines(plan: dict[str, Any], carriers: dict[str, Any]) -> list[dict[str,
 
 def breakdown(plan: dict[str, Any]) -> dict[str, int]:
     base = plan["incremental_cost_usd"] * 100
-    tax = int((Decimal(base + SERVICE_FEE_CENTS) * IGV_RATE).quantize(Decimal("1"), rounding=ROUND_HALF_UP))
+    tax = int((Decimal(base + SERVICE_FEE_CENTS) * TAX_RATE).quantize(Decimal("1"), rounding=ROUND_HALF_UP))
     return {"base": base, "fee": SERVICE_FEE_CENTS, "tax": tax, "total": base + SERVICE_FEE_CENTS + tax}
 
 
@@ -186,13 +206,13 @@ class BookingStore:
                 "quote_id": f"Q-{secrets.token_hex(6)}", "incident_id": incident_id, "plan_id": plan["id"],
                 "plan_label": plan["label"], "source_version": plan["source_version"],
                 "approved": self._approved(snapshot, plan), "lines": lines,
-                "base_usd": usd(price["base"]), "service_fee_usd": usd(price["fee"]), "igv_rate": float(IGV_RATE),
-                "igv_usd": usd(price["tax"]), "total_usd": usd(price["total"]), "currency": "USD",
+                "base_usd": usd(price["base"]), "service_fee_usd": usd(price["fee"]), "tax_rate": float(TAX_RATE),
+                "tax_label": TAX_LABEL, "tax_usd": usd(price["tax"]), "total_usd": usd(price["total"]), "currency": "USD",
                 "payment_method": self.gateway.method, "expires_at": expires.isoformat(),
                 "summary": (f"Booking “{plan['label']}”: carriers and services {money(price['base'])}, service fee "
-                            f"{money(price['fee'])}, IGV 18% {money(price['tax'])}, total {money(price['total'])}, "
+                            f"{money(price['fee'])}, {TAX_LABEL} {money(price['tax'])}, total {money(price['total'])}, "
                             f"charged to the {self.gateway.method.removesuffix(' (simulated)').lower()}. "
-                            f"The price holds until {lima_text(expires)}."),
+                            f"The price holds until {local_text(expires)}."),
                 "quoted_by": actor.name,
             }
             connection.execute(
@@ -247,7 +267,8 @@ class BookingStore:
                 "number": number, "status": "confirmed", "incident_id": quote["incident_id"], "plan_id": plan["id"],
                 "plan_label": plan["label"], "source_version": plan["source_version"], "quote_id": quote_id,
                 "lines": quote["lines"], "base_usd": quote["base_usd"], "service_fee_usd": quote["service_fee_usd"],
-                "igv_rate": quote["igv_rate"], "igv_usd": quote["igv_usd"], "total_usd": quote["total_usd"],
+                "tax_rate": quote["tax_rate"], "tax_label": quote["tax_label"], "tax_usd": quote["tax_usd"],
+                "total_usd": quote["total_usd"],
                 "currency": "USD", "payment": payment, "booked_by": actor.name, "booked_at": now.isoformat(),
                 "receipt_url": f"/bookings/{number}/receipt",
                 "confirmation": (f"Booked “{plan['label']}” for {quote['incident_id']}: {money(price['total'])} charged to "
@@ -286,7 +307,7 @@ class BookingStore:
         amounts = set()
         for row in rows:
             item = json.loads(row[0])
-            amounts |= {float(item[key]) for key in ("base_usd", "service_fee_usd", "igv_usd", "total_usd")}
+            amounts |= {float(item[key]) for key in ("base_usd", "service_fee_usd", "tax_usd", "total_usd")}
         return {"dollars": sorted(amounts)}
 
     def clear(self, incident_id: str | None = None) -> None:
@@ -311,10 +332,10 @@ def receipt_text(booking: dict[str, Any]) -> str:
         *(f"| {line['service']}, {line['units']} units | {line_amount(line)} |" for line in booking["lines"]),
         f"| Carriers and services | ${booking['base_usd']:,.2f} |",
         f"| Service fee | ${booking['service_fee_usd']:,.2f} |",
-        f"| IGV 18% | ${booking['igv_usd']:,.2f} |",
+        f"| {booking['tax_label']} | ${booking['tax_usd']:,.2f} |",
         f"| **Total charged** | **${booking['total_usd']:,.2f}** |", "",
         f"Paid with: {booking['payment']['method']} · payment {booking['payment']['id']}",
-        f"Booked by {booking['booked_by']} on {lima_text(datetime.fromisoformat(booking['booked_at']))}.",
+        f"Booked by {booking['booked_by']} on {local_text(datetime.fromisoformat(booking['booked_at']))}.",
         "Synthetic demo data: no money moved, and delivery is projected, not confirmed.",
     ]
     return "\n".join(lines) + "\n"
@@ -351,11 +372,11 @@ small {{ color: #4a6670; }}
 {rows}
 <tr><td>Carriers and services</td><td>${booking['base_usd']:,.2f}</td></tr>
 <tr><td>Service fee</td><td>${booking['service_fee_usd']:,.2f}</td></tr>
-<tr><td>IGV 18%</td><td>${booking['igv_usd']:,.2f}</td></tr>
+<tr><td>{cell(booking['tax_label'])}</td><td>${booking['tax_usd']:,.2f}</td></tr>
 <tr class="total"><td>Total charged</td><td>${booking['total_usd']:,.2f}</td></tr>
 </table>
 <p>Paid with {cell(booking['payment']['method'])} · payment {cell(booking['payment']['id'])}</p>
-<p>Booked by {cell(booking['booked_by'])} on {cell(lima_text(datetime.fromisoformat(booking['booked_at'])))}</p>
+<p>Booked by {cell(booking['booked_by'])} on {cell(local_text(datetime.fromisoformat(booking['booked_at'])))}</p>
 <p><small>Synthetic demo data: no money moved, and delivery is projected, not confirmed.</small></p>
 </main></body></html>
 """

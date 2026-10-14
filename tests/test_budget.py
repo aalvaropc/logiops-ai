@@ -14,7 +14,7 @@ from logiops.replay import ReplayConverse
 from logiops.scenario import LIMA
 
 
-def test_reservations_are_atomic_per_lima_day_and_released(tmp_path):
+def test_reservations_are_atomic_per_local_day_and_released(tmp_path):
     now = [datetime(2026, 10, 20, 23, 30, tzinfo=LIMA)]
     budget = DailyModelBudget(tmp_path / "budget.sqlite3", limit=10, clock=lambda: now[0])
     day = budget.reserve(8)

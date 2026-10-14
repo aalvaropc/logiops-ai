@@ -46,7 +46,7 @@ ICON_SVG = (
     '<path d="M18 16h8v24h20v8H18z" fill="#72dfc7"/></svg>'
 )
 ICON = Icon(src="data:image/svg+xml;base64," + base64.b64encode(ICON_SVG.encode()).decode(), mimeType="image/svg+xml", sizes=["any"])
-INSTRUCTIONS = """LogiOps AI resolves synthetic logistics exceptions (late or held shipments in Peru) with a person in charge.
+INSTRUCTIONS = """LogiOps AI resolves synthetic logistics exceptions (late or held shipments) with a person in charge.
 Flow: list_incidents (already ordered by what needs attention first) -> read facts with get_shipment, get_order,
 get_inventory and find_alternative_carriers -> investigate_incident calculates every feasible plan from the current
 data -> recommend one plan, quoting its exact figures and calling it by its label.
@@ -54,7 +54,7 @@ Rules: plans and their numbers are calculated by code; never estimate new ones. 
 exact plan and data version; no tool approves. execute_approved_plan runs only an approved plan, is idempotent, and
 sends simulated notifications. To book a plan's paid carriers: quote_carrier_booking, read its summary to the person,
 and call book_carrier with the exact total only after an explicit yes; payment is simulated and never charged twice.
-Delivery is projected, not physically confirmed. Times are Lima time (UTC-05:00).
+Delivery is projected, not physically confirmed. Times are the incident's local time (UTC-05:00 in the sample incidents).
 All data is synthetic. The Agent Skill at skill://logiops-exception-desk/SKILL.md is the full playbook."""
 
 
@@ -266,7 +266,7 @@ def create_mcp_server(
         plan_id: Annotated[str | None, Field(
             description="Exact plan id from investigate_incident. Default: the plan a person approved.")] = None,
     ) -> Quote:
-        """Price booking a plan's paid carriers and services: their cost, a service fee and IGV 18%, held for ten
+        """Price booking a plan's paid carriers and services: their cost, a service fee and a sales tax, held for ten
         minutes. It charges nothing. Read the summary back to the person and get an explicit yes before book_carrier."""
         try:
             return bookings.quote(normalized_incident(shipment_id), plan_id, actor(ctx))

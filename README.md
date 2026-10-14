@@ -20,16 +20,19 @@ against the incident's data before it is shown.
 |---|---|
 | ![Operator console](docs/img/console.png) | ![The device on a phone](docs/img/device-phone.png) |
 
-**Who it is for (illustrative):** the exceptions desk of a mid-size Peruvian
-distributor that ships electronics and medical supplies from Lima and Callao to
-hospitals and stores in Arequipa, Cusco and Trujillo. Today a person opens three
-systems per incident; here they say "any delays today?", "what's happening with
-SHIP-433?", "approve the recommended plan", "yes", "execute it", "book it".
+**Who it is for (illustrative):** the exceptions desk of a mid-size regional
+distributor that ships electronics and medical supplies from its hubs to
+hospitals and stores in several cities. Today a person opens three systems per
+incident; here they say "any delays today?", "what's happening with SHIP-433?",
+"approve the recommended plan", "yes", "execute it", "book it". Nothing in the
+product is tied to a country: the built-in incidents are synthetic samples whose
+place names are examples, the tax on a booking is a setting (`LOGIOPS_TAX_RATE`,
+`LOGIOPS_TAX_NAME`), and a scenario pack brings its own places.
 
 **What the agent decides, and what it never does.** The agent reads, calculates,
 compares and recommends; it never approves. An approval names the exact plan and
 data version, a stock change invalidates it and raises a proactive alert, execution
-is idempotent and verified, and a payment is read back with its IGV and charged
+is idempotent and verified, and a payment is read back with its tax and charged
 once. The audit trail records every step.
 
 **Measured on the deployed demo (2026-10-12, live Amazon Bedrock through
@@ -59,7 +62,7 @@ Challenge. Runtime: Amazon Bedrock.
 | `amazon-v1.0` (to be tagged on 2026-10-21) | _pending_ | Deployed on AWS; URL, demo user and token in the private testing instructions (hosting is optional, D-AMZ-1) | [`aalvaropc/mcp-apps-web-host`](https://github.com/aalvaropc/mcp-apps-web-host), MIT: the MCP Apps host bridge and sandbox proxy used here (public from 2026-10-20) |
 
 The live demo shares a daily budget of 40 model calls (`LOGIOPS_DAILY_MODEL_CALLS`);
-when it is spent, replies come from the scripted replay until midnight, Lima time,
+when it is spent, replies come from the scripted replay until midnight (UTC-05:00),
 and say so.
 
 ## For judges
@@ -106,7 +109,7 @@ More detail in `docs/architecture.md`.
 |---|---|---|
 | `LOGIOPS_AGENT_MODE` | `bedrock` or `replay` (scripted model, zero tokens) | `bedrock` |
 | `LOGIOPS_DB_PATH` | SQLite database | `data/logiops.sqlite3` |
-| `LOGIOPS_SCENARIO_ANCHOR` | when the synthetic incidents are due: `relative` (the first orders due tomorrow, Lima time; stale dates move forward on their own), `fixed` (the seed's own dates) or a `YYYY-MM-DD` day | `relative` |
+| `LOGIOPS_SCENARIO_ANCHOR` | when the synthetic incidents are due: `relative` (the first orders due tomorrow, UTC-05:00; stale dates move forward on their own), `fixed` (the seed's own dates) or a `YYYY-MM-DD` day | `relative` |
 | `LOGIOPS_PUBLIC` | `1` for public mode (requires the token and `LOGIOPS_PUBLIC_HOST`) | off |
 | `LOGIOPS_ACCESS_TOKEN` | bearer token, at least 32 characters in public mode | none |
 | `LOGIOPS_PUBLIC_HOST` | the one public hostname (also the MCP allowed host) | none |
@@ -116,11 +119,12 @@ More detail in `docs/architecture.md`.
 | `LOGIOPS_MCP_LIMIT_PER_MINUTE` | MCP and memory requests per viewer per minute | `60` |
 | `LOGIOPS_SCENARIO_PACK` | path of a JSON scenario pack to register at start (see *Bring your own incidents*) | unset |
 | `LOGIOPS_OTEL` | `1` exports the agent's OpenTelemetry spans (Strands Agents) to `OTEL_EXPORTER_OTLP_ENDPOINT` when set, to the console otherwise; `/healthz` reports `telemetry` | unset |
-| `LOGIOPS_DAILY_MODEL_CALLS` | live model calls per day (Lima time) for the whole demo; each request reserves its run's maximum and releases what it did not use, and a run that no longer fits answers from replay with `fallback: "daily_budget"` | `40` |
+| `LOGIOPS_DAILY_MODEL_CALLS` | live model calls per day (UTC-05:00) for the whole demo; each request reserves its run's maximum and releases what it did not use, and a run that no longer fits answers from replay with `fallback: "daily_budget"` | `40` |
 | `AWS_REGION`, `BEDROCK_MODEL_ID` | Bedrock region and model profile | `us-east-1`, `global.anthropic.claude-sonnet-4-6` |
 | `LOGIOPS_VOICE` | `polly` (Amazon Polly) or `browser` (the browser's own voice) | `polly` with `bedrock`, `browser` with `replay` |
 | `LOGIOPS_POLLY_VOICE`, `LOGIOPS_POLLY_ENGINE` | Polly voice and engine | `Ruth`, `generative` |
-| `LOGIOPS_DAILY_SPEECH_CHARS` | characters Polly may synthesize per day (Lima time) for the whole demo; repeated lines come from the cache and cost nothing | `30000` |
+| `LOGIOPS_DAILY_SPEECH_CHARS` | characters Polly may synthesize per day (UTC-05:00) for the whole demo; repeated lines come from the cache and cost nothing | `30000` |
+| `LOGIOPS_TAX_RATE`, `LOGIOPS_TAX_NAME` | the sales tax added to a booking's carrier cost and service fee (a rate from 0 up to 1) and the name it carries on quotes and receipts; a bad rate stops the start | `0.18`, `Tax` |
 | `LOGIOPS_COGNITO_ISSUER`, `LOGIOPS_COGNITO_DOMAIN`, `LOGIOPS_COGNITO_CLIENT_ID` | turn on OAuth 2.1 sign-in: the user pool's issuer URL, its hosted domain, and the public PKCE app client (`LOGIOPS_COGNITO_EXTRA_CLIENT_IDS` allows more clients) | off |
 | `LOGIOPS_MEMORY_ID` | the Amazon Bedrock AgentCore Memory that keeps conversations across sessions; without it they are kept in SQLite | SQLite |
 | `LOGIOPS_ALERT_SCAN_SECONDS` | how often the proactive alert watcher scans; `0` turns the background scan off (a stock change is still scanned at once) | `30` |
@@ -143,7 +147,7 @@ The four built-in incidents are a scenario pack like any other.
 `{"version": 1, "incidents": [{"id", "kind", "kind_label", "title", "shipment",
 "orders", "inventory", "carriers", "options"}, ...]}`. `POST /scenario/packs`
 (operator) validates a pack of your own — ids like `SHIP-470` and `ORD-470A`,
-ISO timestamps in Lima time (`-05:00`), at most one local warehouse, carriers
+ISO timestamps with the `-05:00` offset (the demo runs on one fixed offset), at most one local warehouse, carriers
 with capacity and cost, options in the playbook form — and registers its
 incidents: they join the inbox, the briefing, the MCP tools, resources and
 completions, the alerts and the metrics, and their plans are calculated by the
@@ -198,7 +202,7 @@ Alexa+ device (an Echo Show-style screen, full-screen on a phone) that shows
 one card at a time: the home card with the incident inbox as a carousel (open
 ones first, then by critical units at risk, priority and due time; "Start
 here" marks the briefing's pick); the incident card with its ETAs, local stock,
-the plan's legs on a map of Peru and each order's promise against its projected
+the plan's legs on a route diagram and each order's promise against its projected
 arrival; the plans card with the interactive MCP App; a confirmation card that
 reads an approval or a price back with Yes / No; the receipt; a proactive
 alert; and the result card after execution. Below the card, the device shows
@@ -286,7 +290,7 @@ with a clear error after 50 seconds so it always answers before CloudFront's
 60-second origin timeout. Live calls share a daily budget for the whole demo
 (`LOGIOPS_DAILY_MODEL_CALLS`): when a run no longer fits, the response says
 `mode: replay` with `fallback: "daily_budget"`, and the page says so until
-midnight, Lima time.
+midnight (UTC-05:00).
 
 ### Follow-up questions
 
@@ -391,7 +395,7 @@ navigates away. The host checks the proxy's origin on every message, sends
 `ui/resource-teardown` before removing the view, and shows no card at all if
 no separate sandbox origin is available. Its MCP client runs `initialize` once
 and then sends `MCP-Protocol-Version: 2025-11-25` on every request. It passes a
-full `hostContext` (theme, display mode, container size, locale, Lima time
+full `hostContext` (theme, display mode, container size, locale, time
 zone, device capabilities, safe-area insets), and its "Light card" toggle
 sends `ui/notifications/host-context-changed`.
 
@@ -423,9 +427,9 @@ receipt (`logiops/booking.py`):
 
 1. **Quote.** `POST /incidents/{id}/bookings/quote` (or the MCP tool
    `quote_carrier_booking`) prices one current plan, by default the approved
-   one: the carriers' cost, a $5 service fee and IGV 18 % on both. It holds
+   one: the carriers' cost, a $5 service fee and a sales tax (18 % by default) on both. It holds
    for ten minutes and charges nothing. Its `summary` is the read-back, for
-   example "carriers and services $120.00, service fee $5.00, IGV 18% $22.50,
+   example "carriers and services $120.00, service fee $5.00, Tax 18% $22.50,
    total $147.50, charged to the corporate card ending 4242".
 2. **Confirm.** `POST /quotes/{quote_id}/confirm` (MCP: `book_carrier`) takes
    the total the person confirmed and an idempotency key. The payment is
@@ -553,7 +557,7 @@ long-term extraction.
 - **Off the request path.** `POST /memory/turns` answers `202` and writes after
   the response. A memory outage is logged and never breaks a reply.
 - **Welcome back.** A new browser session opens with "Welcome back, judge. Last
-  time (Oct 12, 14:05 Lima time) we were on SHIP-433 and you said “book it”…".
+  time (Oct 12, 14:05 local time) we were on SHIP-433 and you said “book it”…".
   It is built only from what was said. "Pick up where we left off" reopens that
   incident.
 - **Live runs.** The long-term facts reach the agent as a `<memory>` block in
@@ -598,7 +602,7 @@ alerts with `list_alerts`. The demo checks every five seconds:
 is an [Agent Skill](https://agentskills.io): YAML frontmatter (`name`,
 `description`, `license`, `compatibility`, `metadata`) and a playbook for these
 tools. It covers the workflow, the rules (plans by label, projected delivery,
-Lima time, no tool approves), how to speak on a voice device (at most five
+local time, no tool approves), how to speak on a voice device (at most five
 options, a read-back before anything is approved), and what to do when a tool
 fails. The MCP server serves it as the resource
 `skill://logiops-exception-desk/SKILL.md` (`text/markdown`), and its
