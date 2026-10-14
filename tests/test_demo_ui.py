@@ -108,7 +108,7 @@ def test_a_purchase_is_read_back_and_paid_once():
     commands = _static("app", "commands.js")
     assert 'command === "confirm" && pendingPurchase' in commands and "await purchase.confirm(pendingPurchase);" in commands
     assert "Say “yes” to approve and pay, or “no”." in purchase and "Say “yes” to pay, or “no”." in purchase
-    assert "IGV 18% ${dollars(quote.igv_usd)}, total ${dollars(quote.total_usd)}" in purchase
+    assert "${quote.tax_label} ${dollars(quote.tax_usd)}, total ${dollars(quote.total_usd)}" in purchase
     assert "confirmed_total_usd: purchase.quote.total_usd, idempotency_key: purchase.key" in purchase
     assert "keep({ ...purchase, approve: false });" in purchase
     assert "Say “yes” to try again; it never charges twice." in purchase
@@ -392,7 +392,7 @@ def test_the_device_page_is_the_full_screen_alexa_experience():
     assert "SHIP-4" not in html and "ui://" not in html and "Operator view" not in html and '<header class="device-bar" role="banner">' in html
     order = [html.index(f"/assets/{name}") for name in ("markdown.js", "intent.js", "route.js", "device/main.js")]
     assert order == sorted(order)
-    assert "createElementNS(SVG" in render and 'viewBox: "0 0 240 300", role: "img"' in render
+    assert "createElementNS(SVG" in render and 'viewBox: `0 0 ${route.VIEW.width} ${route.VIEW.height}`, role: "img"' in render
     for hook in ('device("voice", "request")', 'device("voice", "error")', 'device("voice", "listen-start")',
                  'device("voice", "listen-end")', 'device("reply", text, spoken, speaking)', 'device("heard", text)',
                  'onSurface: (name, payload) => showSurface(name, payload)', 'onReadback: (pending, plan) => showSurface("confirm"',

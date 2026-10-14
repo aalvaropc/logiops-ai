@@ -1,4 +1,4 @@
-"""The device view's route geometry (static/route.js): real plans of every incident, no DOM."""
+"""The device view's route legs and layout (static/route.js): real plans of every incident, no DOM."""
 
 import json
 import shutil
@@ -37,7 +37,7 @@ def test_every_plan_becomes_legs_that_carry_every_unit(incident_id):
             assert leg["late"] == any(datetime.fromisoformat(item["arrival_eta"]) > due[item["order_id"]] for item in items)
 
 
-def test_every_playbook_source_has_a_leg_type_and_every_place_a_city():
+def test_every_playbook_source_has_a_leg_type():
     sources = sorted({source for options in PLAYBOOKS.values() for option in options
                       for source in (option["sources"] if isinstance(option["sources"], list)
                                      else [item for group in option["sources"].values() for item in group])})
@@ -47,22 +47,35 @@ def test_every_playbook_source_has_a_leg_type_and_every_place_a_city():
         "expedited-clearance": "clearance", "express": "express", "express-transfer": "express",
         "ground-reroute": "ground", "lima-stock": "local", "trujillo-stock": "local",
     }
-    places = sorted({name for incident_id in INCIDENT_IDS for name in (
-        seed_state(incident_id)["shipment"]["origin"], seed_state(incident_id)["shipment"]["destination"],
-        *(warehouse.capitalize() for warehouse in seed_state(incident_id)["inventory"]))})
-    cities = route(f"{json.dumps(places)}.map(m.cityOf)")
-    assert all(cities) and [city["name"] for city in cities] == places
 
 
-def test_the_map_is_drawn_inside_its_view_with_cities_in_place():
-    data = route("{view: m.VIEW, cities: m.CITIES, outline: m.OUTLINE, path: m.linePath(m.OUTLINE.slice(0, 3))}")
-    width, height = data["view"]["width"], data["view"]["height"]
-    for point in [*data["cities"].values(), *data["outline"]]:
-        assert 0 <= point["x"] <= width and 0 <= point["y"] <= height
-    city = data["cities"]
-    assert city["Trujillo"]["y"] < city["Lima"]["y"] < city["Cusco"]["y"] < city["Arequipa"]["y"]
-    assert city["Callao"]["x"] < city["Lima"]["x"] < city["Cusco"]["x"]
-    assert data["path"].startswith("M") and data["path"].endswith(" Z")
+@pytest.mark.parametrize("incident_id", INCIDENT_IDS)
+def test_the_layout_places_every_source_above_the_destination_inside_the_view(incident_id):
+    state = seed_state(incident_id)
+    plans = build_plans(state, 1)
+    views = route(f"{json.dumps(plans)}.map((plan) => ({{view: m.VIEW, layout: m.layout({json.dumps(state['shipment'])}, m.legsFor({json.dumps(state)}, plan))}}))")
+    for item in views:
+        width, height = item["view"]["width"], item["view"]["height"]
+        layout = item["layout"]
+        places = [*layout["places"], layout["destination"]]
+        assert all(0 <= place["x"] <= width and 0 <= place["y"] <= height for place in places)
+        assert all(place["y"] < layout["destination"]["y"] for place in layout["places"])
+        assert layout["destination"]["name"] == state["shipment"]["destination"]
+        assert len({place["name"].lower() for place in places}) == len(places)
+        for leg in layout["legs"]:
+            assert leg["to"]["name"] == layout["destination"]["name"]
+            assert leg["loop"] == (leg["from"]["name"] == layout["destination"]["name"])
+
+
+def test_the_layout_works_for_any_place_name_and_spreads_sources():
+    shipment = {"origin": "Rotterdam", "destination": "Gdansk"}
+    legs = [{"from": {"name": "Rotterdam"}}, {"from": {"name": "Hamburg"}}, {"from": {"name": "gdansk"}}]
+    layout = route(f"m.layout({json.dumps(shipment)}, {json.dumps(legs)})")
+    assert [(place["name"], place["role"]) for place in layout["places"]] == [("Rotterdam", "origin"), ("Hamburg", "source")]
+    assert layout["places"][0]["x"] < layout["destination"]["x"] < layout["places"][1]["x"]
+    assert [leg["loop"] for leg in layout["legs"]] == [False, False, True]
+    assert route('[m.placeName("piura"), m.placeName("Lima"), m.placeName(" "), m.shortName("Puerto de Chancay", 10)]') == ["Piura", "Lima", "", "Puerto de…"]
+    assert route(f"m.layout({json.dumps(shipment)}, [])")["places"] == [{"name": "Rotterdam", "role": "origin", "x": 120, "y": 54}]
 
 
 def test_promise_bars_compare_each_order_with_its_promise():
@@ -90,7 +103,7 @@ def test_the_module_never_touches_the_page():
     assert script.rstrip().endswith('})(typeof window === "undefined" ? globalThis : window);')
 
 
-def test_a_pack_incident_off_the_map_still_becomes_legs_with_every_unit():
+def test_a_pack_incident_becomes_legs_and_a_layout_with_every_unit():
     pack = json.loads((Path(__file__).resolve().parent / "fixtures" / "scenario_pack.json").read_text())["incidents"][0]
     state = {"incident_id": pack["id"], "shipment": pack["shipment"], "orders": pack["orders"], "inventory": pack["inventory"], "carriers": pack["carriers"]}
     plan = {"allocations": [
@@ -98,5 +111,8 @@ def test_a_pack_incident_off_the_map_still_becomes_legs_with_every_unit():
         {"source": "refrigerated-truck", "units": 20, "order_id": "ORD-470", "arrival_eta": "2026-10-14T08:00:00-05:00"},
     ]}
     legs = route(f"m.legsFor({json.dumps(state)}, {json.dumps(plan)})")
-    assert [(leg["type"], leg["units"], leg["from"], leg["to"]) for leg in legs] == [("local", 30, None, None), ("unknown", 20, None, None)]
-    assert legs[1]["label"] == "refrigerated-truck" and route('[m.cityOf("Paita"), m.cityOf("Lima").name]') == [None, "Lima"]
+    assert [(leg["type"], leg["units"], leg["from"]["name"], leg["to"]["name"]) for leg in legs] == [
+        ("local", 30, "Piura", "Piura"), ("unknown", 20, "Paita", "Piura")]
+    assert legs[1]["label"] == "refrigerated-truck"
+    layout = route(f"m.layout({json.dumps(state['shipment'])}, {json.dumps(legs)})")
+    assert [place["name"] for place in layout["places"]] == ["Paita"] and layout["legs"][0]["loop"] is True

@@ -12,7 +12,7 @@ import { createCommands, approvalReadback } from "../app/commands.js";
 import { createStore } from "../app/store.js";
 import {
   visibleVersion, visibleApproval, visiblePlans, latestAgentEvent, namedPlanKinds,
-  recommendedPlan as pickRecommended, planFromUtterance as pickFromUtterance,
+  recommendedPlan as pickRecommended, planFromUtterance as pickFromUtterance, TIME_ZONE,
 } from "../app/selectors.js";
 import { welcomeText as greeting } from "../app/greeting.js";
 import { checkBadge, checkNote, fallbackNote, traceSummary, executionSummary } from "../app/run-badges.js";
@@ -29,7 +29,7 @@ const DEFAULT_INCIDENT = "SHIP-421";
 const route = window.LogiOpsRoute;
 const markdown = window.LogiOpsMarkdown;
 const intent = window.LogiOpsIntent;
-const CLOCK = new Intl.DateTimeFormat("en-US", { timeZone: "America/Lima", weekday: "short", hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
+const CLOCK = new Intl.DateTimeFormat("en-US", { timeZone: TIME_ZONE, weekday: "short", hour: "2-digit", minute: "2-digit", hourCycle: "h23", timeZoneName: "short" });
 const reducedMotion = () => matchMedia("(prefers-reduced-motion: reduce)").matches;
 const hashIncident = () => decodeURIComponent(location.hash.slice(1)).trim().toUpperCase() || DEFAULT_INCIDENT;
 const MCP_APP = { uriPrefix: "ui://logiops/resolution-options", proxyPath: "/mcp-app/sandbox.html" };
@@ -63,7 +63,7 @@ function message(text, success = false) {
 }
 
 function tick() {
-  $("device-clock").textContent = `${CLOCK.format(new Date())} · Lima`;
+  $("device-clock").textContent = CLOCK.format(new Date());
 }
 
 function elapsed() {
@@ -198,7 +198,7 @@ function hostContext() {
   const width = Math.round(Math.max(280, ($("surface")?.clientWidth || window.innerWidth) - 36));
   return {
     theme: state.cardTheme, displayMode: "inline", availableDisplayModes: ["inline"],
-    containerDimensions: { width, maxHeight: 640 }, locale: navigator.language || "en-US", timeZone: "America/Lima",
+    containerDimensions: { width, maxHeight: 640 }, locale: navigator.language || "en-US", timeZone: TIME_ZONE,
     platform: "web", deviceClass: width < 480 ? "compact" : "regular",
     deviceCapabilities: { touch: matchMedia("(pointer: coarse)").matches, hover: matchMedia("(hover: hover)").matches },
     safeAreaInsets: { top: 0, right: 0, bottom: 0, left: 0 },

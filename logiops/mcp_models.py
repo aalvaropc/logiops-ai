@@ -30,7 +30,7 @@ class OrderLine(Output):
     customer: str
     priority: Literal["critical", "standard"]
     quantity: int = Field(description="Units ordered.")
-    due_eta: str = Field(description="Promised delivery time, ISO 8601 in Lima time (UTC-05:00).")
+    due_eta: str = Field(description="Promised delivery time, ISO 8601 in the incident's local time (UTC-05:00 in the sample incidents).")
 
 
 class IncidentSummary(Output):
@@ -82,7 +82,7 @@ class Stock(Output):
     warehouse_id: str
     sku: str
     available: int = Field(description="Synthetic units available.")
-    ready_at: str = Field(description="When the stock can leave the warehouse, ISO 8601 in Lima time.")
+    ready_at: str = Field(description="When the stock can leave the warehouse, ISO 8601 in the incident's local time.")
 
 
 class CarrierQuote(Output):
@@ -180,8 +180,9 @@ class Quote(Output):
     lines: list[BookingLine]
     base_usd: float = Field(description="Cost of the carriers and services.")
     service_fee_usd: float
-    igv_rate: float = Field(description="Peru's sales tax (IGV) rate, applied to cost plus fee.")
-    igv_usd: float
+    tax_rate: float = Field(description="Sales tax rate, applied to cost plus fee.")
+    tax_label: str = Field(description="How the tax reads on a receipt, such as Tax 18%.")
+    tax_usd: float
     total_usd: float = Field(description="What book_carrier charges; the person must confirm this exact amount.")
     currency: str
     payment_method: str
@@ -210,8 +211,9 @@ class Booking(Output):
     lines: list[BookingLine]
     base_usd: float
     service_fee_usd: float
-    igv_rate: float
-    igv_usd: float
+    tax_rate: float
+    tax_label: str
+    tax_usd: float
     total_usd: float
     currency: str
     payment: Payment
@@ -234,7 +236,7 @@ class Alert(Output):
     incident_id: str
     source_version: int
     kind: str
-    change: str = Field(description="What changed, such as Arequipa stock is now 3 units.")
+    change: str = Field(description="What changed, such as stock at the warehouse is now 3 units.")
     approval_invalidated: bool = Field(description="Whether a person's approval stopped applying.")
     previous_plan: AlertPlan
     new_plan: dict | None = Field(description="The recalculated pick (label, cost, delay), or null.")

@@ -14,15 +14,15 @@ INTERNAL_ID = re.compile(r"SHIP-\d+:[0-9a-f-]{8,}", re.I)
 ISO = re.compile(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}")
 
 
-def test_plan_ids_become_labels_times_become_lima_and_the_pick_line_goes():
+def test_plan_ids_become_labels_times_become_local_and_the_pick_line_goes():
     plans = build_plans(seed_state("SHIP-421"), 1)
     split = next(plan for plan in plans if plan["kind"] == "split-express")
     raw = (f"I recommend `{split['id']}` ({split['label']}): on time, ETA 2026-10-12T13:00:00-05:00, "
            f"or 2026-10-12T18:00Z. Unknown SHIP-421:00000000-0000:other:v9.\n\n\n**Recommended plan:** `{split['id']}`")
     shown = customer_text(raw, plans)
-    assert shown == (f"I recommend “{split['label']}”: on time, ETA Oct 12, 13:00 Lima time, "
-                     "or Oct 12, 13:00 Lima time. Unknown the plan.")
-    assert customer_text("Arrives 2026-10-12T13:00:00-05:00 Lima time.", plans) == "Arrives Oct 12, 13:00 Lima time."
+    assert shown == (f"I recommend “{split['label']}”: on time, ETA Oct 12, 13:00 local time, "
+                     "or Oct 12, 13:00 local time. Unknown the plan.")
+    assert customer_text("Arrives 2026-10-12T13:00:00-05:00 local time.", plans) == "Arrives Oct 12, 13:00 local time."
     assert customer_text("", plans) == "" and customer_text("No plans here.", []) == "No plans here."
 
 

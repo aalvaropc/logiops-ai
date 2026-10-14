@@ -20,7 +20,7 @@ def router(ctx: Context) -> APIRouter:
     @routes.post("/incidents/{incident_id}/bookings/quote")
     async def quote_booking(incident_id: str, http_request: Request, request: QuoteRequest | None = None) -> dict[str, Any]:
         """Price the paid carriers and services of a current plan (the approved one by default):
-        cost, service fee and IGV 18 %, valid for ten minutes. A quote charges nothing."""
+        cost, service fee and sales tax, valid for ten minutes. A quote charges nothing."""
         return bookings.quote(incident_id, request.plan_id if request else None, actor_of(http_request))
 
     @routes.post("/quotes/{quote_id}/confirm")

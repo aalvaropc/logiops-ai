@@ -205,10 +205,9 @@ footer { padding: 39px 0; color: #718e91; text-align: center; font-size: 11px; }
 .device-chip.chip-plan { background: #173a2f; color: #c7f3e2; }
 .device-map { margin: 0; }
 .device-map svg { display: block; width: 100%; max-width: 260px; height: auto; margin: 0 auto; }
-.map-land { fill: #0f2a33; stroke: #2d5866; stroke-width: 1; stroke-linejoin: round; }
-.city { fill: #6b8f99; }
-.city-origin, .city-destination, .city-source { fill: #e6f6fb; }
-.city-label { fill: #cfe3e8; font-size: 9px; font-weight: 600; }
+.place { fill: #6b8f99; }
+.place-origin, .place-destination, .place-source { fill: #e6f6fb; }
+.place-label { fill: #cfe3e8; font-size: 12px; font-weight: 600; }
 .leg { fill: none; stroke-width: 2.4; stroke-linecap: round; }
 .leg-delayed { stroke: #e9ae63; stroke-dasharray: 4 4; }
 .leg-local { stroke: #62dcb6; }

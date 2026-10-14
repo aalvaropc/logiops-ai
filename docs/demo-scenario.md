@@ -1,7 +1,8 @@
 # Demo scenario: four synthetic incidents
 
-All data is synthetic and every incident is marked `simulated: true`. Times
-use `America/Lima` (UTC-05:00). The dates below are the seed's own: the first
+All data is synthetic and every incident is marked `simulated: true`. The place
+names are examples (a scenario pack can use any) and times carry the UTC-05:00
+offset. The dates below are the seed's own: the first
 orders are due on 2026-10-12, the rest one or two days later. The app moves every
 timestamp by whole days so that first day is always tomorrow
 (`LOGIOPS_SCENARIO_ANCHOR`: `relative` by default, `fixed`, or a `YYYY-MM-DD` day

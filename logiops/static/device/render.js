@@ -1,9 +1,9 @@
 import { dollars, bookingRows } from "../app/purchase.js";
-import { formatDate, allocationSummary } from "../app/selectors.js";
+import { formatDate, allocationSummary, TIME_ZONE } from "../app/selectors.js";
 import { incidentFacts, confirmDetails, resultFigures, alertDetails } from "./surfaces.js";
 
 const SVG = "http://www.w3.org/2000/svg";
-const WHEN = new Intl.DateTimeFormat("en-US", { timeZone: "America/Lima", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
+const WHEN = new Intl.DateTimeFormat("en-US", { timeZone: TIME_ZONE, month: "short", day: "numeric", hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
 const STEP_NAMES = {
   get_shipment: "Shipment", get_order: "Order", get_inventory: "Stock", find_alternative_carriers: "Carrier quotes",
   investigate_incident: "Plans calculated", get_execution_status: "Execution status", list_incidents: "Inbox",
@@ -53,57 +53,44 @@ export function renderHome(section, { greeting, lead, session }, doc = globalThi
   section.append(strip);
 }
 
-function drawCity(layer, city, role, doc) {
-  const right = city.x < 170;
+function drawPlace(layer, place, doc) {
+  const below = place.role === "destination";
   layer.append(
-    svg("circle", { cx: city.x, cy: city.y, r: role ? 3.2 : 2, class: `city${role ? ` city-${role}` : ""}` }, undefined, doc),
-    svg("text", { x: city.x + (right ? 6 : -6), y: city.y + 3, "text-anchor": right ? "start" : "end", class: "city-label" }, city.name, doc),
+    svg("circle", { cx: place.x, cy: place.y, r: place.role === "source" ? 4 : 5, class: `place place-${place.role}` }, undefined, doc),
+    svg("text", { x: place.x, y: place.y + (below ? 17 : -10), "text-anchor": "middle", class: "place-label" }, place.name, doc),
   );
 }
 
 export function drawMap(map, caption, snapshot, plan, route, doc = globalThis.document) {
-  map.replaceChildren(
-    svg("title", { id: "device-map-title" }, "Plan route on a map of Peru", doc),
-    svg("path", { d: route.linePath(route.OUTLINE), class: "map-land" }, undefined, doc),
-  );
+  map.replaceChildren(svg("title", { id: "device-map-title" }, "Plan route diagram", doc));
   caption.replaceChildren();
   const shipment = snapshot?.state?.shipment;
   if (!shipment) return;
-  const origin = route.cityOf(shipment.origin);
-  const destination = route.cityOf(shipment.destination);
-  const legs = route.legsFor(snapshot.state, plan);
+  const view = route.layout(shipment, route.legsFor(snapshot.state, plan));
   const layer = svg("g", { class: "legs" }, undefined, doc);
   const lifts = [0.22, -0.22, 0.42, -0.42];
   let travelling = 0;
-  if (!legs.length && origin && destination) layer.append(svg("path", { d: route.arc(origin, destination, 0.22), class: "leg leg-delayed" }, undefined, doc));
-  for (const leg of legs) {
+  if (!view.legs.length && view.places.length) layer.append(svg("path", { d: route.arc(view.places[0], view.destination, 0.22), class: "leg leg-delayed" }, undefined, doc));
+  for (const leg of view.legs) {
     const className = `leg leg-${leg.type}${leg.late ? " late" : ""}`;
-    if (leg.from && leg.to && leg.from.name === leg.to.name) {
+    if (leg.loop) {
       layer.append(svg("circle", { cx: leg.to.x, cy: leg.to.y, r: 8, class: className }, undefined, doc));
-    } else if (leg.from && leg.to) {
+    } else {
       layer.append(svg("path", { d: route.arc(leg.from, leg.to, lifts[travelling % lifts.length]), class: className }, undefined, doc));
       travelling += 1;
     }
   }
-  const cities = svg("g", { class: "cities" }, undefined, doc);
-  const shown = new Set();
-  for (const [city, role] of [[origin, "origin"], [destination, "destination"], ...legs.map((leg) => [leg.from, "source"])]) {
-    if (city && !shown.has(city.name)) {
-      shown.add(city.name);
-      drawCity(cities, city, role, doc);
-    }
-  }
-  map.append(layer, cities);
-  if (!origin || !destination) caption.append(el("span", "muted", `${shipment.origin} → ${shipment.destination} (off the map).`, doc));
-  if (!legs.length) {
-    caption.append(el("span", "muted", origin && destination ? "Delayed route. Investigate to see a plan's legs." : "Investigate to see the plan.", doc));
+  const places = svg("g", { class: "places" }, undefined, doc);
+  for (const place of [...view.places, view.destination]) drawPlace(places, { ...place, name: route.shortName(place.name, view.places.length > 2 ? 10 : 14) }, doc);
+  map.append(layer, places);
+  if (!view.legs.length) {
+    caption.append(el("span", "muted", "Delayed route. Investigate to see a plan's legs.", doc));
     return;
   }
   const list = el("ul", "legend", undefined, doc);
-  for (const leg of legs) {
+  for (const leg of view.legs) {
     const item = el("li", `leg-${leg.type}${leg.late ? " late" : ""}`, undefined, doc);
-    const where = leg.from && leg.to ? (leg.from.name !== leg.to.name ? `${leg.from.name} → ${leg.to.name}` : `at ${leg.to.name}`)
-      : `${leg.type === "local" ? leg.source.replace(/-stock$/, "") : shipment.origin} → ${shipment.destination}`;
+    const where = leg.loop ? `at ${leg.to.name}` : `${leg.from.name} → ${leg.to.name}`;
     item.append(el("span", "swatch", undefined, doc), el("span", "", `${leg.label}: ${leg.units} units ${where}, ${when(leg.arrival_eta)}${leg.late ? " · late" : ""}`, doc));
     list.append(item);
   }
@@ -154,7 +141,7 @@ export function renderIncident(section, { snapshot, plan, summary, route }, doc 
   facts3.append(fact("Original ETA", facts.originalEta, facts.promiseLabel), fact("Delayed ETA", facts.delayedEta, `+${facts.delayHours} hours`, "warning"),
     fact("Local stock", facts.stock ? `${facts.stock.available} units` : "None", facts.stock ? facts.stock.name : "No local warehouse"));
   const figure = el("figure", "device-map", undefined, doc);
-  const map = svg("svg", { id: "device-map", viewBox: "0 0 240 300", role: "img", "aria-labelledby": "device-map-title" }, undefined, doc);
+  const map = svg("svg", { id: "device-map", viewBox: `0 0 ${route.VIEW.width} ${route.VIEW.height}`, role: "img", "aria-labelledby": "device-map-title" }, undefined, doc);
   const caption = el("figcaption", "", undefined, doc);
   caption.id = "device-map-caption";
   figure.append(map, caption);

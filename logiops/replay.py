@@ -46,8 +46,8 @@ def _text(answer: str) -> dict[str, Any]:
     }
 
 
-def _lima(iso: str) -> str:
-    return datetime.fromisoformat(iso).strftime("%b %d, %H:%M").replace(" 0", " ") + " Lima time"
+def _local(iso: str) -> str:
+    return datetime.fromisoformat(iso).strftime("%b %d, %H:%M").replace(" 0", " ") + " local time"
 
 
 def _result(messages: list[dict[str, Any]], tool: str) -> dict[str, Any]:
@@ -159,11 +159,11 @@ class ReplayConverse:
             who = f"critical order for {', '.join(critical)}" if critical else f"{item['units']} units"
             risk = f", {item['critical_units_at_risk']} critical units at risk" if item["critical_units_at_risk"] else ""
             lines.append(f"{index}. {item['incident_id']} ({item['kind_label']}, {item['route']}): {item['title'].rstrip('.')}; "
-                         f"{who}{risk}, due {_lima(item['due_eta'])}, +{item['delay_hours']} h.")
+                         f"{who}{risk}, due {_local(item['due_eta'])}, +{item['delay_hours']} h.")
         first = open_[0]
         tail = f" {resolved} resolved." if resolved else ""
         why = (f"{first['critical_units_at_risk']} critical units at risk" if first["critical_units_at_risk"]
-               else f"due {_lima(first['due_eta'])}")
+               else f"due {_local(first['due_eta'])}")
         answer = (
             f"{len(open_)} open incidents, the most critical units at risk first.{tail}\n\n" + "\n".join(lines)
             + f"\n\nStart with: {first['incident_id']}\n"

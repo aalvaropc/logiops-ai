@@ -51,9 +51,9 @@ def actor_key(actor: Actor) -> str | None:
     return "operator" if actor.kind == "operator" else None
 
 
-def lima_text(moment: datetime) -> str:
+def local_text(moment: datetime) -> str:
     local = moment.astimezone(LIMA)
-    return f"{local.strftime('%b')} {local.day}, {local.strftime('%H:%M')} Lima time"
+    return f"{local.strftime('%b')} {local.day}, {local.strftime('%H:%M')} local time"
 
 
 def welcome(turns: list[dict[str, Any]], name: str | None) -> str | None:
@@ -63,7 +63,7 @@ def welcome(turns: list[dict[str, Any]], name: str | None) -> str | None:
     last_user = next((turn for turn in reversed(turns) if turn["role"] == "user"), None)
     last_reply = next((turn for turn in reversed(turns) if turn["role"] == "assistant"), None)
     incident = next((turn["incident"] for turn in reversed(turns) if turn.get("incident")), None)
-    when = lima_text(datetime.fromisoformat(turns[-1]["at"]))
+    when = local_text(datetime.fromisoformat(turns[-1]["at"]))
     parts = [f"Welcome back{', ' + name if name else ''}. Last time ({when})"]
     parts.append(f" we were on {incident}" if incident else " we talked")
     if last_user:
