@@ -67,23 +67,18 @@
           <button id="ask" type="submit" class="send">Send</button>
         </form>
       </div>
-    </div>
-    <footer class="stage-note">A simulated Alexa+ screen on the same MCP tools and data as the <a id="console-link" href="/console">operator console</a>. Projections come from synthetic quotes; delivery is not physically confirmed.</footer>
-  </div>
-  <div id="sheet" class="sheet" role="dialog" aria-modal="true" aria-labelledby="sheet-title" hidden>
-    <div class="sheet-panel">
-      <div class="sheet-head">
-        <h2 id="sheet-title">Conversation</h2>
-        <label id="speak-toggle" class="speak-toggle" hidden><input id="speak-replies" type="checkbox"> Read replies aloud<span id="speak-engine"></span></label>
-        <button id="mcp-app-theme" type="button" class="secondary mcp-app-theme" aria-pressed="false">Dark plans card</button>
-        <button id="sheet-close" type="button" class="secondary">Close</button>
-      </div>
-      <ol id="conversation" class="conversation" aria-label="Conversation" tabindex="0"></ol>
-      <div id="device-trace" class="device-trace" hidden>
-        <p class="label"><span class="device-check" hidden></span> <span class="trace-title">From the recorded tool trace</span></p>
-        <ol class="device-steps" aria-label="Steps the agent took, from the recorded tool trace"></ol>
+      <div id="sheet" class="sheet" role="dialog" aria-modal="true" aria-labelledby="sheet-title" hidden>
+        <div class="sheet-panel">
+          <div class="sheet-head">
+            <h2 id="sheet-title">Conversation</h2>
+            <label id="speak-toggle" class="speak-toggle" hidden><input id="speak-replies" type="checkbox"> Read replies aloud<span id="speak-engine"></span></label>
+            <button id="sheet-close" type="button" class="secondary">Close</button>
+          </div>
+          <ol id="conversation" class="conversation" aria-label="Conversation" tabindex="0"></ol>
+        </div>
       </div>
     </div>
+    <footer class="stage-note">A simulated Alexa+ screen on the same MCP tools and data as the <a id="console-link" href="/console">operator console</a>. Projections come from synthetic quotes; delivery is not physically confirmed. <button id="mcp-app-theme" type="button" class="mcp-app-theme" aria-pressed="false">Dark plans card</button></footer>
   </div>
 </body>
 </html>

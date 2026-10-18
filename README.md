@@ -396,8 +396,9 @@ navigates away. The host checks the proxy's origin on every message, sends
 no separate sandbox origin is available. Its MCP client runs `initialize` once
 and then sends `MCP-Protocol-Version: 2025-11-25` on every request. It passes a
 full `hostContext` (theme, display mode, container size, locale, time
-zone, device capabilities, safe-area insets), and its "Light card" toggle
-sends `ui/notifications/host-context-changed`.
+zone, device capabilities, safe-area insets), and its "Dark plans card"
+toggle, under the simulated device on a desktop screen, sends
+`ui/notifications/host-context-changed`.
 
 In Swagger, run `POST /demo/reset`, `POST /incidents/SHIP-421/agent/investigate`
 (or the deterministic `/investigate` endpoint),

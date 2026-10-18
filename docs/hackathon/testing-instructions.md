@@ -52,9 +52,10 @@ LOGIOPS_AGENT_MODE=replay uv run uvicorn logiops.api:app --host 127.0.0.1 --port
    seconds) to Speaking or Ready, and the heard and spoken lines update. "More"
    opens the whole conversation with the Agent Skill (`logiops-exception-desk`,
    read over MCP) listed first, then the steps of the recorded tool trace one by
-   one and the "Checked against the data" badge. The MCP App card highlights the
-   same plan as the operator console ("Agent pick"); "Light card" switches the
-   card's theme through the MCP Apps host context, without reloading it. The
+   one, each under the reply it belongs to, and the "Checked against the data" badge. The MCP App card highlights the
+   same plan as the operator console ("Agent pick"); on a desktop screen, "Dark
+   plans card" under the device switches the card's theme through the MCP Apps
+   host context, without reloading it (phones and tablets keep the light card). The
    operator console at `/console` shows the same incident in full (the Approve
    and Execute buttons, bookings, preferences, the audit trail and the Developer
    drawer); the link in the top bar of each page keeps the incident.
