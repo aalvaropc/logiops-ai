@@ -1,5 +1,7 @@
 """The Alexa+ device: home queue, incident, plans with the MCP App card, confirmation, result, purchase, receipt and alerts."""
 
+import re
+
 import pytest
 from playwright.sync_api import expect
 
@@ -244,6 +246,33 @@ def test_an_approval_blocks_a_second_one_and_can_be_withdrawn(page, replay_serve
     expect(page.locator('[data-surface="incident"]')).to_be_visible()
     expect(page.locator("#device-spoken")).to_contain_text("is withdrawn")
     expect(page.locator('#lifecycle li[aria-current="step"]')).to_have_text("Detected")
+    assert_accessible(page)
+    assert page_errors == []
+
+
+def test_the_phone_dock_expands_its_reply_toggles_the_voice_and_keeps_the_shell_bar_whole(page, replay_server, page_errors, reset_demo):
+    page.set_viewport_size({"width": 360, "height": 740})
+    page.goto(f"{replay_server}/demo#SHIP-421")
+    expect(page.locator("#connection")).to_have_text("Connected")
+    say_on_device(page, "What's happening with SHIP-421?")
+    line = page.locator("#device-spoken")
+    assert line.evaluate("(node) => node.scrollHeight > node.clientHeight + 1"), "a long reply starts clamped"
+    line.click()
+    expect(page.locator(".talk")).to_have_class(re.compile(r"\bexpanded\b"))
+    assert line.evaluate("(node) => node.scrollHeight <= node.clientHeight + 1"), "a tap shows the whole reply"
+    orb = page.locator("#device-orb")
+    pressed = orb.get_attribute("aria-pressed")
+    orb.click()
+    expect(orb).not_to_have_attribute("aria-pressed", pressed)
+    assert page.locator("#speak-replies").is_checked() == (pressed == "false")
+
+    say_on_device(page, "open SHIP-433")
+    expect(page.locator(".talk")).not_to_have_class(re.compile(r"\bexpanded\b"))
+    changed = page.request.post(f"{replay_server}/demo/inventory", data={"incident_id": "SHIP-421", "available": 20})
+    assert changed.ok, changed.text()
+    expect(page.locator("#alerts-bell")).to_be_visible(timeout=12000)
+    assert page.evaluate("(() => { const bar = document.querySelector('.device-bar'); return bar.scrollWidth <= bar.clientWidth; })()")
+    assert page.locator(".send-label").is_hidden() and page.locator("#ask").get_attribute("aria-label") == "Send"
     assert_accessible(page)
     assert page_errors == []
 

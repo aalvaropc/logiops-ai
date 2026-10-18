@@ -96,6 +96,7 @@ function device(method, ...args) {
   else if (method === "reply") {
     const [text, spoken, speaking] = args;
     $("device-spoken").textContent = shortSpoken(text, spoken, markdown.plainText);
+    document.querySelector(".talk").classList.remove("expanded");
     $("more").hidden = false;
     setVoice("reply", speaking);
   }
@@ -428,6 +429,7 @@ function paintTalk() {
   $("heard-label").hidden = !heard;
   $("device-heard").textContent = heard ? heard.text : "Try “any delays today?”";
   $("device-spoken").textContent = reply ? shortSpoken(reply.text, reply.spoken, markdown.plainText) : "Ask about the queue, an incident, or a plan.";
+  document.querySelector(".talk").classList.remove("expanded");
   $("more").hidden = !state.conversation.length;
 }
 
@@ -558,7 +560,8 @@ function renderAlertBell() {
   const bell = $("alerts-bell");
   const shown = bellText(alerts.current(), state.incidentId);
   bell.hidden = !shown;
-  bell.textContent = shown ? shown.text : "";
+  bell.replaceChildren();
+  if (shown) bell.append(`${shown.count} alert${shown.count === 1 ? "" : "s"}`, el("span", "bell-where", ` · ${shown.incidentId}`));
   bell.setAttribute("aria-label", shown ? shown.label : "No proactive alerts");
 }
 
@@ -592,6 +595,18 @@ function say(role, text, meta, spoken, check) {
   if (speaking) speak(spoken || markdown.plainText(text));
 }
 
+function paintVoiceToggle() {
+  const toggle = $("device-orb");
+  toggle.disabled = $("speak-toggle").hidden;
+  toggle.setAttribute("aria-pressed", String(!toggle.disabled && $("speak-replies").checked));
+}
+
+function setSpeech(on) {
+  $("speak-replies").checked = on;
+  if (!on) stopSpeaking();
+  paintVoiceToggle();
+}
+
 function speechOn() {
   return $("speak-replies").checked && (state.voice.engine === "polly" || "speechSynthesis" in window);
 }
@@ -612,6 +627,7 @@ async function loadVoice() {
     $("speak-replies").checked = true;
     $("speak-engine").textContent = ` (Amazon Polly · ${state.voice.voice})`;
   }
+  paintVoiceToggle();
 }
 
 function paintSheet() {
@@ -662,6 +678,7 @@ function closeSheet() {
 function setUpVoice() {
   const Recognition = window.SpeechRecognition || window.webkitSpeechRecognition;
   if ("speechSynthesis" in window) $("speak-toggle").hidden = false;
+  paintVoiceToggle();
   if (!Recognition) return;
   const mic = $("mic");
   mic.hidden = false;
@@ -717,6 +734,13 @@ $("ask-form").addEventListener("submit", (event) => {
 });
 $("execute-plan").addEventListener("click", () => handleUtterance("Execute the approved plan"));
 $("more").addEventListener("click", openSheet);
+$("device-orb").addEventListener("click", () => setSpeech(!$("speak-replies").checked));
+$("speak-replies").addEventListener("change", () => setSpeech($("speak-replies").checked));
+$("device-spoken").addEventListener("click", () => {
+  const line = $("device-spoken");
+  const talk = document.querySelector(".talk");
+  if (talk.classList.contains("expanded") || line.scrollHeight > line.clientHeight + 1) talk.classList.toggle("expanded");
+});
 $("sheet-close").addEventListener("click", closeSheet);
 $("sheet").addEventListener("click", (event) => { if (event.target === $("sheet")) closeSheet(); });
 window.addEventListener("keydown", (event) => {

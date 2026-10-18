@@ -242,7 +242,8 @@ export function createCommands({
         if (standing) {
           const approvedLabel = state.snapshot.plans.find((item) => item.id === standing.plan_id)?.label || standing.plan_id;
           say("assistant", plan?.id === standing.plan_id ? `“${approvedLabel}” is already approved. Press Execute or say “execute it” when you're ready.`
-            : `“${approvedLabel}” is already approved for this data, so I can't approve another plan. Say “withdraw the approval” first if you want to choose again.`);
+            : `“${approvedLabel}” is already approved for this data, so I can't approve another plan. Say “withdraw the approval” first if you want to choose again.`,
+          undefined, plan?.id === standing.plan_id ? "Already approved. Press Execute when you're ready." : "Another plan is already approved. Say “withdraw the approval” to choose again.");
           return;
         }
         if (!plan) {
@@ -285,7 +286,8 @@ export function createCommands({
         }
         if (!approval) {
           const next = investigated() ? "Say “approve the recommended plan” first, and I'll read it back." : `Ask me what's happening with ${state.incidentId} first, then approve a plan.`;
-          say("assistant", `Nothing is approved for ${state.incidentId} yet, so nothing ran. ${next}`);
+          say("assistant", `Nothing is approved for ${state.incidentId} yet, so nothing ran. ${next}`, undefined,
+            investigated() ? "Nothing ran. Approve a plan first." : "Nothing ran. Ask me what's happening first.");
           return;
         }
         await act(executeApproved, "");
