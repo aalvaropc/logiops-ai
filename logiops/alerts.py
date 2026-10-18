@@ -103,12 +103,18 @@ class AlertWatcher:
             same = pick["kind"] == before["kind"]
             verdict = (f"“{pick['label']}” still works and is still my pick: ${pick['incremental_cost_usd']}, {_delay(pick)}."
                        if same else f"The new pick is “{pick['label']}”: ${pick['incremental_cost_usd']}, {_delay(pick)}.")
-            message = (f"{lead} I recalculated the plans. {verdict}{risk} Nothing was approved; "
-                       "say “approve the recommended plan”, or ask me about it.")
-            spoken = (f"Heads up on {incident_id}: {change}. I recalculated; "
-                      + (f"{pick['label']} still works, ${pick['incremental_cost_usd']}, {_delay(pick, 'hours')}."
-                         if same else f"the new pick is {pick['label']}, ${pick['incremental_cost_usd']}, {_delay(pick, 'hours')}.")
-                      + " Nothing was approved.")
+            next_step = ("Approve again to go ahead: say “approve the recommended plan”, or ask me about it." if approval
+                         else "Nothing was approved; say “approve the recommended plan”, or ask me about it.")
+            message = f"{lead} I recalculated the plans. {verdict}{risk} {next_step}"
+            figures = f"${pick['incremental_cost_usd']}, {_delay(pick, 'hours')}"
+            if approval:
+                spoken = (f"Heads up on {incident_id}: {change}, so your approval of {before['label']} no longer applies. "
+                          + (f"{pick['label']} still works, {figures}. Approve it again to go ahead."
+                             if same else f"The new pick is {pick['label']}, {figures}. Approve it to go ahead."))
+            else:
+                spoken = (f"Heads up on {incident_id}: {change}. I recalculated; "
+                          + (f"{pick['label']} still works, {figures}." if same else f"the new pick is {pick['label']}, {figures}.")
+                          + " Nothing was approved.")
         now = self.clock().isoformat()
         alert = {
             "id": f"{incident_id}-v{version}", "incident_id": incident_id, "source_version": version,

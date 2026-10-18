@@ -155,7 +155,7 @@ const alerts = createAlerts({
     if (purchase.pending()?.incidentId === alert.incident_id || purchase.stored()?.incidentId === alert.incident_id) purchase.forget();
     state.selectedPlanId = alert.new_plan?.plan_id || null;
     await refresh().catch(() => {});
-    say("assistant", alert.message, "proactive alert · nothing approved", alert.spoken);
+    say("assistant", alert.message, alert.approval_invalidated ? "proactive alert · approval invalidated" : "proactive alert · nothing approved", alert.spoken);
     showSurface("alert", { alert });
   },
 });
