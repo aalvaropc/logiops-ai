@@ -52,7 +52,7 @@ test("the read-back lists the breakdown and asks for approval only when the plan
   assert.equal(dollars(1234.5), "$1,234.50");
   assert.equal(spelled("LGO-7K2M9Q"), "L G O 7 K 2 M 9 Q");
   assert.deepEqual(bookingRows({ lines: [{ service: "Express", units: 8, cost_usd: 120 }, { service: "Stock", units: 12 }], base_usd: 120, service_fee_usd: 5, tax_label: "Tax 18%", tax_usd: 22.5, total_usd: 147.5 }),
-    [["Express, 8 units", "$120.00"], ["Stock, 12 units", "included"], ["Carriers and services", "$120.00"], ["Service fee", "$5.00"], ["Tax 18%", "$22.50"], ["Total", "$147.50"]]);
+    [["Carriers and services", "$120.00"], ["Express, 8 units", "$120.00", "line"], ["Stock, 12 units", "included", "line"], ["Service fee", "$5.00"], ["Tax 18%", "$22.50"], ["Total", "$147.50"]]);
 });
 
 test("book it quotes the named plan, keeps the purchase and reads it back; yes approves and pays once", async () => {

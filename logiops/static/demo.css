@@ -128,6 +128,8 @@ input::placeholder { color: var(--ink-3); }
 .booking-lines { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 16px; margin: 0 0 10px; font-size: 14px; }
 .booking-lines dt { color: var(--ink-2); }
 .booking-lines dd { margin: 0; text-align: right; font-variant-numeric: tabular-nums; }
+.booking-lines .line { color: var(--ink-3); }
+.booking-lines dt.line { padding-left: 14px; }
 .booking-lines dt:nth-last-of-type(1), .booking-lines dd:last-of-type { font-weight: 800; }
 
 .pref-form { display: grid; gap: 6px; margin-top: 14px; }

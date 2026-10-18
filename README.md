@@ -10,7 +10,7 @@ approves with one "yes", the agent executes and verifies the result, and can
 book and pay the carriers after reading the price back. Every answer is checked
 against the incident's data before it is shown.
 
-![The simulated Alexa+ device: home card with the incident inbox as a carousel](docs/img/device-home.png)
+![The simulated Alexa+ device: home card with the incident inbox as a stacked queue](docs/img/device-home.png)
 
 | The plans, with the interactive MCP App card inside the device | Approve with one yes | The result, verified |
 |---|---|---|
@@ -76,7 +76,7 @@ headless and prints PASS or FAIL.
 ## Architecture
 
 ```text
- /demo  simulated Alexa+ device: one card at a time (home carousel, incident, plans
+ /demo  simulated Alexa+ device: one card at a time (home queue, incident, plans
         with the MCP App inside, confirm, receipt, alert, result), voice, "More"
  /console  operator console: inbox, plans, Approve, Execute, bookings, preferences,
         audit trail, metrics, Developer drawer (token, stock, reset, pack import)
@@ -199,7 +199,7 @@ same server without `LOGIOPS_AGENT_MODE=replay`.
 
 Open the browser demo at <http://127.0.0.1:8000/demo>. It is a simulated
 Alexa+ device (an Echo Show-style screen, full-screen on a phone) that shows
-one card at a time: the home card with the incident inbox as a carousel (open
+one card at a time: the home card with the incident inbox as a stacked queue (open
 ones first, then by critical units at risk, priority and due time; "Start
 here" marks the briefing's pick); the incident card with its ETAs, local stock,
 the plan's legs on a route diagram and each order's promise against its projected

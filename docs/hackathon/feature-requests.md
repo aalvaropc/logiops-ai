@@ -7,7 +7,7 @@ workaround we had to test, **P3** polish. Each request names the evidence in
 
 | Priority | Product | Request | Why (evidence) |
 |---|---|---|---|
-| P1 | Alexa+ developer tools | A public Alexa+ simulator (even a limited one) and public access to the MCP toolkit for hackathon participants. | The tools are partner-only; we built our own device simulation to show the conversation, cards and carousels (`alexa-plus-readiness.md`, feedback "Alexa+ developer tools"). |
+| P1 | Alexa+ developer tools | A public Alexa+ simulator (even a limited one) and public access to the MCP toolkit for hackathon participants. | The tools are partner-only; we built our own device simulation to show the conversation and the cards (`alexa-plus-readiness.md`, feedback "Alexa+ developer tools"). |
 | P1 | MCP Apps | A reference sandbox proxy page in the SDK and a documented local-development pattern (two loopback origins). | Every web host must build the second-origin proxy; ours is `mcp_app_sandbox.html` plus a second CloudFront distribution (feedback "MCP Apps"). |
 | P1 | Strands Agents | An MCP client mode that runs on the caller's event loop (or accepts an existing `ClientSession`) instead of a background thread. | `MCPClient` deadlocks with an in-process stateless Streamable HTTP server; we wrapped each tool in our own `AgentTool` (friction 2026-10-12). |
 | P2 | Amazon Cognito | Advertise `code_challenge_methods_supported` in the OIDC discovery document and support RFC 8707 resource indicators (an `aud` per resource server). | MCP clients expect both; we publish our own RFC 8414 document and check scopes instead of `aud` (friction 2026-10-11). |

@@ -1,4 +1,4 @@
-"""The Alexa+ device: home carousel, incident, plans with the MCP App card, confirmation, result, purchase, receipt and alerts."""
+"""The Alexa+ device: home queue, incident, plans with the MCP App card, confirmation, result, purchase, receipt and alerts."""
 
 import pytest
 from playwright.sync_api import expect
@@ -56,6 +56,7 @@ def test_device_walkthrough(page, replay_server, page_errors, reset_demo, width)
     home = page.locator('[data-surface="home"]')
     expect(home).to_be_visible()
     expect(home).to_contain_text("Hi, I'm LogiOps")
+    expect(home.locator("h2#home-title")).to_have_text("4 open incidents")
     expect(home.locator(".incident-card")).to_have_count(4)
     expect(page).to_have_title("LogiOps AI · SHIP-433")
     expect(home.locator(".incident-card[aria-pressed]")).to_have_count(0)
@@ -63,7 +64,7 @@ def test_device_walkthrough(page, replay_server, page_errors, reset_demo, width)
     card = home.locator('.incident-card[data-incident="SHIP-433"]')
     page.evaluate("document.querySelector('#inbox .incident-card').dataset.marker = 'before-metrics'")
     expect(home.locator(".session-strip")).to_be_visible()
-    assert page.evaluate("document.querySelector('#inbox .incident-card').dataset.marker") == "before-metrics", "metrics must not rebuild the carousel"
+    assert page.evaluate("document.querySelector('#inbox .incident-card').dataset.marker") == "before-metrics", "metrics must not rebuild the queue"
 
     card.click()
     incident = page.locator('[data-surface="incident"]')
@@ -106,6 +107,8 @@ def test_device_walkthrough(page, replay_server, page_errors, reset_demo, width)
     expect(result).to_be_visible()
     expect(result).to_contain_text("Units accounted for")
     expect(result).to_contain_text("30")
+    expect(result.locator(".result-figure")).to_have_text("12 critical units on time projected")
+    expect(result.locator("dd .outcome.late")).to_have_text("+8 h late")
 
     say_on_device(page, "book it")
     expect(confirm).to_be_visible()
@@ -151,7 +154,7 @@ def test_the_device_fits_a_small_phone(page, replay_server, page_errors, reset_d
     assert page_errors == []
 
 
-def test_a_briefing_reorders_the_carousel_and_a_no_dismisses_a_confirmation(page, replay_server, page_errors, reset_demo):
+def test_a_briefing_reorders_the_queue_and_a_no_dismisses_a_confirmation(page, replay_server, page_errors, reset_demo):
     page.set_viewport_size({"width": 1440, "height": 1000})
     page.goto(f"{replay_server}/demo#SHIP-421")
     expect(page.locator("#connection")).to_have_text("Connected")

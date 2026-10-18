@@ -559,11 +559,12 @@ function showBooking(booking) {
   head.textContent = `Booked ${booking.number} · ${dollars(booking.total_usd)} charged once (simulated payment)`;
   const list = document.createElement("dl");
   list.className = "booking-lines";
-  for (const [term, value] of bookingRows(booking)) {
+  for (const [term, value, kind] of bookingRows(booking)) {
     const dt = document.createElement("dt");
     dt.textContent = term;
     const dd = document.createElement("dd");
     dd.textContent = value;
+    if (kind === "line") dt.className = dd.className = "line";
     list.append(dt, dd);
   }
   const open = document.createElement("button");

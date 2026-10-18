@@ -32,9 +32,9 @@ export function purchaseReadback(purchase, plan) {
 
 export function bookingRows(booking) {
   return [
-    ...booking.lines.map((line) => [`${line.service}, ${line.units} units`, "cost_usd" in line ? dollars(line.cost_usd) : "included"]),
-    ["Carriers and services", dollars(booking.base_usd)], ["Service fee", dollars(booking.service_fee_usd)],
-    [booking.tax_label, dollars(booking.tax_usd)], ["Total", dollars(booking.total_usd)],
+    ["Carriers and services", dollars(booking.base_usd)],
+    ...booking.lines.map((line) => [`${line.service}, ${line.units} units`, "cost_usd" in line ? dollars(line.cost_usd) : "included", "line"]),
+    ["Service fee", dollars(booking.service_fee_usd)], [booking.tax_label, dollars(booking.tax_usd)], ["Total", dollars(booking.total_usd)],
   ];
 }
 

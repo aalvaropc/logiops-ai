@@ -1,6 +1,6 @@
 import { dollars, bookingRows } from "../app/purchase.js";
 import { formatDate, allocationSummary, distinguishing, TIME_ZONE } from "../app/selectors.js";
-import { incidentFacts, incidentBand, confirmDetails, resultFigures, alertDetails } from "./surfaces.js";
+import { incidentFacts, incidentBand, confirmDetails, resultFigures, resultOutcome, orderRows, alertDetails } from "./surfaces.js";
 import { EMPTY_SESSION } from "../app/metrics.js";
 
 const SVG = "http://www.w3.org/2000/svg";
@@ -36,6 +36,18 @@ function when(iso) {
   return Number.isNaN(time) ? "—" : WHEN.format(new Date(time));
 }
 
+function rowList(rows, doc = globalThis.document) {
+  const list = el("dl", "rows", undefined, doc);
+  for (const [term, value, kind] of rows) {
+    const chip = kind && kind !== "line";
+    const line = kind === "line" ? "line" : "";
+    const cell = el("dd", line, chip ? undefined : value, doc);
+    if (chip) cell.append(el("span", `outcome ${kind}`, value, doc));
+    list.append(el("dt", line, term, doc), cell);
+  }
+  return list;
+}
+
 function button(text, className, onClick, doc = globalThis.document) {
   const node = el("button", className, text, doc);
   node.type = "button";
@@ -43,13 +55,19 @@ function button(text, className, onClick, doc = globalThis.document) {
   return node;
 }
 
-export function renderHome(section, { greeting, lead, session }, doc = globalThis.document) {
+export function renderHome(section, { heading, greeting, lead, session }, doc = globalThis.document) {
   section.querySelector(".home-head")?.remove();
-  section.querySelector(".session-strip")?.remove();
   const head = el("div", "home-head", undefined, doc);
-  head.append(el("p", "lead", lead || greeting, doc));
-  if (lead) head.append(el("p", "sub", greeting, doc));
+  const title = el("h2", "", heading, doc);
+  title.id = "home-title";
+  head.append(title);
+  if (!lead) head.append(el("p", "sub", greeting, doc));
   section.prepend(head);
+  renderSession(section, session, doc);
+}
+
+export function renderSession(section, session, doc = globalThis.document) {
+  section.querySelector(".session-strip")?.remove();
   if (!session) return;
   const strip = el("ul", `session-strip${session.length ? "" : " empty"}`, undefined, doc);
   strip.setAttribute("aria-label", "This session's outcomes, from the recorded events");
@@ -201,14 +219,7 @@ export function renderConfirm(section, payload, { onYes, onNo, labels = [] }, do
   card.append(el("h2", "", details.title, doc), lead);
   const figure = el("p", "confirm-figure", undefined, doc);
   figure.append(el("strong", "", details.figure[0], doc), " ", el("span", "", details.figure[1], doc));
-  card.append(figure);
-  const rows = el("dl", "rows", undefined, doc);
-  for (const [term, value, tone] of details.rows) {
-    const cell = el("dd", "", tone ? undefined : value, doc);
-    if (tone) cell.append(el("span", `outcome ${tone}`, value, doc));
-    rows.append(el("dt", "", term, doc), cell);
-  }
-  card.append(rows);
+  card.append(figure, rowList(details.rows, doc));
   card.append(el("p", "note", details.note, doc));
   const actions = el("div", "confirm-actions", undefined, doc);
   const yes = button(details.yes, "primary", onYes, doc);
@@ -224,9 +235,7 @@ export function renderReceipt(section, { booking, onOpen }, doc = globalThis.doc
   const card = el("div", "receipt-card", undefined, doc);
   card.append(el("p", "band ok", "Receipt · simulated payment", doc), el("h2", "", `Booked ${booking.number}`, doc),
     el("p", "receipt-total", dollars(booking.total_usd), doc), el("p", "lead", booking.plan_label, doc));
-  const rows = el("dl", "rows", undefined, doc);
-  for (const [term, value] of bookingRows(booking)) rows.append(el("dt", "", term, doc), el("dd", "", value, doc));
-  card.append(rows, el("p", "note", `${String(booking.payment?.method || "").replace(/\s*\(simulated\)$/i, "")} · charged once · delivery is projected, not confirmed`, doc));
+  card.append(rowList(bookingRows(booking), doc), el("p", "note", `${String(booking.payment?.method || "").replace(/\s*\(simulated\)$/i, "")} · charged once · delivery is projected, not confirmed`, doc));
   card.append(button("Open printable receipt", "secondary", onOpen, doc));
   section.replaceChildren(card);
 }
@@ -247,6 +256,12 @@ export function renderResult(section, { snapshot, execution, plan, booking, time
   heading.append(...(plan ? labelNodes(plan.label, labels, doc) : [execution.plan_id]));
   card.append(el("p", "band ok", "Executed · operationally verified", doc), heading,
     el("p", "lead", `${snapshot.state.incident_id} · ${snapshot.state.title}`, doc));
+  if (plan) {
+    const outcome = resultOutcome(plan);
+    const figure = el("p", "result-figure", undefined, doc);
+    figure.append(el("strong", "", outcome.value, doc), " ", el("span", "", outcome.label, doc), " ", el("small", "", outcome.note, doc));
+    card.append(figure, rowList(orderRows(plan), doc));
+  }
   const figures = el("div", "figures", undefined, doc);
   for (const item of resultFigures(snapshot, execution)) {
     const box = el("div", "figure", undefined, doc);
