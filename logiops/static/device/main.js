@@ -106,6 +106,7 @@ function device(method, ...args) {
     const [text, spoken, speaking] = args;
     $("device-spoken").textContent = shortSpoken(text, spoken, markdown.plainText);
     document.querySelector(".talk").classList.remove("expanded");
+    document.querySelector(".talk").classList.add("replied");
     $("more").hidden = false;
     setVoice("reply", speaking);
   }
@@ -133,7 +134,9 @@ const api = createApi({
   onAgentCall: (phase, path) => {
     if (phase === "request") {
       device("voice", "request");
-      stage.ask(stageLine(path));
+      const asking = stageLine(path);
+      stage.ask(asking);
+      $("device-spoken").textContent = `${asking.filter(Boolean).join(" ")}…`;
       startFiller();
       return;
     }
