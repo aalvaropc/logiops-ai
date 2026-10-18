@@ -353,7 +353,9 @@ function paintSurface(shown = surfaces.current()) {
   } else if (shown.name === "plans") {
     renderPlansSurface();
   } else if (shown.name === "confirm") {
-    renderConfirm(section, shown.payload, { onYes: () => handleUtterance("yes"), onNo: () => handleUtterance("no") });
+    renderConfirm(section, shown.payload, {
+      onYes: () => handleUtterance("yes"), onNo: () => handleUtterance("no"), labels: snapshot ? visiblePlans(snapshot).map((plan) => plan.label) : [],
+    });
   } else if (shown.name === "receipt") {
     const booking = shown.payload.booking;
     renderReceipt(section, { booking, onOpen: () => openReceipt(booking.number).catch((error) => message(error.message || String(error))) });

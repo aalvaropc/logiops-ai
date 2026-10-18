@@ -75,6 +75,22 @@ export function allocationSummary(plan) {
   return [...units].map(([source, count]) => `${count} via ${source.replaceAll("-", " ")}`).join(" · ");
 }
 
+export function distinguishing(label, labels) {
+  const words = String(label).split(" ");
+  let best = { before: 0, after: 0 };
+  for (const other of labels) {
+    if (other === label) continue;
+    const theirs = String(other).split(" ");
+    let before = 0;
+    while (before < words.length && before < theirs.length && words[before] === theirs[before]) before += 1;
+    let after = 0;
+    while (after < words.length - before && after < theirs.length - before && words[words.length - 1 - after] === theirs[theirs.length - 1 - after]) after += 1;
+    if (before + after > best.before + best.after) best = { before, after };
+  }
+  if (best.before + best.after < 2 || best.before + best.after >= words.length) return [String(label)];
+  return [words.slice(0, best.before).join(" "), words.slice(best.before, words.length - best.after).join(" "), words.slice(words.length - best.after).join(" ")];
+}
+
 export function localWarehouse(snapshot) {
   return Object.keys(snapshot.state.inventory || {})[0] || null;
 }

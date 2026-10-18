@@ -150,7 +150,8 @@ def test_the_card_highlights_the_same_pick_as_the_panel():
     assert 'result?._meta?.["logiops/approved_plan_id"]' in card and "if (!approved) item.append(selectButton(" in card
     assert 'const hinted = result?._meta?.["logiops/recommended_plan_id"];' in card
     assert 'hinted === plan.id ? "Agent pick" : "Default pick"' in card and ".plan.pick {" in card
-    assert "if (picked) root.append(pickCard(picked, hinted, preference, approved, executed));" in card
+    assert "if (picked) root.append(pickCard(picked, hinted, preference, approved, executed, labels));" in card
+    assert "name.append(...labelNodes(plan.label, labels));" in card
     assert "const others = plans.filter((plan) => plan !== picked);" in card
     assert "preference?.preferred_plan_id" in card and ".plan.best" not in card
 

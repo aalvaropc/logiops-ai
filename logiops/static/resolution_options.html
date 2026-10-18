@@ -57,6 +57,7 @@
   button:hover { background: var(--button-hover); }
   button:focus-visible { outline: 3px solid var(--rule); outline-offset: 2px; }
   button.more { margin: 4px var(--pad) 0; }
+  .diff { font-weight: 800; text-decoration: underline; text-decoration-color: var(--accent); text-decoration-thickness: 3px; text-underline-offset: 4px; }
   .tag { display: inline-block; margin-left: 8px; padding: 1px 7px; border: 1.5px solid transparent; border-radius: 3px; vertical-align: 2px; color: var(--tag-ink); background: var(--tag); font-size: 12px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; }
   .tag.pick-tag { border-color: var(--accent); color: var(--accent); background: transparent; }
   .tag.done-tag { border-color: var(--ok); color: var(--ok); background: transparent; }
@@ -134,6 +135,28 @@
 
   const verdict = (order) => (order.delay_hours ? `+${order.delay_hours} h` : "on time");
 
+  function distinguishing(label, labels) {
+    const words = String(label).split(" ");
+    let best = { before: 0, after: 0 };
+    for (const other of labels) {
+      if (other === label) continue;
+      const theirs = String(other).split(" ");
+      let before = 0;
+      while (before < words.length && before < theirs.length && words[before] === theirs[before]) before += 1;
+      let after = 0;
+      while (after < words.length - before && after < theirs.length - before && words[words.length - 1 - after] === theirs[theirs.length - 1 - after]) after += 1;
+      if (before + after > best.before + best.after) best = { before, after };
+    }
+    if (best.before + best.after < 2 || best.before + best.after >= words.length) return [String(label)];
+    return [words.slice(0, best.before).join(" "), words.slice(best.before, words.length - best.after).join(" "), words.slice(words.length - best.after).join(" ")];
+  }
+
+  function labelNodes(label, labels) {
+    const [before, diff, after] = distinguishing(label, labels);
+    if (diff === undefined) return [before];
+    return [before && `${before} `, el("span", "diff", diff), after && ` ${after}`].filter(Boolean);
+  }
+
   function namer(orders) {
     const priorities = orders.map((order) => order.priority);
     if (new Set(priorities).size < priorities.length) return (order) => order.customer;
@@ -157,7 +180,7 @@
     return plan.id === approved ? el("span", "tag done-tag", executed ? "Executed" : "Approved") : null;
   }
 
-  function pickCard(plan, hinted, preference, approved, executed) {
+  function pickCard(plan, hinted, preference, approved, executed, labels) {
     const item = el("section", "plan pick");
     const critical = (plan.orders || []).filter((order) => order.priority === "critical");
     const late = (plan.orders || []).filter((order) => order.delay_hours);
@@ -166,7 +189,8 @@
       : late.length ? ["late", `${late.length} order${late.length === 1 ? "" : "s"} late`] : ["ok", "Every order on time"];
     item.append(el("p", `band ${band[0]}`, band[1]));
     const heading = el("h2", "pick-name");
-    const name = el("strong", "", plan.label);
+    const name = el("strong");
+    name.append(...labelNodes(plan.label, labels));
     const tags = [el("span", "tag pick-tag", hinted === plan.id ? "Agent pick" : "Default pick"), doneTag(plan, approved, executed),
       plan.id === preference?.preferred_plan_id ? el("span", "tag", "Your preference") : null];
     name.append(...tags.filter(Boolean).slice(0, 2));
@@ -191,10 +215,11 @@
     return item;
   }
 
-  function planRow(plan, preference, nameOf, approved, executed) {
+  function planRow(plan, preference, nameOf, approved, executed, labels) {
     const item = el("li", "plan");
     const text = el("div");
-    const name = el("strong", "plan-name", plan.label);
+    const name = el("strong", "plan-name");
+    name.append(...labelNodes(plan.label, labels));
     if (plan.id === preference?.preferred_plan_id) name.append(el("span", "tag", "Your preference"));
     const done = doneTag(plan, approved, executed);
     if (done) name.append(done);
@@ -229,7 +254,8 @@
       : plans.length ? [...plans].sort(byRank)[0].id : null;
     const picked = plans.find((plan) => plan.id === pick);
     if (preference?.changes_pick && picked?.id !== preference.preferred_plan_id) root.append(el("p", "preference", `Your preference: ${preference.reason}`));
-    if (picked) root.append(pickCard(picked, hinted, preference, approved, executed));
+    const labels = plans.map((plan) => plan.label);
+    if (picked) root.append(pickCard(picked, hinted, preference, approved, executed, labels));
     const others = plans.filter((plan) => plan !== picked);
     const { shown, hidden } = pageOf(others, picked ? PAGE - 1 : PAGE);
     if (shown.length) {
@@ -238,7 +264,7 @@
       const list = el("ul", "plans");
       list.setAttribute("aria-labelledby", "others-title");
       const nameOf = namer(plans[0]?.orders || []);
-      for (const plan of shown) list.append(planRow(plan, preference, nameOf, approved, executed));
+      for (const plan of shown) list.append(planRow(plan, preference, nameOf, approved, executed, labels));
       root.append(title, list);
     }
     if (hidden) {
