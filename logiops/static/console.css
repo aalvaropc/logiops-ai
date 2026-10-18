@@ -8,12 +8,12 @@
 .account-row.signed-in .account-status { color: var(--ok); }
 .metrics-strip { list-style: none; display: flex; flex-wrap: wrap; gap: 10px; margin: 18px 0 0; padding: 0; }
 .metrics-strip[hidden] { display: none; }
-.metrics-strip li { display: grid; gap: 2px; min-width: 130px; padding: 10px 14px; border: 2px solid var(--rule); border-radius: var(--radius-label); background: var(--surface); }
+.metrics-strip li { display: grid; gap: 2px; min-width: 130px; padding: 0 18px 0 0; }
 .metrics-strip strong { font-size: 20px; font-variant-numeric: tabular-nums; }
 .metrics-strip span { color: var(--ink-3); font-size: 14px; }
 .metrics-strip.empty { padding: 0; border: 0; text-align: left; }
 .metrics-strip.empty li { min-width: 0; padding: 0; border: 0; background: none; color: var(--ink-3); font-size: 14px; }
-.developer { margin-top: 18px; padding: 16px 20px; border: 2px dashed var(--hairline); border-radius: var(--radius-label); background: var(--surface); }
+.developer { margin-top: 18px; padding: 16px 20px; border-radius: var(--radius-panel); background: var(--surface); }
 .developer summary { min-height: 32px; color: var(--ink-2); font-size: 12px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; cursor: pointer; }
 .developer label { display: block; margin-top: 14px; color: var(--ink-2); font-size: 14px; font-weight: 700; }
 .developer label span { color: var(--ink-3); font-weight: 400; }
@@ -21,7 +21,7 @@
 .developer-links { margin: 14px 0 0; color: var(--ink-3); font-size: 14px; }
 .developer-links a { color: var(--shell); font-weight: 700; }
 .developer input[type=file] { padding: 8px 10px; }
-.developer input[type=file]::file-selector-button { margin-right: 10px; padding: 6px 10px; border: 2px solid var(--rule); border-radius: var(--radius-control); background: var(--surface); color: var(--ink); font: inherit; font-size: 14px; font-weight: 700; cursor: pointer; }
+.developer input[type=file]::file-selector-button { margin-right: 10px; padding: 6px 10px; border: 1.5px solid var(--ink-3); border-radius: var(--radius-pill); background: transparent; color: var(--ink); font: inherit; font-size: 14px; font-weight: 700; cursor: pointer; }
 #pack-result.failed { color: var(--late); }
 @media (max-width: 760px) {
   .console-head { grid-template-columns: minmax(0, 1fr); align-items: start; padding: 26px 0 18px; }

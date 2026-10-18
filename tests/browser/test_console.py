@@ -16,6 +16,8 @@ def test_console_walkthrough(page, replay_server, page_errors, reset_demo, width
 
     say(page, "What's happening with SHIP-421?")
     expect(page.locator("#plans input[type=radio]")).to_have_count(3)
+    expect(page.locator("#plans-field circle.field-dot")).to_have_count(3)
+    expect(page.locator("#plans-field .field-label.chosen")).to_have_text("$120")
     expect(page.locator("#approve")).to_be_enabled()
 
     page.click("#approve")

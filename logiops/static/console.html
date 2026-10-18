@@ -13,6 +13,7 @@
   <link rel="stylesheet" href="/assets/console.css">
   <script src="/assets/markdown.js"></script>
   <script src="/assets/intent.js"></script>
+  <script src="/assets/field.js"></script>
   <script src="/assets/console.js" type="module"></script>
 </head>
 <body>
@@ -80,6 +81,7 @@
             <div class="panel-heading"><h2 id="plans-title">Compare the options</h2><span class="muted">Human approval required</span></div>
             <p>Completion times are projections from synthetic carrier quotes. Physical delivery is not verified.</p>
             <p id="preference-line" class="preference-line" role="status" hidden></p>
+            <figure id="plans-field" class="plans-field" hidden></figure>
             <div id="plans" class="plans"><div class="empty">Run the investigation to see the options.</div></div>
             <div class="approval-row"><label for="approver">Approved by</label><input id="approver" type="text" maxlength="80" value="demo-operator"><button id="approve" class="secondary" type="button" disabled>Approve selected plan</button></div>
           </section>
