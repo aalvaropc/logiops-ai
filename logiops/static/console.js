@@ -16,6 +16,7 @@ import { welcomeText as greeting } from "./app/greeting.js";
 import { checkBadge, checkNote, fallbackNote, traceSummary, executionSummary } from "./app/run-badges.js";
 import { renderMarkdown } from "./app/markdown-dom.js";
 import { sessionFigures, EMPTY_SESSION } from "./app/metrics.js";
+import { drawField } from "./app/field-dom.js";
 
 const $ = (id) => document.getElementById(id);
 const DEFAULT_INCIDENT = "SHIP-421";
@@ -127,6 +128,7 @@ function renderPlans(snapshot) {
   container.setAttribute("aria-label", "Resolution plans");
   const plans = visiblePlans(snapshot);
   if (!plans.length) {
+    drawField($("plans-field"), [], null, { shapes: window.LogiOpsField });
     const empty = document.createElement("div");
     empty.className = "empty";
     empty.textContent = "Ask LogiOps to investigate to see the options.";
@@ -140,6 +142,7 @@ function renderPlans(snapshot) {
   } else if (!plans.some((plan) => plan.id === state.selectedPlanId)) {
     state.selectedPlanId = recommended?.id || plans[0].id;
   }
+  drawField($("plans-field"), plans, state.selectedPlanId, { shapes: window.LogiOpsField, id: "plans-field" });
   const labels = plans.map((plan) => plan.label);
   for (const plan of plans) {
     const isRecommended = plan.id === recommended?.id;
