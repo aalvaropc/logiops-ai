@@ -242,7 +242,7 @@ export function renderIncident(section, { snapshot, plan, summary, route, journe
   title.append(el("span", "incident-id", facts.id, doc));
   head.append(title, el("p", "incident-route", [summary?.kind_label, facts.route, `${facts.units} units`].filter(Boolean).join(" · "), doc));
   const band = incidentBand(snapshot, summary);
-  if (band) head.prepend(el("p", `band ${band[0]}`, band[1], doc));
+  if (band) head.append(el("p", `band ${band[0]}`, band[1], doc));
   const figure = el("figure", "device-map", undefined, doc);
   settle(section, figure, `${facts.id}:${plan?.id || ""}`);
   const map = svg("svg", { id: "device-map", viewBox: `0 0 ${journey.WIDE.width} ${journey.WIDE.height}`, role: "img", "aria-labelledby": "device-map-title" }, undefined, doc);
@@ -288,12 +288,12 @@ export function renderConfirm(section, payload, { onYes, onNo, labels = [], ship
   const details = confirmDetails(payload);
   const tracks = details.kind === "approval" ? planTracks(payload.plan, shipment, { route, journey }) : [];
   const card = el("div", `confirm-card ${details.kind}`, undefined, doc);
-  if (details.warning) card.append(el("p", "band late", details.warning, doc));
   const lead = el("p", "lead", undefined, doc);
   lead.append(...labelNodes(details.lead, labels, doc));
   const figure = el("p", "confirm-figure", undefined, doc);
   figure.append(el("strong", "", details.figure[0], doc), " ", el("span", "", details.figure[1], doc));
-  card.append(columns([el("h2", "", details.title, doc), lead, figure], [rowList(details.rows, doc, tracks), el("p", "note", details.note, doc)], doc));
+  card.append(columns([el("h2", "", details.title, doc), details.warning ? el("p", "band late", details.warning, doc) : null, lead, figure],
+    [rowList(details.rows, doc, tracks), el("p", "note", details.note, doc)], doc));
   const actions = el("div", "confirm-actions", undefined, doc);
   const yes = button(details.yes, "primary", onYes, doc);
   yes.id = "confirm-yes";
@@ -306,8 +306,8 @@ export function renderConfirm(section, payload, { onYes, onNo, labels = [], ship
 
 export function renderReceipt(section, { booking, onOpen, onExecute = null }, doc = globalThis.document) {
   const card = el("div", "receipt-card", undefined, doc);
-  card.append(el("p", "band ok", "Receipt · simulated payment", doc), columns([
-    el("h2", "", `Booked ${booking.number}`, doc), el("p", "receipt-total", dollars(booking.total_usd), doc), el("p", "lead", booking.plan_label, doc),
+  card.append(columns([
+    el("h2", "", `Booked ${booking.number}`, doc), el("p", "band ok", "Receipt · simulated payment", doc), el("p", "receipt-total", dollars(booking.total_usd), doc), el("p", "lead", booking.plan_label, doc),
     el("p", "note", `${String(booking.payment?.method || "").replace(/\s*\(simulated\)$/i, "")} · charged once · delivery is projected, not confirmed`, doc),
   ], [rowList(bookingRows(booking), doc)], doc));
   const actions = el("div", "receipt-actions", undefined, doc);
@@ -331,8 +331,9 @@ export function renderAlert(section, alert, doc = globalThis.document) {
   const details = alertDetails(alert);
   const labels = [details.was?.label, details.plan?.label].filter(Boolean);
   const card = el("div", "alert-card", undefined, doc);
-  card.append(el("p", `band ${details.invalidated ? "late" : "warn"}`, details.invalidated ? "Proactive alert · approval invalidated" : "Proactive alert · nothing approved", doc),
-    columns([el("h2", "", details.title, doc), el("p", "lead", details.text, doc)], [
+  card.append(columns([el("h2", "", details.title, doc),
+    el("p", `band ${details.invalidated ? "late" : "warn"}`, details.invalidated ? "Proactive alert · approval invalidated" : "Proactive alert · nothing approved", doc),
+    el("p", "lead", details.text, doc)], [
       details.was ? planLine("was-plan", details.invalidated ? "Was approved:" : "Was", details.was, labels, doc) : null,
       details.plan ? planLine(`new-plan${details.plan.late ? " late" : ""}`, "Now", details.plan, labels, doc) : null,
     ], doc));
@@ -366,7 +367,7 @@ export function renderResult(section, { snapshot, execution, plan, booking, time
     figures.append(box);
   }
   card.append(columns([
-    el("p", "band ok", "Executed · operationally verified", doc), heading, lead, figure,
+    heading, el("p", "band ok", "Executed · operationally verified", doc), lead, figure,
     times.length ? el("p", "times", times.map(([label, value]) => `${label} ${value}`).join(" · "), doc) : null,
     booking ? el("p", "note", `Booked ${booking.number} · ${dollars(booking.total_usd)} charged once.`, doc) : null,
     el("p", "note", "Delivery is projected from synthetic quotes, not physically confirmed.", doc),
