@@ -196,7 +196,8 @@ button:focus-visible, input:focus-visible, a:focus-visible, .conversation:focus-
 .heard .label[hidden] { display: none; }
 #device-heard { color: var(--ink-2); }
 .spoken-wrap .label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
-.spoken { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; font-size: var(--type-spoken); font-weight: 700; line-height: 1.3; }
+.spoken { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; font-size: var(--type-spoken); font-weight: 700; line-height: 1.3; cursor: pointer; }
+.talk.expanded .spoken { display: block; max-height: 38vh; overflow-y: auto; -webkit-line-clamp: none; line-clamp: none; }
 .more { position: absolute; right: 0; top: 0; min-height: 44px; padding: 0 12px; border: 2px solid var(--rule); border-radius: var(--radius-control); background: var(--surface); font-size: var(--type-meta); font-weight: 800; }
 .more[hidden] { display: none; }
 .chips { display: flex; gap: 8px; margin: 0 calc(-1 * var(--gutter)); padding: 0 var(--gutter); overflow-x: auto; scroll-snap-type: x proximity; scroll-padding-inline: var(--gutter); scrollbar-width: none; }
@@ -207,7 +208,9 @@ button:focus-visible, input:focus-visible, a:focus-visible, .conversation:focus-
 .chip.act { border: 2px solid var(--shell); color: var(--shell); font-weight: 800; }
 .ask-row { display: flex; align-items: center; gap: 8px; }
 .orb-row { display: flex; align-items: center; gap: 10px; flex: 0 0 auto; }
-.orb { position: relative; flex: 0 0 auto; width: 40px; height: 40px; border: 3px solid var(--hairline); border-radius: 50%; background: var(--surface); }
+.orb { position: relative; flex: 0 0 auto; width: 44px; height: 44px; padding: 0; border: 3px solid var(--hairline); border-radius: 50%; background: var(--surface); cursor: pointer; }
+.orb:disabled { cursor: default; opacity: 1; }
+.orb[aria-pressed="false"] span { background: var(--ink-3); }
 .orb span { position: absolute; inset: 8px; border-radius: 50%; background: var(--shell); transform: scale(.55); transition: transform .3s cubic-bezier(.16, 1, .3, 1); }
 .orb[data-state="listening"] { border-color: var(--shell); }
 .orb[data-state="listening"] span { animation: orb-pulse 1.1s ease-in-out infinite alternate; }
@@ -226,6 +229,7 @@ input::placeholder { color: var(--ink-3); }
 .mic[hidden] { display: none; }
 .mic[aria-pressed="true"] { background: var(--late); }
 .send { padding: 0 16px; border: 0; border-radius: var(--radius-control); background: var(--ink); color: var(--surface); font-size: var(--type-body); }
+.send-icon { display: none; width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round; }
 
 .sheet { position: absolute; inset: 0; z-index: 10; display: flex; align-items: flex-end; justify-content: center; background: var(--scrim); }
 .sheet[hidden] { display: none; }
@@ -312,6 +316,13 @@ input::placeholder { color: var(--ink-3); }
 @media (max-width: 399px) {
   .lifecycle ol { grid-template-columns: repeat(4, auto); }
   .lifecycle li { padding-inline: 4px; }
+  .send { display: grid; place-items: center; width: 48px; padding: 0; }
+  .send-label { display: none; }
+  .send-icon { display: block; }
+}
+@media (max-width: 479px) {
+  .device-bar-right:has(.bell:not([hidden])) .connection { font-size: 0; }
+  .bell-where { display: none; }
 }
 @media (forced-colors: active) {
   .lifecycle li.now { forced-color-adjust: none; background: Highlight; color: HighlightText; }
