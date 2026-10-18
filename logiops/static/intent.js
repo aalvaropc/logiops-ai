@@ -10,11 +10,25 @@
     + "carrier carriers service services transport booking for"
   ).split(" "));
   const AMOUNT = /^\$?(?:\d{1,3}(?:,\d{3})+|\d{1,6})$/;
+  const KNOWN_WORDS = new Set((
+    "a an the is are was were be been am do does did done can could should would will may might must don doesn isn can won "
+    + "what why how which when where who whose any anything some every all none its this that these those there here "
+    + "i me my we us our you your they them their he she his her to of in on at for from with without about by "
+    + "and or but not no yes yeah yep nope ok okay please thanks thank hi hello hey "
+    + "if then than so as up out over under after before now today tomorrow yesterday tonight morning next last "
+    + "tell show give explain check need needs want happen happens happening happened going get got let make help see "
+    + "open approve execute run go ahead reset start book pay resume continue cancel confirm forget remember delete "
+    + "link connect sign log unlink disconnect switch back "
+    + "delay delays late eta status incident incidents shipment shipments customer customers cost costs price "
+    + "risk critical inventory queue inbox route truck alert alerts receipt"
+  ).split(" "));
   const GRAMMAR = [
     ["reset", /^(?:reset(?: (?:this|the) incident| it| this)?|start (?:this|the) incident over)$/],
     ["approve", /^approve(?: (?<rest>.+))?$/],
     ["execute", /^(?:(?:execute|run|do) it|go ahead|execute(?: (?<rest>.+))?)$/],
     ["open", /^(?:open|show|switch to|go to) ship-\d+$/],
+    ["show_plans", /^(?:show|open|see|go back to|back to)(?: me)?(?: the| all(?: the)?)? (?:plans|options)$/],
+    ["show_incident", /^(?:show|open|see|go back to|back to)(?: me)? (?:the|this) (?:incident|map)$/],
     ["book", /^(?:book(?: and pay(?: for)?)?|pay for)(?: (?<rest>.+))?$/],
     ["confirm", /^(?:yes|yeah|yep|confirm(?:ed)?)(?:[,\s]+(?:please|do it|go ahead|confirm|approve it|execute it|book it|pay(?: for it)?|approve and pay))?$/],
     ["decline", /^(?:(?:no|nope)(?:[,\s]+(?:thanks|thank you))?|(?:no[,\s]+)?(?:cancel(?: it)?|never mind|don'?t (?:book|pay for) it|don'?t))$/],
@@ -103,6 +117,12 @@
     return START_OVER.test(String(text).trim().toLowerCase());
   }
 
+  function isNoise(text) {
+    const lower = String(text).toLowerCase();
+    if (/\b(?:ship|ord)-\d+/.test(lower)) return false;
+    return !(lower.match(/[a-z]+/g) || []).some((word) => KNOWN_WORDS.has(word) || PLAN_WORDS.has(word));
+  }
+
   function resolvePlan(reference, plans) {
     const wanted = reference.trim().replace(/[.,;:]+$/, "").toLowerCase();
     const [, base, version] = wanted.match(/^(.+?)(?::v(\d+))?$/);
@@ -164,7 +184,7 @@
   }
 
   const api = {
-    isQuestion, parseCommand, planSelector, parsePreference, isBriefing, isCapabilities, isStartOver, isForgetMe,
+    isQuestion, parseCommand, planSelector, parsePreference, isBriefing, isCapabilities, isStartOver, isForgetMe, isNoise,
     recommendedPlanId, mentionedIncident,
   };
   if (typeof module === "object" && module.exports) module.exports = api;

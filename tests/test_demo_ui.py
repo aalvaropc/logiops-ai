@@ -86,6 +86,24 @@ def test_only_the_closed_grammar_acts():
     assert dict(zip(cases, got)) == cases
 
 
+def test_navigation_is_a_closed_command_and_noise_is_not_sent_to_the_agent():
+    import json
+
+    cases = {
+        "show the plans": "show_plans", "Show me all the plans": "show_plans", "back to the options": "show_plans",
+        "show the incident": "show_incident", "go back to the incident": "show_incident", "show the map": "show_incident",
+        "show SHIP-433": "open", "show the plans?": None, "show the plans for SHIP-433": None, "show the cheapest plan": None,
+    }
+    got = json.loads(_intent(f"console.log(JSON.stringify({json.dumps(list(cases))}.map(m.parseCommand)))"))
+    assert dict(zip(cases, got)) == cases
+    noise = {
+        "asdf qwer": True, "hmm": True, "12345": True, "...": True, "SHIP-433 zzz": False, "thanks": False, "why?": False,
+        "delays": False, "Fly the hospital order": False, "what is going on": False, "no": False, "status": False,
+    }
+    got = json.loads(_intent(f"console.log(JSON.stringify({json.dumps(list(noise))}.map(m.isNoise)))"))
+    assert dict(zip(noise, got)) == noise
+
+
 def test_buying_declining_and_resuming_are_closed_commands():
     import json
 
@@ -277,7 +295,8 @@ def test_the_demo_is_an_inbox_of_incidents():
     assert "SHIP-4" not in page
     assert "state.app.incidentId !== snapshot.state.incident_id" in device
     assert 'card.setAttribute("aria-pressed", String(item.incident_id === state.incidentId));' in script
-    assert 'button.setAttribute("aria-pressed", String(card.incident_id === selectedId));' in (root / "device" / "carousel.js").read_text()
+    assert "aria-pressed" not in (root / "device" / "carousel.js").read_text() and ".incident-card[aria-pressed" not in (root / "device.css").read_text()
+    assert "DEFAULT_INCIDENT" not in device and "state.inbox[0]?.incident_id" in device
     assert "intent.mentionedIncident(text," in _static("app", "commands.js")
 
 

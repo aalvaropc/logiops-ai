@@ -52,6 +52,7 @@ function harness({ snapshot = investigated(), responses = {}, auth = { enabled: 
     executeApproved: async () => { events.push("execute"); store.state.snapshot.executions.push({ plan_id: plans[2].id, source_version: 1, accounted_units: 20, incremental_cost_usd: 120, notifications: [1, 2, 3], projected_customer_delay_hours: 0, fulfillments: [] }); },
     savePreferences: async (update) => { events.push(`save:${JSON.stringify(update)}`); store.state.snapshot.operator_preferences = { max_cost_usd: update.max_cost_usd }; },
     linkAccount: async () => events.push("link"), signOut: () => { events.push("signOut"); store.set({ session: null }); },
+    onSurface: (name) => events.push(`surface:${name}`),
   });
   const last = () => said.at(-1);
   return { commands, store, said, calls, events, purchase, last };
@@ -80,7 +81,7 @@ test("an approval is read back and only an explicit yes approves; execute refuse
   assert.deepEqual(h.store.state.pendingApproval, { planId: plans[2].id, sourceVersion: 1 });
   await h.commands.handle("yes");
   assert.ok(h.events.includes("approve:split-express"));
-  assert.match(h.last().text, /^Approved “Fulfill local stock and send the rest express” for version 1\. Say “execute it”/);
+  assert.equal(h.last().text, "Approved “Fulfill local stock and send the rest express” on the current data. Nothing has run yet: say “execute it” when you're ready.");
   assert.equal(h.store.state.awaitingExecute, true);
   await h.commands.handle("execute the wait plan");
   assert.match(h.last().text, /The approved plan is “Fulfill local stock and send the rest express”, so nothing was executed\. Approve “Keep the delayed shipment” first/);
@@ -195,6 +196,34 @@ test("memory and account commands", async () => {
   assert.ok(user.events.includes("select:SHIP-433"));
   assert.equal(user.last().text, "Back on SHIP-433. Ask what's happening, or say “approve the recommended plan”.");
   assert.equal(user.store.state.conversation.at(-1).text, "where were we");
+});
+
+test("a line with no words to act on asks again instead of calling the agent", async () => {
+  const h = harness();
+  await h.commands.handle("asdf qwer");
+  assert.equal(h.last().text, "I didn't catch that. Ask “any delays today?”, or ask what's happening with SHIP-421.");
+  assert.equal(h.last().meta, "not understood");
+  await h.commands.handle("12345");
+  assert.equal(h.calls.length, 0);
+  assert.equal(h.store.state.pendingApproval, null);
+});
+
+test("the plans and the incident can be shown again by voice, text or a chip", async () => {
+  const h = harness();
+  await h.commands.handle("show the incident");
+  assert.equal(h.last().text, "Here's SHIP-421: Laptop shipment delayed in transit. Say “show the plans” or “approve the recommended plan”.");
+  assert.equal(h.events.at(-1), "surface:incident");
+  await h.commands.handle("Show the plans");
+  assert.equal(h.last().text, "Here are the 3 plans for SHIP-421. Only you approve.");
+  assert.equal(h.events.at(-1), "surface:plans");
+  await h.commands.handle("open SHIP-421");
+  assert.match(h.last().text, /^Opened SHIP-421: Laptop shipment delayed in transit\. Say “show the plans”/);
+  assert.equal(h.events.at(-1), "surface:incident");
+  const empty = harness({ snapshot: { ...investigated(), plans: [] } });
+  await empty.commands.handle("back to the plans");
+  assert.equal(empty.last().text, "There are no plans for the current data yet. Ask me what's happening first.");
+  assert.ok(!empty.events.some((event) => event.startsWith("surface:")));
+  assert.equal(h.calls.length + empty.calls.length, 0);
 });
 
 test("approval read-backs name the cost, the delay and a critical order left late", () => {

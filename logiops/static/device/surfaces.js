@@ -47,6 +47,13 @@ function lateWarning(plan) {
 
 const delayText = (plan) => (plan.projected_customer_delay_hours ? `${plan.projected_customer_delay_hours} h` : "none");
 
+export function orderRows(plan) {
+  const orders = plan.orders || [];
+  if (!orders.length) return [["Customer delay", delayText(plan)]];
+  return orders.map((order) => [`${order.customer}${order.priority === "critical" ? " · critical" : ""}`,
+    order.delay_hours ? `+${order.delay_hours} h late` : "On time", order.delay_hours ? "late" : "on-time"]);
+}
+
 export function confirmDetails(payload) {
   if (payload.kind === "purchase") {
     const quote = payload.purchase.quote;
@@ -62,7 +69,7 @@ export function confirmDetails(payload) {
   const plan = payload.plan;
   return {
     kind: "approval", title: "Approve this plan?", lead: plan.label,
-    rows: [["Extra cost", `$${plan.incremental_cost_usd}`], ["Customer delay", delayText(plan)], ["Allocation", allocationSummary(plan)]],
+    rows: [["Extra cost", `$${plan.incremental_cost_usd}`], ...orderRows(plan), ["Allocation", allocationSummary(plan)]],
     note: "Approval records the exact plan and data version. Nothing is executed yet.", warning: lateWarning(plan),
     yes: "Yes, approve", no: "No",
   };
@@ -87,21 +94,26 @@ export function alertDetails(alert) {
   };
 }
 
-export function chipsFor(surface, { snapshot, incidentId, inbox = [], plan = null }) {
-  const incident = `What's happening with ${incidentId}, and which plan should we choose?`;
+export function chipsFor(surface, { snapshot, incidentId, inbox = [], plan = null, pick = null }) {
+  const ask = (id) => [`What's happening with ${id}?`, `What's happening with ${id}, and which plan should we choose?`];
   const briefing = "Any delays today? What needs my attention first?";
   if (!snapshot) return [];
   const approved = Boolean(visibleApproval(snapshot));
   const executed = Boolean(snapshot.executions.length);
+  const investigated = visiblePlans(snapshot).length > 0;
   const booked = (snapshot.bookings || []).some((booking) => plan && booking.plan_id === plan.id);
   const pay = plan && plan.incremental_cost_usd > 0 && !booked ? [["Book and pay", "Book and pay for the recommended plan"]] : [];
+  const lead = inbox.some((item) => item.incident_id === pick) ? pick : incidentId;
   switch (surface) {
-    case "home": return [["Any delays today?", briefing], [`What's happening with ${incidentId}?`, incident]];
-    case "incident": return [[`What's happening with ${incidentId}?`, incident], ["Any delays today?", briefing]];
+    case "home": return [["Any delays today?", briefing], ask(lead)];
+    case "incident":
+      if (!investigated) return [ask(incidentId), ["Any delays today?", briefing]];
+      return [["Show the plans", "Show the plans"], ...(approved || executed ? [] : [["Approve the recommended plan", "Approve the recommended plan"]])];
     case "plans":
       if (executed) return [...pay, ["Any delays today?", briefing]];
       if (approved) return [["Execute it", "Execute the approved plan"], ...pay, ["Why this plan?", "Why is that the recommended plan?"]];
-      return [["Approve the recommended plan", "Approve the recommended plan"], ["Why this plan?", "Why is that the recommended plan?"], ...pay];
+      return [["Approve the recommended plan", "Approve the recommended plan"], ["Why this plan?", "Why is that the recommended plan?"],
+        ["Show the incident", "Show the incident"], ...pay];
     case "receipt": return approved && !executed ? [["Execute it", "Execute the approved plan"]] : [["Any delays today?", briefing]];
     case "alert": return [["Approve the new pick", "Approve the recommended plan"], ["Why did it change?", "Why did the recommended plan change?"]];
     case "result": return [...pay, ["Any delays today?", briefing], inbox.length > 1 ? ["Next incident", "start over"] : null].filter(Boolean);
