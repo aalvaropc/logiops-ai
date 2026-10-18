@@ -134,7 +134,7 @@ export function drawBars(list, plan, route, doc = globalThis.document) {
   for (const bar of bars) {
     const item = el("li", `promise${bar.on_time ? " on-time" : " late"}`, undefined, doc);
     const who = el("span", "who", `${bar.customer} · ${bar.quantity} units`, doc);
-    if (bar.priority === "critical") who.append(" ", el("span", "critical-tag", "critical", doc));
+    if (bar.priority === "critical") who.append(" ", el("span", "critical-tag", "critical order", doc));
     const track = el("span", "track", undefined, doc);
     track.setAttribute("aria-hidden", "true");
     const fill = el("span", "fill", undefined, doc);
@@ -231,13 +231,26 @@ export function renderConfirm(section, payload, { onYes, onNo, labels = [] }, do
   section.replaceChildren(card);
 }
 
-export function renderReceipt(section, { booking, onOpen }, doc = globalThis.document) {
+export function renderReceipt(section, { booking, onOpen, onExecute = null }, doc = globalThis.document) {
   const card = el("div", "receipt-card", undefined, doc);
   card.append(el("p", "band ok", "Receipt · simulated payment", doc), el("h2", "", `Booked ${booking.number}`, doc),
     el("p", "receipt-total", dollars(booking.total_usd), doc), el("p", "lead", booking.plan_label, doc));
   card.append(rowList(bookingRows(booking), doc), el("p", "note", `${String(booking.payment?.method || "").replace(/\s*\(simulated\)$/i, "")} · charged once · delivery is projected, not confirmed`, doc));
-  card.append(button("Open printable receipt", "secondary", onOpen, doc));
+  const actions = el("div", "receipt-actions", undefined, doc);
+  if (onExecute) {
+    const execute = button("Execute approved plan", "primary", onExecute, doc);
+    execute.id = "receipt-execute";
+    actions.append(execute);
+  }
+  actions.append(button("Open printable receipt", "secondary", onOpen, doc));
+  card.append(actions);
   section.replaceChildren(card);
+}
+
+function planLine(className, prefix, plan, labels, doc) {
+  const line = el("p", className, `${prefix} “`, doc);
+  line.append(...labelNodes(plan.label, labels, doc), `”${plan.figures ? ` · ${plan.figures}` : ""}`);
+  return line;
 }
 
 export function renderAlert(section, alert, doc = globalThis.document) {
@@ -245,7 +258,9 @@ export function renderAlert(section, alert, doc = globalThis.document) {
   const card = el("div", "alert-card", undefined, doc);
   card.append(el("p", `band ${details.invalidated ? "late" : "warn"}`, details.invalidated ? "Proactive alert · approval invalidated" : "Proactive alert · nothing approved", doc),
     el("h2", "", details.title, doc), el("p", "lead", details.text, doc));
-  if (details.plan) card.append(el("p", "new-plan", details.plan, doc));
+  const labels = [details.was?.label, details.plan?.label].filter(Boolean);
+  if (details.was) card.append(planLine("was-plan", details.invalidated ? "Was approved:" : "Was", details.was, labels, doc));
+  if (details.plan) card.append(planLine("new-plan", "Now", details.plan, labels, doc));
   section.replaceChildren(card);
 }
 

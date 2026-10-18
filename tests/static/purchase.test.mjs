@@ -73,8 +73,8 @@ test("book it quotes the named plan, keeps the purchase and reads it back; yes a
   assert.deepEqual(calls[1], { path: "/quotes/Q-1/confirm", method: "POST", body: { confirmed_total_usd: 147.5, idempotency_key: "buy-1234" } });
   assert.equal(bookings[0], booking);
   assert.equal(storage.get(PURCHASE_KEY), null);
-  assert.equal(said[1].text, "Approved. Booked “Fulfill…” for SHIP-421: $147.50 charged. The receipt is in the execute panel.");
-  assert.equal(said[1].spoken, "Approved, and booked. $147.50 charged. Your confirmation number is L G O A B C 2 3 4.");
+  assert.equal(said[1].text, "Approved. Booked “Fulfill…” for SHIP-421: $147.50 charged. Open the receipt for a printable copy.");
+  assert.equal(said[1].spoken, "Approved, and booked. $147.50 charged. Your confirmation number is LGO-ABC234.");
 });
 
 test("refusals explain themselves: no plans, a conflicting name, already booked, nothing to pay", async () => {

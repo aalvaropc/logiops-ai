@@ -336,8 +336,11 @@ function renderPlansSurface() {
   else if (!plans.some((plan) => plan.id === state.selectedPlanId)) state.selectedPlanId = recommended?.id || plans[0]?.id || null;
   $("plans-title").textContent = plans.length ? `${plans.length} plans for ${snapshot.state.incident_id}` : `No plans yet for ${snapshot.state.incident_id}`;
   const approver = approval?.approved_by === state.approver ? "you" : approval?.approved_by;
-  $("plans-state").textContent = executed ? "Executed and verified" : approval ? `Approved by ${approver} · say “execute it”`
+  const approvedPlan = approval && plans.find((plan) => plan.id === approval.plan_id);
+  $("plans-state").textContent = executed ? "Executed and verified"
+    : approval ? `Approved by ${approver}: “${approvedPlan?.label || approval.plan_id}”. Nothing has run yet.`
     : plans.length ? "Only you approve. Selecting a plan does not approve it." : "Ask what's happening to calculate them";
+  $("execute-plan").hidden = !approval || executed;
   renderPlanList($("plans"), {
     plans: recommended ? [recommended, ...plans.filter((plan) => plan.id !== recommended.id)] : plans, selectedId: state.selectedPlanId, recommendedId: recommended?.id, preferredId: snapshot.preference?.preferred_plan_id,
     locked: Boolean(approval || executed), onSelect: (plan) => selectPlan(plan),
@@ -367,7 +370,11 @@ function paintSurface(shown = surfaces.current()) {
     });
   } else if (shown.name === "receipt") {
     const booking = shown.payload.booking;
-    renderReceipt(section, { booking, onOpen: () => openReceipt(booking.number).catch((error) => message(error.message || String(error))) });
+    const pending = Boolean(snapshot && visibleApproval(snapshot) && !snapshot.executions.length);
+    renderReceipt(section, {
+      booking, onOpen: () => openReceipt(booking.number).catch((error) => message(error.message || String(error))),
+      onExecute: pending ? () => handleUtterance("Execute the approved plan") : null,
+    });
   } else if (shown.name === "alert") {
     renderAlert(section, shown.payload.alert);
   } else if (shown.name === "result" && snapshot?.executions[0]) {
@@ -405,8 +412,8 @@ function renderChips(surface) {
   const box = $("chips");
   box.replaceChildren();
   const pick = surfaces.current().payload.pick ?? state.briefingPick;
-  for (const [text, utterance] of chipsFor(surface, { snapshot: state.snapshot, incidentId: state.incidentId, inbox: state.inbox, plan: currentPlan(), pick })) {
-    const chip = el("button", "chip", text);
+  for (const [text, utterance, kind] of chipsFor(surface, { snapshot: state.snapshot, incidentId: state.incidentId, inbox: state.inbox, plan: currentPlan(), pick })) {
+    const chip = el("button", kind === "act" ? "chip act" : "chip", text);
     chip.type = "button";
     chip.dataset.say = utterance;
     chip.disabled = state.busy || !state.snapshot;
@@ -430,7 +437,7 @@ function renderControls() {
   $("ask-input").readOnly = !ready;
   $("mic").disabled = !ready;
   for (const chip of document.querySelectorAll(".chip")) chip.disabled = !ready;
-  for (const id of ["confirm-yes", "confirm-no"]) if ($(id)) $(id).disabled = state.busy;
+  for (const id of ["confirm-yes", "confirm-no", "execute-plan", "receipt-execute"]) if ($(id)) $(id).disabled = state.busy;
   $("account").disabled = state.busy;
 }
 
@@ -532,7 +539,7 @@ async function approvePlan(plan) {
 
 async function executeApproved() {
   const approval = visibleApproval(state.snapshot);
-  if (!approval) throw new Error("No plan is approved for the current incident version.");
+  if (!approval) throw new Error("No plan is approved for this incident's current data.");
   await request(incidentPath("/execute"), "POST", { plan_id: approval.plan_id, source_version: approval.source_version });
 }
 
@@ -708,6 +715,7 @@ $("ask-form").addEventListener("submit", (event) => {
   if (document.activeElement === $("ask")) input.focus({ preventScroll: true });
   handleUtterance(text);
 });
+$("execute-plan").addEventListener("click", () => handleUtterance("Execute the approved plan"));
 $("more").addEventListener("click", openSheet);
 $("sheet-close").addEventListener("click", closeSheet);
 $("sheet").addEventListener("click", (event) => { if (event.target === $("sheet")) closeSheet(); });

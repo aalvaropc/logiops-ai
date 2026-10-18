@@ -57,7 +57,7 @@ test("confirmation cards read back exactly what a yes would do", () => {
   assert.equal(approval.title, "Approve this plan?");
   assert.deepEqual(approval.figure, ["$0", "extra cost"]);
   assert.deepEqual(approval.rows, [["store · 20 units", "+12 h late", "late"], ["Allocation", "20 via delayed shipment"]]);
-  assert.deepEqual(confirmDetails({ kind: "approval", plan: plans[1] }).rows[0], ["store · 20 units · critical", "On time", "on-time"]);
+  assert.deepEqual(confirmDetails({ kind: "approval", plan: plans[1] }).rows[0], ["store · 20 units · critical order", "On time", "on-time"]);
   assert.deepEqual(confirmDetails({ kind: "approval", plan: { ...plans[0], orders: [] } }).rows[0], ["Customer delay", "12 h"]);
   assert.equal(approval.warning, null);
   assert.equal(approval.yes, "Yes, approve");
@@ -79,26 +79,32 @@ test("the result card, the alert card and the chips come from the data", () => {
     [["Units accounted for", "20"], ["Extra cost", "$120"], ["Notifications simulated", "2"], ["Customer delay", "0 h"]]);
   assert.deepEqual(resultOutcome(plans[1]), { value: "20", label: "critical units on time", note: "projected" });
   assert.deepEqual(resultOutcome(plans[0]), { value: "0 of 20", label: "units on time", note: "projected" });
-  const alert = alertDetails({ incident_id: "SHIP-421", message: "Heads up.", approval_invalidated: true, new_plan: { label: "Reroute", incremental_cost_usd: 80, projected_customer_delay_hours: 3 } });
-  assert.deepEqual(alert, { title: "Heads up on SHIP-421", text: "Heads up.", invalidated: true, plan: "Reroute · $80 · 3 h delay" });
+  const alert = alertDetails({ incident_id: "SHIP-421", message: "Heads up.", approval_invalidated: true, previous_plan: { label: "Wait", incremental_cost_usd: 0 },
+    new_plan: { label: "Reroute", incremental_cost_usd: 80, projected_customer_delay_hours: 3 } });
+  assert.deepEqual(alert, { title: "Heads up on SHIP-421", text: "Heads up.", invalidated: true, was: { label: "Wait", figures: "$0" },
+    plan: { label: "Reroute", figures: "$80 · 3 h delay" } });
+  assert.deepEqual(alertDetails({ incident_id: "SHIP-421", message: "x", previous_plan: { label: "Wait" } }).was, { label: "Wait", figures: "" });
   assert.equal(alertDetails({ incident_id: "SHIP-421", message: "Heads up on SHIP-421: Arequipa stock is now 20 units." }).text, "Arequipa stock is now 20 units.");
   const context = { snapshot, incidentId: "SHIP-421", inbox, plan: plans[1] };
   assert.deepEqual(chipsFor("home", context).map(([text]) => text), ["Any delays today?", "What's happening with SHIP-421?"]);
   assert.deepEqual(chipsFor("home", { ...context, pick: "SHIP-433" }).map(([text]) => text), ["Any delays today?", "What's happening with SHIP-433?"]);
   assert.deepEqual(chipsFor("home", { ...context, pick: "SHIP-999" }).map(([text]) => text), ["Any delays today?", "What's happening with SHIP-421?"]);
-  assert.deepEqual(chipsFor("incident", context).map(([text]) => text), ["Show the plans", "Approve the recommended plan"]);
+  assert.deepEqual(chipsFor("incident", context).map(([text]) => text), ["Approve the recommended plan", "Show the plans"]);
+  assert.deepEqual(chipsFor("plans", context).filter(([, , kind]) => kind === "act").map(([text]) => text), ["Approve the recommended plan", "Book and pay"]);
+  assert.deepEqual(chipsFor("alert", context)[0], ["Approve the new pick", "Approve the recommended plan", "act"]);
   assert.deepEqual(chipsFor("incident", { ...context, snapshot: { ...snapshot, plans: [] } }).map(([text]) => text), ["What's happening with SHIP-421?", "Any delays today?"]);
   assert.deepEqual(chipsFor("plans", context).map(([text]) => text), ["Approve the recommended plan", "Why this plan?", "Show the incident", "Book and pay"]);
   assert.deepEqual(chipsFor("plans", { ...context, plan: plans[0] }).map(([text]) => text), ["Approve the recommended plan", "Why this plan?", "Show the incident"]);
   const approved = { ...snapshot, approvals: [{ plan_id: "p-express", source_version: 1 }] };
-  assert.deepEqual(chipsFor("plans", { ...context, snapshot: approved }).map(([text]) => text), ["Execute it", "Book and pay", "Why this plan?"]);
+  assert.deepEqual(chipsFor("plans", { ...context, snapshot: approved }).map(([text]) => text), ["Book and pay", "Why this plan?"]);
   const executed = { ...approved, executions: [{ plan_id: "p-express", source_version: 1 }], bookings: [{ plan_id: "p-express" }] };
   assert.deepEqual(chipsFor("result", { ...context, snapshot: executed }).map(([text]) => text), ["Open SHIP-433", "Any delays today?"]);
   assert.deepEqual(chipsFor("result", { ...context, snapshot: executed }).find(([text]) => text === "Open SHIP-433")[1], "Open SHIP-433");
   const resolved = inbox.map((item) => ({ ...item, status: "verified" }));
   assert.deepEqual(chipsFor("result", { ...context, snapshot: executed, inbox: resolved }).map(([text]) => text), ["Any delays today?"]);
   assert.deepEqual(chipsFor("receipt", { ...context, snapshot: executed }).map(([text]) => text), ["See the result", "Open SHIP-433", "Any delays today?"]);
-  assert.deepEqual(chipsFor("receipt", { ...context, snapshot: approved }).map(([text]) => text), ["Execute it"]);
+  assert.deepEqual(chipsFor("receipt", { ...context, snapshot: approved }).map(([text]) => text), ["Any delays today?"]);
+  assert.ok(!["home", "incident", "plans", "receipt", "alert", "result"].some((name) => chipsFor(name, { ...context, snapshot: approved }).some(([text]) => /execute/i.test(text))));
   assert.deepEqual(chipsFor("incident", { ...context, snapshot: executed }).map(([text]) => text), ["See the result", "Show the plans", "Open SHIP-433"]);
   const doneHere = [{ ...inbox[0], status: "verified" }, inbox[1]];
   assert.deepEqual(chipsFor("home", { ...context, incidentId: "SHIP-433", inbox: doneHere, pick: "SHIP-433" }).map(([text]) => text),

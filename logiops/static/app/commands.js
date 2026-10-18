@@ -217,7 +217,7 @@ export function createCommands({
           state.pendingApproval = pending;
           throw error;
         }
-        say("assistant", `Approved “${plan.label}” on the current data. Nothing has run yet: say “execute it” when you're ready.`);
+        say("assistant", `Approved “${plan.label}” on the current data. Nothing has run yet: say “execute it” or press Execute when you're ready.`);
         state.awaitingExecute = true;
         onSurface("plans");
       } else if (command === "execute" || (command === "confirm" && awaitingExecute && selectors.visibleApproval(state.snapshot))) {
@@ -231,6 +231,11 @@ export function createCommands({
         }
         if (state.snapshot?.executions.length) {
           say("assistant", `${state.incidentId} was already executed. ${badges.executionSummary(state.snapshot, state.snapshot.executions[0])} Reset this incident to run the flow again.`);
+          return;
+        }
+        if (!approval) {
+          const next = investigated() ? "Say “approve the recommended plan” first, and I'll read it back." : `Ask me what's happening with ${state.incidentId} first, then approve a plan.`;
+          say("assistant", `Nothing is approved for ${state.incidentId} yet, so nothing ran. ${next}`);
           return;
         }
         await act(executeApproved, "");

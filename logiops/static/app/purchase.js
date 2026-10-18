@@ -144,9 +144,9 @@ export function createPurchase({
     }
     forget();
     onBooking(booking);
-    say("assistant", `${approvedNow ? "Approved. " : ""}${booking.confirmation} The receipt is in the execute panel.`,
+    say("assistant", `${approvedNow ? "Approved. " : ""}${booking.confirmation} Open the receipt for a printable copy.`,
       `booking · ${booking.number}`,
-      `${approvedNow ? "Approved, and booked. " : "Booked. "}${dollars(booking.total_usd)} charged. Your confirmation number is ${spelled(booking.number)}.`);
+      `${approvedNow ? "Approved, and booked. " : "Booked. "}${dollars(booking.total_usd)} charged. Your confirmation number is ${booking.number}.`);
     return booking;
   }
 

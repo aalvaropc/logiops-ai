@@ -110,7 +110,7 @@ const delayText = (plan) => (plan.projected_customer_delay_hours ? `${plan.proje
 export function orderRows(plan) {
   const orders = plan.orders || [];
   if (!orders.length) return [["Customer delay", delayText(plan)]];
-  return orders.map((order) => [`${order.customer} · ${order.quantity} unit${order.quantity === 1 ? "" : "s"}${order.priority === "critical" ? " · critical" : ""}`,
+  return orders.map((order) => [`${order.customer} · ${order.quantity} unit${order.quantity === 1 ? "" : "s"}${order.priority === "critical" ? " · critical order" : ""}`,
     order.delay_hours ? `+${order.delay_hours} h late` : "On time", order.delay_hours ? "late" : "on-time"]);
 }
 
@@ -158,10 +158,12 @@ export function resultOutcome(plan) {
 
 export function alertDetails(alert) {
   const plan = alert.new_plan;
+  const before = alert.previous_plan;
   return {
     title: `Heads up on ${alert.incident_id}`, text: String(alert.message).replace(`Heads up on ${alert.incident_id}: `, ""),
     invalidated: Boolean(alert.approval_invalidated),
-    plan: plan ? `${plan.label} · $${plan.incremental_cost_usd} · ${plan.projected_customer_delay_hours} h delay` : null,
+    was: before?.label ? { label: before.label, figures: Number.isFinite(before.incremental_cost_usd) ? `$${before.incremental_cost_usd}` : "" } : null,
+    plan: plan ? { label: plan.label, figures: `$${plan.incremental_cost_usd} · ${plan.projected_customer_delay_hours} h delay` } : null,
   };
 }
 
@@ -173,7 +175,8 @@ export function chipsFor(surface, { snapshot, incidentId, inbox = [], plan = nul
   const executed = Boolean(snapshot.executions.length);
   const investigated = visiblePlans(snapshot).length > 0;
   const booked = (snapshot.bookings || []).some((booking) => plan && booking.plan_id === plan.id);
-  const pay = plan && plan.incremental_cost_usd > 0 && !booked ? [["Book and pay", "Book and pay for the recommended plan"]] : [];
+  const pay = plan && plan.incremental_cost_usd > 0 && !booked ? [["Book and pay", "Book and pay for the recommended plan", "act"]] : [];
+  const approve = ["Approve the recommended plan", "Approve the recommended plan", "act"];
   const current = inbox.find((item) => item.incident_id === incidentId);
   const lead = livePick(inbox, pick) ?? (current && !isOpen(current) ? nextOpen(inbox, incidentId)?.incident_id : null) ?? incidentId;
   const next = nextOpen(inbox, incidentId);
@@ -184,16 +187,15 @@ export function chipsFor(surface, { snapshot, incidentId, inbox = [], plan = nul
     case "incident":
       if (!investigated) return [ask(incidentId), ["Any delays today?", briefing]];
       if (executed) return [...result, ["Show the plans", "Show the plans"], ...openNext];
-      return [["Show the plans", "Show the plans"], ...(approved ? [] : [["Approve the recommended plan", "Approve the recommended plan"]])];
+      return [...(approved ? [] : [approve]), ["Show the plans", "Show the plans"]];
     case "plans":
       if (executed) return [...pay, ["Any delays today?", briefing]];
-      if (approved) return [["Execute it", "Execute the approved plan"], ...pay, ["Why this plan?", "Why is that the recommended plan?"]];
-      return [["Approve the recommended plan", "Approve the recommended plan"], ["Why this plan?", "Why is that the recommended plan?"],
-        ["Show the incident", "Show the incident"], ...pay];
+      if (approved) return [...pay, ["Why this plan?", "Why is that the recommended plan?"]];
+      return [approve, ["Why this plan?", "Why is that the recommended plan?"], ["Show the incident", "Show the incident"], ...pay];
     case "receipt":
       if (executed) return [...result, ...openNext, ["Any delays today?", briefing]];
-      return approved ? [["Execute it", "Execute the approved plan"]] : [["Any delays today?", briefing]];
-    case "alert": return [["Approve the new pick", "Approve the recommended plan"], ["Why did it change?", "Why did the recommended plan change?"]];
+      return [["Any delays today?", briefing]];
+    case "alert": return [["Approve the new pick", "Approve the recommended plan", "act"], ["Why did it change?", "Why did the recommended plan change?"]];
     case "result": return [...pay, ...openNext, ["Any delays today?", briefing]];
     default: return [];
   }

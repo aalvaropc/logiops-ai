@@ -125,3 +125,12 @@ test("a filler is spoken after 2.5 seconds of thinking unless it is cancelled", 
     mock.timers.reset();
   }
 });
+
+test("booking numbers are spelled for the voice only", async () => {
+  const { spokenForm } = await import(moduleUrl("app/voice.js"));
+  assert.equal(spokenForm("Your confirmation number is LGO-ABC234."), "Your confirmation number is L G O A B C 2 3 4.");
+  assert.equal(spokenForm("SHIP-433 costs $390."), "SHIP-433 costs $390.");
+  const { win, voice } = setup();
+  await voice.speak("Booked LGO-7KQ2MD.");
+  assert.equal(win.spoken[0].text, "Booked L G O 7 K Q 2 M D.");
+});

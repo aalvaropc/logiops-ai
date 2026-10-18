@@ -1,6 +1,11 @@
 export const DEFAULT_FILLER = "One moment, I'm still working on it.";
 export const FILLER_DELAY_MS = 2500;
 export const SPEECH_TIMEOUT_MS = 30000;
+const BOOKING_NUMBER = /\bLGO-[A-Z2-9]{6}\b/g;
+
+export function spokenForm(line) {
+  return String(line).replace(BOOKING_NUMBER, (number) => number.replace("-", "").split("").join(" "));
+}
 
 export function createVoice({ window: win = globalThis.window, fetch: doFetch, getToken = () => "", getConfig = () => ({ engine: "browser", fillers: [] }), isEnabled = () => false, device = () => {} } = {}) {
   const fetcher = (...args) => (doFetch ?? globalThis.fetch)(...args);
@@ -41,7 +46,8 @@ export function createVoice({ window: win = globalThis.window, fetch: doFetch, g
     voices.speak(utterance);
   }
 
-  async function speak(line, { filler = false } = {}) {
+  async function speak(text, { filler = false } = {}) {
+    const line = spokenForm(text);
     stop({ quiet: true });
     const turn = current.turn;
     const done = () => {
