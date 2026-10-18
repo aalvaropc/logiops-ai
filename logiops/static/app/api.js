@@ -21,6 +21,13 @@ export function createStorage(backing) {
   };
 }
 
+const PLAIN_ERRORS = {
+  "A different plan is already approved for this version": "Another plan is already approved for this data. Say “withdraw the approval” to choose again.",
+  "Plan is stale; investigate the incident again": "The data changed after these plans were calculated. Ask me what's happening to recalculate them.",
+  "The exact plan and version must be approved before execution": "That plan isn't approved for the current data, so nothing ran. Approve it first.",
+  "The incident has already been executed": "This incident was already executed. Say “show the result” to see what ran.",
+};
+
 export function explainError(status, detail, { authEnabled = false, signedIn = false, hasToken = false } = {}) {
   if (status === 401 && authEnabled) {
     return signedIn
@@ -38,7 +45,7 @@ export function explainError(status, detail, { authEnabled = false, signedIn = f
   }
   if (status === 429) return "Too many requests in the last minute. Wait a moment and try again.";
   if (status >= 500) return "I couldn't reach the planning service just now. Try again in a moment; the plans and buttons still work.";
-  return detail;
+  return PLAIN_ERRORS[detail] || detail;
 }
 
 export function base64url(bytes) {

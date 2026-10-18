@@ -719,7 +719,11 @@ $("execute-plan").addEventListener("click", () => handleUtterance("Execute the a
 $("more").addEventListener("click", openSheet);
 $("sheet-close").addEventListener("click", closeSheet);
 $("sheet").addEventListener("click", (event) => { if (event.target === $("sheet")) closeSheet(); });
-window.addEventListener("keydown", (event) => { if (event.key === "Escape" && !$("sheet").hidden) closeSheet(); });
+window.addEventListener("keydown", (event) => {
+  if (event.key !== "Escape") return;
+  if (!$("sheet").hidden) closeSheet();
+  else if (surfaces.current().name === "confirm" && !state.busy) handleUtterance("no");
+});
 
 tick();
 setInterval(tick, 30000);

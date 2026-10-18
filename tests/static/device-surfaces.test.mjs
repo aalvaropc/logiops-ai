@@ -68,7 +68,9 @@ test("confirmation cards read back exactly what a yes would do", () => {
   assert.equal(pay.title, "Approve and pay?");
   assert.deepEqual(pay.figure, ["$147.50", "total, charged once"]);
   assert.deepEqual(pay.rows.at(-1), ["Total", "$147.50"]);
-  assert.equal(pay.note, "Charged once to the corporate card ending 4242. Nothing is charged until you say yes.");
+  assert.equal(pay.note, "Charged once to the corporate card ending 4242 (simulated payment). Nothing is charged until you say yes.");
+  const withdraw = confirmDetails({ kind: "withdraw", plan: plans[1] });
+  assert.deepEqual([withdraw.title, withdraw.lead, withdraw.yes, withdraw.no], ["Withdraw this approval?", plans[1].label, "Yes, withdraw", "Keep it"]);
   assert.equal(pay.yes, "Yes, approve and pay");
   assert.equal(confirmDetails({ kind: "purchase", purchase: { approve: false, quote }, plan: plans[1] }).yes, "Yes, pay");
 });

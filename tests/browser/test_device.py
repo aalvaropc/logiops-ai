@@ -220,6 +220,34 @@ def test_the_lifecycle_strip_reads_whole_on_narrow_phones(page, replay_server, p
     assert page_errors == []
 
 
+def test_an_approval_blocks_a_second_one_and_can_be_withdrawn(page, replay_server, page_errors, reset_demo):
+    page.set_viewport_size({"width": 390, "height": 844})
+    page.goto(f"{replay_server}/demo#SHIP-421")
+    expect(page.locator("#connection")).to_have_text("Connected")
+    say_on_device(page, "What's happening with SHIP-421?")
+    say_on_device(page, "approve the recommended plan")
+    page.click("#confirm-yes")
+    expect(page.locator("#plans-state")).to_contain_text("Approved by you")
+    assert "already approved" in say_on_device(page, "approve the wait plan")
+    expect(page.locator('[data-surface="plans"]')).to_be_visible()
+    expect(page.locator("#message")).to_have_text("")
+
+    say_on_device(page, "withdraw the approval")
+    confirm = page.locator('[data-surface="confirm"]')
+    expect(confirm).to_contain_text("Withdraw this approval?")
+    page.keyboard.press("Escape")
+    expect(page.locator("#device-spoken")).to_contain_text("stays")
+    expect(page.locator('[data-surface="plans"]')).to_be_visible()
+
+    say_on_device(page, "withdraw the approval")
+    page.click("#confirm-yes")
+    expect(page.locator('[data-surface="incident"]')).to_be_visible()
+    expect(page.locator("#device-spoken")).to_contain_text("is withdrawn")
+    expect(page.locator('#lifecycle li[aria-current="step"]')).to_have_text("Detected")
+    assert_accessible(page)
+    assert page_errors == []
+
+
 def test_the_device_fits_a_small_phone(page, replay_server, page_errors, reset_demo):
     page.set_viewport_size({"width": 360, "height": 740})
     page.goto(f"{replay_server}/demo")

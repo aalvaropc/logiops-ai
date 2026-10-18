@@ -95,7 +95,7 @@ Success means:
     absolute times.
   - The screen keeps the full detail.
 - **Commands act only from a closed grammar.** "Approve the recommended plan",
-  "yes", "execute it" and "book it" act. Questions, negations and commands
+  "yes", "execute it", "book it" and "withdraw the approval" act. Questions, negations and commands
   buried in a longer sentence go to the agent and never act.
 - **The live demo runs on AWS within limits.**
   - It shares a daily budget of model calls. When the budget is spent, replies
