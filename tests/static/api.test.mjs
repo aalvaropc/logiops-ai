@@ -182,3 +182,31 @@ test("a structured error keeps its detail for the page and a readable message", 
     return true;
   });
 });
+
+const sse = (text) => new Response(text, { headers: { "content-type": "text/event-stream" } });
+
+test("a streamed investigation reports each step, then returns the same result as the plain route", async () => {
+  const body = 'event: step\ndata: {"tool":"get_shipment"}\n\nevent: ping\ndata: {}\n\nevent: step\ndata: {"tool":"investigate_incident"}\n\nevent: done\ndata: {"answer":"ok"}\n\n';
+  const { api, calls, phases } = setup({ routes: { "/incidents/SHIP-1/agent/investigate/stream": () => sse(body) } });
+  const steps = [];
+  const run = await api.streamed("/incidents/SHIP-1/agent/investigate/stream", { question: "?" }, (step) => steps.push(step.tool));
+  assert.deepEqual(run, { answer: "ok" });
+  assert.deepEqual(steps, ["get_shipment", "investigate_incident"]);
+  assert.deepEqual(phases, ["request", "done"]);
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].init.headers.Accept, "text/event-stream");
+});
+
+test("a stream error is explained, and a stream that cannot start falls back to the plain route", async () => {
+  const failing = setup({ routes: { "/incidents/SHIP-1/agent/investigate/stream": () => sse('event: step\ndata: {"tool":"get_shipment"}\n\nevent: error\ndata: {"status":502,"detail":"boom"}\n\n') } });
+  await assert.rejects(failing.api.streamed("/incidents/SHIP-1/agent/investigate/stream", {}, () => {}), (error) => error.status === 502 && /planning service/.test(error.message));
+  assert.deepEqual(failing.phases, ["request", "error"]);
+
+  const plain = setup({ routes: {
+    "/incidents/SHIP-1/agent/investigate/stream": () => jsonResponse(404, { detail: "Not Found" }),
+    "/incidents/SHIP-1/agent/investigate": () => jsonResponse(200, { answer: "plain" }),
+  } });
+  assert.deepEqual(await plain.api.streamed("/incidents/SHIP-1/agent/investigate/stream", {}, () => {}), { answer: "plain" });
+  assert.deepEqual(plain.calls.map((call) => call.url), ["/incidents/SHIP-1/agent/investigate/stream", "/incidents/SHIP-1/agent/investigate"]);
+  assert.deepEqual(plain.phases, ["request", "done"]);
+});

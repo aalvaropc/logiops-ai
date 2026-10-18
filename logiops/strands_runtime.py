@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import asyncio
 import json
-from typing import Any, AsyncGenerator, Callable, Iterable, Mapping
+from typing import Any, AsyncGenerator, Awaitable, Callable, Iterable, Mapping
 
 from strands import Agent
 from strands.agent.conversation_manager import NullConversationManager
@@ -19,6 +19,7 @@ from strands.types.tools import AgentTool, ToolSpec, ToolUse
 from .bedrock import BedrockError
 
 Evaluate = Callable[[str, list[dict[str, Any]]], dict[str, Any]]
+OnStep = Callable[[dict[str, Any]], Awaitable[None]]
 USAGE_KEYS = ("inputTokens", "outputTokens")
 CACHE_KEYS = ("cacheReadInputTokens", "cacheWriteInputTokens")
 
@@ -109,13 +110,15 @@ class ConverseModel(Model):
 
 
 class McpTool(AgentTool):
-    """One allowed MCP tool, called on the session that lives in this event loop; every call lands in the trace."""
+    """One allowed MCP tool, called on the session that lives in this event loop; every call lands in the trace
+    and, with `on_step`, is reported as soon as it returns."""
 
-    def __init__(self, tool: Any, session: Any, trace: list[dict[str, Any]]) -> None:
+    def __init__(self, tool: Any, session: Any, trace: list[dict[str, Any]], on_step: OnStep | None = None) -> None:
         super().__init__()
         self._spec: ToolSpec = {"name": tool.name, "description": tool.description or tool.name, "inputSchema": {"json": tool.inputSchema}}
         self.session = session
         self.trace = trace
+        self.on_step = on_step
 
     @property
     def tool_name(self) -> str:
@@ -136,6 +139,8 @@ class McpTool(AgentTool):
         if payload is None:
             payload = {"text": "\n".join(part.text for part in result.content if part.type == "text")}
         self.trace.append({"tool": self.tool_name, "input": arguments, "output": payload, "is_error": bool(result.isError)})
+        if self.on_step is not None:
+            await self.on_step(self.trace[-1])
         yield ToolResultEvent({"toolUseId": tool_use["toolUseId"], "status": "error" if result.isError else "success", "content": [{"json": payload}]})
 
 
@@ -191,6 +196,7 @@ async def run_agent(
     *, client: Any, session: Any, tools: list[Any], allowed: Iterable[str], shipments: Iterable[str], skill: str, skill_info: dict[str, Any],
     system: str, first_message: str, required_tool: str | None, max_turns: int, evaluate: Evaluate | None = None,
     revise_until: float | None = None, closing: str = "", trace_attributes: Mapping[str, Any] | None = None,
+    on_step: OnStep | None = None,
 ) -> dict[str, Any]:
     """Run the tool loop as a Strands agent and return the result the API expects: answer, spoken line, tool
     trace, usage, skill, and the evaluations when the answer is checked. A failed first check is sent back
@@ -200,7 +206,7 @@ async def run_agent(
     trace: list[dict[str, Any]] = []
     model = ConverseModel(client)
     agent = Agent(
-        model=model, tools=[McpTool(tool, session, trace) for tool in tools],
+        model=model, tools=[McpTool(tool, session, trace, on_step) for tool in tools],
         system_prompt=[{"text": skill}, {"text": system}, {"cachePoint": {"type": "default"}}],
         hooks=[RunGuards(allowed, shipments)], conversation_manager=NullConversationManager(), callback_handler=None,
         retry_strategy=None, tool_executor=SequentialToolExecutor(), record_direct_tool_call=False, trace_attributes=trace_attributes,

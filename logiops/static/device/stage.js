@@ -9,6 +9,8 @@ export function createStage({ root, surface, document: doc = globalThis.document
   const stations = root.querySelector(".agent-stations");
   const meta = root.querySelector(".agent-meta");
   let timers = [];
+  let live = 0;
+  let nextAt = 0;
 
   const later = (work, ms) => timers.push(setTimeout(work, ms));
 
@@ -30,6 +32,8 @@ export function createStage({ root, surface, document: doc = globalThis.document
     line.replaceChildren(subject ? `${lead} ` : lead);
     if (subject) line.append(el("strong", "", subject, doc));
     stations.replaceChildren();
+    live = 0;
+    nextAt = 0;
     meta.textContent = "0 s";
     root.classList.remove("leaving");
     root.dataset.phase = "asking";
@@ -38,6 +42,21 @@ export function createStage({ root, surface, document: doc = globalThis.document
 
   function tick(seconds) {
     if (root.dataset.phase === "asking") meta.textContent = `${seconds} s`;
+  }
+
+  function schedule(item, index) {
+    const now = performance.now();
+    const at = reducedMotion() ? now : Math.max(now, nextAt);
+    nextAt = at + CADENCE_MS;
+    later(() => {
+      if (stations.children.length === index) stations.append(station(stepLabel(item), item.is_error ? "error" : "", 0));
+    }, at - now);
+  }
+
+  function step(item) {
+    if (root.hidden || root.dataset.phase !== "asking") return;
+    schedule(item, live);
+    live += 1;
   }
 
   function clear() {
@@ -54,17 +73,27 @@ export function createStage({ root, surface, document: doc = globalThis.document
 
   function replay(run, check, caption) {
     if (root.hidden) return;
-    reset();
     const steps = run.tool_trace || [];
     if (!steps.length) {
       clear();
       return;
     }
-    stations.replaceChildren(...steps.map((step, index) => station(stepLabel(step), step.is_error ? "error" : "", index)));
-    if (check) stations.append(station(check.text, check.passed ? "check" : "check failed", steps.length));
-    meta.textContent = caption;
-    meta.style.setProperty("--step", String(stations.children.length));
+    const streamed = live > 0;
     root.dataset.phase = "replay";
+    if (streamed) {
+      steps.slice(live).forEach((item, offset) => schedule(item, live + offset));
+      const wait = Math.max(0, nextAt - performance.now());
+      if (check) later(() => stations.append(station(check.text, check.passed ? "check" : "check failed", 0)), wait);
+      meta.textContent = caption(true);
+      meta.style.setProperty("--step", "0");
+      later(leave, wait + HOLD_MS);
+      return;
+    }
+    reset();
+    stations.replaceChildren(...steps.map((item, index) => station(stepLabel(item), item.is_error ? "error" : "", index)));
+    if (check) stations.append(station(check.text, check.passed ? "check" : "check failed", steps.length));
+    meta.textContent = caption(false);
+    meta.style.setProperty("--step", String(stations.children.length));
     later(leave, (reducedMotion() ? 0 : stations.children.length * CADENCE_MS) + HOLD_MS);
   }
 
@@ -74,5 +103,5 @@ export function createStage({ root, surface, document: doc = globalThis.document
     }, 0);
   }
 
-  return { ask, tick, replay, settle, clear };
+  return { ask, tick, step, replay, settle, clear };
 }

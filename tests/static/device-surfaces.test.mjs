@@ -196,6 +196,7 @@ test("the agent stage names who is asked and captions the recorded trace honestl
   const run = { tool_trace: [{ tool: "get_shipment" }, { tool: "investigate_incident" }], mode: "replay" };
   assert.equal(stageCaption(run, 13.04), "Replayed from the recorded tool trace · 2 MCP calls · answered in 13.0 s · scripted replay");
   assert.equal(stageCaption({ tool_trace: [{ tool: "list_incidents" }], mode: "bedrock" }, null), "Replayed from the recorded tool trace · 1 MCP call");
+  assert.equal(stageCaption(run, 3.14, true), "Live from the MCP tool calls · 2 MCP calls · answered in 3.1 s · scripted replay");
   assert.equal(agentLine(run, { passed: true, text: "Checked against the data" }), "2 MCP calls by the agent · Checked against the data · scripted replay");
   assert.equal(agentLine({ tool_trace: [], mode: "bedrock" }, null), "");
   assert.equal(agentLine(undefined, null), "");

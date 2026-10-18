@@ -28,6 +28,7 @@ export function createCommands({
   store, intent, request, purchase, selectors, badges, preferences, say, act, device = () => {}, stopSpeaking = () => {},
   selectIncident, hideMcpApp = () => {}, showMcpApp = async () => {}, showMcpAppNote = () => {}, onInbox = () => {},
   approvePlan, executeApproved, savePreferences, linkAccount = async () => {}, signOut = () => {}, onRun = () => {}, onSurface = () => {},
+  investigate = (path, body) => request(path, "POST", body),
 }) {
   const state = store.state;
   const incidentPath = (suffix = "") => `/incidents/${encodeURIComponent(state.incidentId)}${suffix}`;
@@ -315,7 +316,7 @@ export function createCommands({
         let run;
         await act(async () => {
           run = fresh
-            ? await request(incidentPath("/agent/investigate"), "POST", { question: text })
+            ? await investigate(incidentPath("/agent/investigate"), { question: text })
             : await request(incidentPath("/agent/ask"), "POST", { question: text, history });
         }, "");
         say("assistant", run.answer, `${fresh ? "investigation" : "follow-up"} · ${badges.traceSummary(run)}`, run.spoken, badges.checkBadge(run));
