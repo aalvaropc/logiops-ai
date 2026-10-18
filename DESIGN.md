@@ -367,6 +367,7 @@ Firm, square-shouldered, heavy-weight text.
 ### Chips
 - **Question chips:** label stock, 1.5px ink border, 6px radius, 44px tall, Meta type at 600; one scrolling row in the dock, wrapping on the console. Hover shifts the border to Label Blue over Blue Wash.
 - **Action chips:** the chips that act rather than ask (approve the recommended plan, approve the new pick, book and pay, execute approved plan) take a 2px Label Blue outline and Label Blue 800 text, so a tap that changes state never looks like a question. While a plan is approved and not executed, "Execute approved plan" leads the chips on the plans card and on a receipt booked before execution, alongside the primary button.
+- **Back to queue:** a plain question-style chip closes the chip row on the incident, plans, receipt and result cards and returns to the home queue without clearing the conversation; "home", "go back" and "back to the queue" say the same.
 - **Outcome chips:** square, solid green or red, white uppercase tag type; one per order row ("on time", "+8 h late").
 - **Incident tags:** square uppercase tags, at most two per card: start here (blue), critical units at risk (red), critical order (amber with ink), and the investigated or approved state as words in a 1.5px slate outline. An executed incident shows only the Executed tag, a 1.5px green outline with green text, which outranks start here.
 - **Badges:** agent pick and zero delay in blue; "your preference" in Amber Wash with Amber Ink.
@@ -378,7 +379,7 @@ Firm, square-shouldered, heavy-weight text.
 - **Border:** 2px ink.
 - **Internal Padding:** 14 to 16px on the device (18px for queue cards from 768px), 24px for console panels (18px under 650px).
 - **Two-column labels:** from 900px wide the confirmation, receipt, alert and result cards split into a decision column and an evidence column under one band; below 900px they stack in that order.
-- **Confirmation card:** heading, the plan name as the lead, one Figure, then the rows and a slate note, with the primary yes and a secondary no. Approval ("Yes, approve" / "No"), payment and withdrawal ("Withdraw this approval?", "Yes, withdraw" / "Keep it") share it; a red band appears only when the plan leaves a critical order late.
+- **Confirmation card:** heading, the plan name as the lead, one Figure, then the rows and a slate note, with the primary yes and a secondary no. Approval ("Yes, approve" / "No"), payment and withdrawal ("Withdraw this approval?", "Yes, withdraw" / "Keep it") share it; a red band appears only when the plan leaves a critical order late. Under 480px the yes/no row sticks to the bottom of the card area on a white bar with a hairline rule, so it stays in reach while the rows scroll.
 - **Queue cards:** whole-card buttons with the incident id at Stat size, up to two tags, the incident text and a meta line; hover takes Blue Wash.
 
 ### Inputs / Fields
