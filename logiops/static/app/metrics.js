@@ -6,6 +6,8 @@ export function seconds(value) {
   return whole < 60 ? `${whole} s` : `${Math.floor(whole / 60)} min ${whole % 60} s`;
 }
 
+export const EMPTY_SESSION = "No plan approved yet this session. Outcomes appear here as you decide.";
+
 export function sessionFigures(totals) {
   if (!totals.decided && !totals.executed && !totals.booked_usd) return [];
   return [

@@ -12,6 +12,7 @@ def test_console_walkthrough(page, replay_server, page_errors, reset_demo, width
     page.goto(f"{replay_server}/console#SHIP-421")
     expect(page.locator("#connection")).to_have_text("Connected")
     expect(page.locator("#inbox > li > button")).to_have_count(4)
+    expect(page.locator("#metrics")).to_contain_text("No plan approved yet this session")
 
     say(page, "What's happening with SHIP-421?")
     expect(page.locator("#plans input[type=radio]")).to_have_count(3)
@@ -23,6 +24,7 @@ def test_console_walkthrough(page, replay_server, page_errors, reset_demo, width
     expect(page.locator("#execution-result")).to_be_visible()
     expect(page.locator("#execution-result")).to_contain_text("Verified: 20 units accounted for")
     expect(page.locator("#event-count")).to_contain_text("7 events")
+    expect(page.locator("#metrics li")).to_have_count(6)
 
     assert "Say “yes” to pay" in say(page, "book it")
     assert "Booked “Fulfill local stock and send the rest express”" in say(page, "yes")
