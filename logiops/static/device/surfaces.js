@@ -32,6 +32,15 @@ export function incidentFacts(snapshot) {
   };
 }
 
+export const LIFECYCLE = ["Detected", "Investigated", "Approved", "Executed"];
+
+export function lifecycleStep(snapshot) {
+  if (!snapshot) return -1;
+  if (snapshot.executions.length) return 3;
+  if (visibleApproval(snapshot)) return 2;
+  return visiblePlans(snapshot).length ? 1 : 0;
+}
+
 export function displayPlan(snapshot, selectedId, recommended) {
   if (!snapshot) return null;
   const plans = visiblePlans(snapshot);

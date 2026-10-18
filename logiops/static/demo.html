@@ -2,12 +2,14 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="color-scheme" content="dark">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="color-scheme" content="light">
+  <meta name="theme-color" content="#0B4F9C">
   <meta name="logiops-sandbox-origin" content="">
   <title>LogiOps AI · Alexa+ device</title>
   <link rel="icon" href="data:,">
   <link rel="preload" href="/assets/fonts/atkinson-hyperlegible-next-latin.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="/assets/tokens.css">
   <link rel="stylesheet" href="/assets/device.css">
   <script src="/assets/markdown.js"></script>
   <script src="/assets/intent.js"></script>
@@ -26,6 +28,9 @@
           <span id="device-clock" class="device-clock">--:--</span>
         </div>
       </header>
+      <section id="lifecycle" class="lifecycle" aria-label="Incident progress" hidden>
+        <ol><li>Detected</li><li>Investigated</li><li>Approved</li><li>Executed</li></ol>
+      </section>
       <main id="surface" class="surface" tabindex="0">
         <div id="message" class="message" role="status" aria-live="polite"></div>
         <section data-surface="home" class="card home" aria-label="Home">
@@ -56,7 +61,7 @@
         <div id="chips" class="chips" aria-label="Suggested requests"></div>
         <form id="ask-form" class="ask-row">
           <div class="orb-row"><div id="device-orb" class="orb" data-state="ready" aria-hidden="true"><span></span></div><p id="device-state" class="orb-label" role="status" aria-live="polite">Ready</p><span id="device-elapsed" class="device-elapsed" aria-hidden="true"></span></div>
-          <button id="mic" type="button" class="mic" aria-pressed="false" aria-label="Speak" hidden><span aria-hidden="true">🎤</span></button>
+          <button id="mic" type="button" class="mic" aria-pressed="false" aria-label="Speak" hidden><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg></button>
           <label class="visually-hidden" for="ask-input">Message to LogiOps</label>
           <input id="ask-input" type="text" maxlength="500" autocomplete="off" placeholder="Ask LogiOps">
           <button id="ask" type="submit" class="send">Send</button>
@@ -70,7 +75,7 @@
       <div class="sheet-head">
         <h2 id="sheet-title">Conversation</h2>
         <label id="speak-toggle" class="speak-toggle" hidden><input id="speak-replies" type="checkbox"> Read replies aloud<span id="speak-engine"></span></label>
-        <button id="mcp-app-theme" type="button" class="secondary mcp-app-theme" aria-pressed="false">Light plans card</button>
+        <button id="mcp-app-theme" type="button" class="secondary mcp-app-theme" aria-pressed="false">Dark plans card</button>
         <button id="sheet-close" type="button" class="secondary">Close</button>
       </div>
       <ol id="conversation" class="conversation" aria-label="Conversation" tabindex="0"></ol>
