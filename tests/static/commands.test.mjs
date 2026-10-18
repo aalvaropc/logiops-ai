@@ -74,6 +74,26 @@ test("help and start over answer without the model and start over clears what wa
   assert.equal(h.said.filter((turn) => turn.role === "user").length, 2);
 });
 
+test("start over says what stays in place once a plan is approved or executed, and the result can be reopened", async () => {
+  const approval = { plan_id: "SHIP-421:r:split-express:v1", source_version: 1, is_current: true };
+  const approved = harness({ snapshot: { ...investigated(), approvals: [approval] } });
+  await approved.commands.handle("start over");
+  assert.equal(approved.last().text, "Okay, starting over. I cleared our conversation; your approval of “Fulfill local stock and send the rest express” still stands. "
+    + "Ask about your queue, or about an incident.");
+  assert.equal(approved.last().spoken, "Okay, starting over. Your approval still stands.");
+  await approved.commands.handle("show the result");
+  assert.equal(approved.last().text, "Nothing has been executed for SHIP-421 yet, so there's no result to show.");
+  const executed = harness({ snapshot: { ...investigated(), approvals: [approval], executions: [{ plan_id: approval.plan_id, source_version: 1 }],
+    bookings: [{ plan_id: approval.plan_id, number: "LGO-7KQ2MD" }] } });
+  await executed.commands.handle("start over");
+  assert.match(executed.last().text, /“Fulfill local stock and send the rest express” stays executed, and booking LGO-7KQ2MD stays paid \(simulated\)\./);
+  assert.ok(!executed.last().text.includes("Nothing was changed"));
+  await executed.commands.handle("show the result");
+  assert.equal(executed.last().text, "Here's the result for SHIP-421.");
+  assert.ok(executed.events.includes("surface:result"));
+  assert.equal(executed.calls.length, 0);
+});
+
 test("an approval is read back and only an explicit yes approves; execute refuses another plan", async () => {
   const h = harness();
   await h.commands.handle("approve the recommended plan");

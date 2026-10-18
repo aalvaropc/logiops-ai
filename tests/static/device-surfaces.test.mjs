@@ -4,9 +4,8 @@ import { moduleUrl } from "./helpers.mjs";
 
 const {
   SURFACES, shortSpoken, homeCards, incidentFacts, displayPlan, confirmDetails, resultFigures, alertDetails, chipsFor, createSurfaces,
-  lifecycleStep, LIFECYCLE,
+  lifecycleStep, LIFECYCLE, cardTags, livePick, nextOpen, criticalOutcome, incidentBand,
 } = await import(moduleUrl("device/surfaces.js"));
-const { cardTags } = await import(moduleUrl("device/carousel.js"));
 
 const plans = [
   { id: "p-wait", kind: "wait", label: "Keep the delayed shipment", incremental_cost_usd: 0, projected_customer_delay_hours: 12, late_units: 20,
@@ -92,7 +91,16 @@ test("the result card, the alert card and the chips come from the data", () => {
   const approved = { ...snapshot, approvals: [{ plan_id: "p-express", source_version: 1 }] };
   assert.deepEqual(chipsFor("plans", { ...context, snapshot: approved }).map(([text]) => text), ["Execute it", "Book and pay", "Why this plan?"]);
   const executed = { ...approved, executions: [{ plan_id: "p-express", source_version: 1 }], bookings: [{ plan_id: "p-express" }] };
-  assert.deepEqual(chipsFor("result", { ...context, snapshot: executed }).map(([text]) => text), ["Any delays today?", "Next incident"]);
+  assert.deepEqual(chipsFor("result", { ...context, snapshot: executed }).map(([text]) => text), ["Open SHIP-433", "Any delays today?"]);
+  assert.deepEqual(chipsFor("result", { ...context, snapshot: executed }).find(([text]) => text === "Open SHIP-433")[1], "Open SHIP-433");
+  const resolved = inbox.map((item) => ({ ...item, status: "verified" }));
+  assert.deepEqual(chipsFor("result", { ...context, snapshot: executed, inbox: resolved }).map(([text]) => text), ["Any delays today?"]);
+  assert.deepEqual(chipsFor("receipt", { ...context, snapshot: executed }).map(([text]) => text), ["See the result", "Open SHIP-433", "Any delays today?"]);
+  assert.deepEqual(chipsFor("receipt", { ...context, snapshot: approved }).map(([text]) => text), ["Execute it"]);
+  assert.deepEqual(chipsFor("incident", { ...context, snapshot: executed }).map(([text]) => text), ["See the result", "Show the plans", "Open SHIP-433"]);
+  const doneHere = [{ ...inbox[0], status: "verified" }, inbox[1]];
+  assert.deepEqual(chipsFor("home", { ...context, incidentId: "SHIP-433", inbox: doneHere, pick: "SHIP-433" }).map(([text]) => text),
+    ["Any delays today?", "What's happening with SHIP-421?"]);
   assert.deepEqual(chipsFor("confirm", context), []);
   assert.deepEqual(chipsFor("plans", { ...context, snapshot: null }), []);
   for (const [, utterance] of chipsFor("plans", context)) assert.equal(typeof utterance, "string");
@@ -101,7 +109,9 @@ test("the result card, the alert card and the chips come from the data", () => {
 test("an inbox card carries at most two tags: start here, then risk or a critical order, then a state past detected", () => {
   const card = { startHere: true, critical_units_at_risk: 12, priority: "critical", status: "investigated" };
   assert.deepEqual(cardTags(card), [["start-here", "Start here"], ["at-risk", "12 critical units at risk"]]);
-  assert.deepEqual(cardTags({ ...card, startHere: false }), [["at-risk", "12 critical units at risk"], ["state", "investigated"]]);
+  assert.deepEqual(cardTags({ ...card, startHere: false }), [["at-risk", "12 critical units at risk"], ["state", "Investigated"]]);
+  assert.deepEqual(cardTags({ ...card, startHere: false, critical_units_at_risk: 0, status: "approved" }), [["critical", "Critical order"], ["state", "Approved"]]);
+  assert.deepEqual(cardTags({ ...card, critical_units_at_risk: 0, status: "verified" }), [["executed", "Executed"]]);
   assert.deepEqual(cardTags({ ...card, startHere: false, critical_units_at_risk: 0, status: "detected" }), [["critical", "Critical order"]]);
   assert.deepEqual(cardTags({ priority: "standard", critical_units_at_risk: 0, status: "detected" }), []);
 });
@@ -131,4 +141,33 @@ test("a confirmation or an alert is dismissed back to the card underneath", () =
   const fresh = createSurfaces("incident");
   fresh.show("confirm", {});
   assert.equal(fresh.show("dismiss").name, "incident");
+});
+
+test("an executed incident drops out of the briefing's pick and the queue moves on", () => {
+  const done = [{ ...inbox[0], status: "verified" }, inbox[1]];
+  assert.equal(livePick(inbox, "SHIP-433"), "SHIP-433");
+  assert.equal(livePick(done, "SHIP-433"), null);
+  assert.equal(livePick(inbox, "SHIP-999"), null);
+  assert.equal(nextOpen(inbox, "SHIP-433").incident_id, "SHIP-421");
+  assert.equal(nextOpen(done, "SHIP-421"), null);
+  assert.equal(nextOpen(done, null).incident_id, "SHIP-421");
+});
+
+test("the incident band follows the approved or executed plan, not the risk it had at detection", () => {
+  const orders = [{ order_id: "A", customer: "hospital", priority: "critical", quantity: 12, delay_hours: 0, late_units: 0 },
+    { order_id: "B", customer: "store", priority: "standard", quantity: 18, delay_hours: 8, late_units: 18 }];
+  const fly = { id: "p-fly", label: "Fly the critical order", source_version: 1, orders };
+  const slow = { id: "p-slow", label: "Wait", source_version: 1, orders: orders.map((order) => ({ ...order, delay_hours: 8, late_units: order.quantity })) };
+  const base = { ...snapshot, plans: [fly, slow] };
+  assert.deepEqual(criticalOutcome(fly), { critical: true, onTime: 12, total: 12 });
+  assert.deepEqual(criticalOutcome({ orders: [orders[1]] }), { critical: false, onTime: 0, total: 18 });
+  assert.deepEqual(incidentBand(base, { critical_units_at_risk: 12 }), ["late", "12 critical units at risk"]);
+  assert.equal(incidentBand(base, { critical_units_at_risk: 0 }), null);
+  const approve = (id) => ({ ...base, approvals: [{ plan_id: id, source_version: 1 }] });
+  assert.deepEqual(incidentBand(approve("p-fly"), { critical_units_at_risk: 12 }), ["warn", "Approved · 12 critical units projected on time once executed"]);
+  assert.deepEqual(incidentBand(approve("p-slow"), { critical_units_at_risk: 12 }), ["late", "Approved · 0 of 12 critical units projected on time"]);
+  const executed = { ...approve("p-fly"), executions: [{ plan_id: "p-fly", source_version: 1 }] };
+  assert.deepEqual(incidentBand(executed, { critical_units_at_risk: 0 }), ["ok", "Executed · 12 critical units projected on time"]);
+  const standard = { ...base, plans: [{ ...fly, orders: [{ ...orders[1], delay_hours: 0, late_units: 0 }] }], executions: [{ plan_id: "p-fly", source_version: 1 }] };
+  assert.deepEqual(incidentBand(standard, null), ["ok", "Executed · 18 units projected on time"]);
 });

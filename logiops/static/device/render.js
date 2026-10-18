@@ -1,6 +1,6 @@
 import { dollars, bookingRows } from "../app/purchase.js";
 import { formatDate, allocationSummary, distinguishing, TIME_ZONE } from "../app/selectors.js";
-import { incidentFacts, confirmDetails, resultFigures, alertDetails } from "./surfaces.js";
+import { incidentFacts, incidentBand, confirmDetails, resultFigures, alertDetails } from "./surfaces.js";
 import { EMPTY_SESSION } from "../app/metrics.js";
 
 const SVG = "http://www.w3.org/2000/svg";
@@ -137,7 +137,8 @@ export function renderIncident(section, { snapshot, plan, summary, route }, doc 
   title.append(el("span", "incident-id", facts.id, doc));
   head.append(title, el("p", "incident-title", summary?.kind_label ? `${summary.kind_label} · ${facts.title}` : facts.title, doc),
     el("p", "incident-route", `${facts.route} · ${facts.units} units of ${facts.sku} · ${facts.orders === 1 ? "1 order" : `${facts.orders} orders`}`, doc));
-  if (summary?.critical_units_at_risk > 0) head.prepend(el("p", "band late", `${summary.critical_units_at_risk} critical units at risk`, doc));
+  const band = incidentBand(snapshot, summary);
+  if (band) head.prepend(el("p", `band ${band[0]}`, band[1], doc));
   if (plan) {
     const line = el("p", "plan-line", undefined, doc);
     const labels = snapshot.plans.filter((item) => item.source_version === plan.source_version).map((item) => item.label);

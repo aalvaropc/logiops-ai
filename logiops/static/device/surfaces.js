@@ -15,6 +15,57 @@ export function homeCards(inbox, pick) {
   return [...cards.filter((card) => card.startHere), ...cards.filter((card) => !card.startHere)];
 }
 
+const isOpen = (item) => item.status !== "verified";
+
+export function livePick(inbox, pick) {
+  return inbox.some((item) => item.incident_id === pick && isOpen(item)) ? pick : null;
+}
+
+export function nextOpen(inbox, currentId) {
+  return inbox.find((item) => isOpen(item) && item.incident_id !== currentId) || null;
+}
+
+const STATES = { investigated: "Investigated", approved: "Approved" };
+
+export function cardTags(card) {
+  if (card.status === "verified") return [["executed", "Executed"]];
+  const tags = [];
+  if (card.startHere) tags.push(["start-here", "Start here"]);
+  if (card.critical_units_at_risk > 0) tags.push(["at-risk", `${card.critical_units_at_risk} critical units at risk`]);
+  else if (card.priority === "critical") tags.push(["critical", "Critical order"]);
+  if (STATES[card.status]) tags.push(["state", STATES[card.status]]);
+  return tags.slice(0, 2);
+}
+
+export function criticalOutcome(plan) {
+  const orders = plan?.orders || [];
+  const critical = orders.filter((order) => order.priority === "critical");
+  const counted = critical.length ? critical : orders;
+  return {
+    critical: critical.length > 0,
+    onTime: counted.reduce((sum, order) => sum + order.quantity - (order.late_units || 0), 0),
+    total: counted.reduce((sum, order) => sum + order.quantity, 0),
+  };
+}
+
+function unitsOnTime(plan) {
+  const { critical, onTime, total } = criticalOutcome(plan);
+  const units = `${critical ? "critical " : ""}unit${total === 1 ? "" : "s"}`;
+  return { allOnTime: onTime === total, text: `${onTime === total ? total : `${onTime} of ${total}`} ${units} projected on time` };
+}
+
+export function incidentBand(snapshot, summary) {
+  const execution = snapshot.executions[0];
+  const decided = execution?.plan_id || visibleApproval(snapshot)?.plan_id;
+  const plan = decided && snapshot.plans.find((item) => item.id === decided);
+  if (plan) {
+    const { allOnTime, text } = unitsOnTime(plan);
+    if (execution) return [allOnTime ? "ok" : "late", `Executed · ${text}`];
+    return allOnTime ? ["warn", `Approved · ${text} once executed`] : ["late", `Approved · ${text}`];
+  }
+  return summary?.critical_units_at_risk > 0 ? ["late", `${summary.critical_units_at_risk} critical units at risk`] : null;
+}
+
 const capital = (name) => `${name[0].toUpperCase()}${name.slice(1)}`;
 
 export function incidentFacts(snapshot) {
@@ -115,20 +166,27 @@ export function chipsFor(surface, { snapshot, incidentId, inbox = [], plan = nul
   const investigated = visiblePlans(snapshot).length > 0;
   const booked = (snapshot.bookings || []).some((booking) => plan && booking.plan_id === plan.id);
   const pay = plan && plan.incremental_cost_usd > 0 && !booked ? [["Book and pay", "Book and pay for the recommended plan"]] : [];
-  const lead = inbox.some((item) => item.incident_id === pick) ? pick : incidentId;
+  const current = inbox.find((item) => item.incident_id === incidentId);
+  const lead = livePick(inbox, pick) ?? (current && !isOpen(current) ? nextOpen(inbox, incidentId)?.incident_id : null) ?? incidentId;
+  const next = nextOpen(inbox, incidentId);
+  const openNext = next ? [[`Open ${next.incident_id}`, `Open ${next.incident_id}`]] : [];
+  const result = [["See the result", "Show the result"]];
   switch (surface) {
     case "home": return [["Any delays today?", briefing], ask(lead)];
     case "incident":
       if (!investigated) return [ask(incidentId), ["Any delays today?", briefing]];
-      return [["Show the plans", "Show the plans"], ...(approved || executed ? [] : [["Approve the recommended plan", "Approve the recommended plan"]])];
+      if (executed) return [...result, ["Show the plans", "Show the plans"], ...openNext];
+      return [["Show the plans", "Show the plans"], ...(approved ? [] : [["Approve the recommended plan", "Approve the recommended plan"]])];
     case "plans":
       if (executed) return [...pay, ["Any delays today?", briefing]];
       if (approved) return [["Execute it", "Execute the approved plan"], ...pay, ["Why this plan?", "Why is that the recommended plan?"]];
       return [["Approve the recommended plan", "Approve the recommended plan"], ["Why this plan?", "Why is that the recommended plan?"],
         ["Show the incident", "Show the incident"], ...pay];
-    case "receipt": return approved && !executed ? [["Execute it", "Execute the approved plan"]] : [["Any delays today?", briefing]];
+    case "receipt":
+      if (executed) return [...result, ...openNext, ["Any delays today?", briefing]];
+      return approved ? [["Execute it", "Execute the approved plan"]] : [["Any delays today?", briefing]];
     case "alert": return [["Approve the new pick", "Approve the recommended plan"], ["Why did it change?", "Why did the recommended plan change?"]];
-    case "result": return [...pay, ["Any delays today?", briefing], inbox.length > 1 ? ["Next incident", "start over"] : null].filter(Boolean);
+    case "result": return [...pay, ...openNext, ["Any delays today?", briefing]];
     default: return [];
   }
 }
