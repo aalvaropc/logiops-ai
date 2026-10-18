@@ -1,5 +1,7 @@
 import { formatDate } from "../app/selectors.js";
 
+const SVG = "http://www.w3.org/2000/svg";
+
 export function cardTags(card) {
   const tags = [];
   if (card.startHere) tags.push(["start-here", "Start here"]);
@@ -13,19 +15,25 @@ export function createCarousel({ root, document: doc = globalThis.document, onOp
   root.classList.add("carousel");
   root.setAttribute("aria-roledescription", "carousel");
   root.setAttribute("aria-label", label);
-  const arrow = (direction, text) => {
+  const arrow = (direction) => {
     const button = doc.createElement("button");
     button.type = "button";
     button.className = `carousel-arrow ${direction}`;
     button.setAttribute("aria-label", direction === "prev" ? "Previous incidents" : "Next incidents");
-    button.textContent = text;
+    const icon = doc.createElementNS(SVG, "svg");
+    icon.setAttribute("viewBox", "0 0 24 24");
+    icon.setAttribute("aria-hidden", "true");
+    const path = doc.createElementNS(SVG, "path");
+    path.setAttribute("d", direction === "prev" ? "M15 5l-7 7 7 7" : "M9 5l7 7-7 7");
+    icon.append(path);
+    button.append(icon);
     button.addEventListener("click", () => scroll(direction === "prev" ? -1 : 1));
     return button;
   };
   const track = doc.createElement("ul");
   track.className = "carousel-track";
   track.setAttribute("aria-label", "Incidents, most urgent first");
-  root.replaceChildren(arrow("prev", "‹"), track, arrow("next", "›"));
+  root.replaceChildren(arrow("prev"), track, arrow("next"));
 
   function scroll(direction) {
     track.scrollBy({ left: direction * Math.max(220, track.clientWidth * 0.8), behavior: reducedMotion() ? "auto" : "smooth" });

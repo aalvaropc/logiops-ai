@@ -18,7 +18,7 @@ import { welcomeText as greeting } from "../app/greeting.js";
 import { checkBadge, checkNote, fallbackNote, traceSummary, executionSummary } from "../app/run-badges.js";
 import { renderMarkdown } from "../app/markdown-dom.js";
 import { sessionFigures, incidentTimes } from "../app/metrics.js";
-import { SURFACES, createSurfaces, shortSpoken, homeCards, displayPlan, chipsFor } from "./surfaces.js";
+import { SURFACES, createSurfaces, shortSpoken, homeCards, displayPlan, chipsFor, lifecycleStep } from "./surfaces.js";
 import { createCarousel } from "./carousel.js";
 import {
   el, renderHome, renderIncident, renderPlanList, renderConfirm, renderReceipt, renderAlert, renderResult, renderTrace, renderTranscript,
@@ -43,7 +43,7 @@ const SANDBOX_ORIGIN = (() => {
 const store = createStore({
   token: "", snapshot: null, selectedPlanId: null, busy: false, conversation: [], app: null, lastRun: null,
   awaitingExecute: false, pendingApproval: null, incidentId: hashIncident(), inbox: [], conversations: {}, selections: {},
-  briefingPick: null, cardTheme: "dark", voice: { engine: "browser", voice: null, fillers: [] }, auth: { enabled: false }, session: null,
+  briefingPick: null, cardTheme: "light", voice: { engine: "browser", voice: null, fillers: [] }, auth: { enabled: false }, session: null,
   memoryIncident: null, approver: "demo-operator", metrics: null,
 });
 const state = store.state;
@@ -261,7 +261,7 @@ function showMcpAppNote(text) {
 
 $("mcp-app-theme").addEventListener("click", () => {
   state.cardTheme = state.cardTheme === "dark" ? "light" : "dark";
-  $("mcp-app-theme").setAttribute("aria-pressed", String(state.cardTheme === "light"));
+  $("mcp-app-theme").setAttribute("aria-pressed", String(state.cardTheme === "dark"));
   mcpHost.notifyContext();
 });
 let contextTimer = 0;
@@ -367,6 +367,7 @@ function paintSurface(shown = surfaces.current()) {
     });
   }
   renderChips(shown.name);
+  paintLifecycle(shown.name);
   $("surface").scrollTop = 0;
   const heading = section.querySelector("h2");
   if (shown.name !== paintedSurface && lostFocus && heading && $("sheet").hidden) {
@@ -374,6 +375,19 @@ function paintSurface(shown = surfaces.current()) {
     heading.focus({ preventScroll: true });
   }
   paintedSurface = shown.name;
+}
+
+function paintLifecycle(surface) {
+  const strip = $("lifecycle");
+  const step = surface === "home" ? -1 : lifecycleStep(state.snapshot);
+  strip.hidden = step < 0;
+  if (step < 0) return;
+  strip.setAttribute("aria-label", `${state.snapshot.state.incident_id} progress`);
+  [...strip.querySelector("ol").children].forEach((item, index) => {
+    item.className = index < step ? "done" : index === step ? "now" : "";
+    if (index === step) item.setAttribute("aria-current", "step");
+    else item.removeAttribute("aria-current");
+  });
 }
 
 function renderChips(surface) {

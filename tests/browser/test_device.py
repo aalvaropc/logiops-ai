@@ -127,6 +127,29 @@ def test_device_walkthrough(page, replay_server, page_errors, reset_demo, width)
     assert page_errors == []
 
 
+def test_the_device_fits_a_small_phone(page, replay_server, page_errors, reset_demo):
+    page.set_viewport_size({"width": 360, "height": 740})
+    page.goto(f"{replay_server}/demo")
+    expect(page.locator("#connection")).to_have_text("Connected")
+    say_on_device(page, "What's happening with SHIP-433, and which plan should we choose?")
+    expect(page.locator('[data-surface="plans"]')).to_be_visible()
+    expect(page.locator('#lifecycle li[aria-current="step"]')).to_have_text("Investigated")
+    layout = page.evaluate("""(() => {
+        const box = (node) => node.getBoundingClientRect();
+        const controls = [...document.querySelectorAll("#device button, #device input")].filter((node) => node.offsetParent && !node.disabled);
+        return {
+            overflowX: document.documentElement.scrollWidth > innerWidth,
+            pageScroll: document.documentElement.scrollHeight > innerHeight + 1,
+            inputBottom: box(document.querySelector("#ask-input")).bottom,
+            small: controls.filter((node) => box(node).height < 44).map((node) => node.id || node.className),
+        };
+    })()""")
+    assert not layout["overflowX"] and not layout["pageScroll"], layout
+    assert layout["inputBottom"] <= 740 and layout["small"] == [], layout
+    assert_accessible(page)
+    assert page_errors == []
+
+
 def test_a_briefing_reorders_the_carousel_and_a_no_dismisses_a_confirmation(page, replay_server, page_errors, reset_demo):
     page.set_viewport_size({"width": 1440, "height": 1000})
     page.goto(f"{replay_server}/demo#SHIP-421")

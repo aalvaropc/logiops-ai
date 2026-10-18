@@ -1,0 +1,33 @@
+@font-face { font-family: "Atkinson Hyperlegible Next"; font-style: normal; font-weight: 200 800; font-display: swap; src: url("/assets/fonts/atkinson-hyperlegible-next-latin.woff2") format("woff2"); }
+:root {
+  --ground: #ECEEF1;
+  --outer: #D6DAE0;
+  --surface: #FFFFFF;
+  --sunken: #F4F5F7;
+  --ink: #111418;
+  --ink-2: #454C55;
+  --ink-3: #5B636D;
+  --rule: #111418;
+  --hairline: #C9CED5;
+  --shell: #0B4F9C;
+  --shell-ink: #FFFFFF;
+  --shell-tint: #E4ECF7;
+  --ok: #1D7A3C;
+  --ok-tint: #E2F1E6;
+  --late: #B8102A;
+  --late-tint: #FBE6E9;
+  --warn: #F2A900;
+  --warn-ink: #664400;
+  --warn-tint: #FFF3D1;
+  --bezel: #1A1D21;
+  --focus: #111418;
+  --radius-label: 4px;
+  --radius-control: 6px;
+  --font-sans: "Atkinson Hyperlegible Next", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  color-scheme: light;
+  font-family: var(--font-sans);
+  font-synthesis: none;
+  color: var(--ink);
+  background: var(--ground);
+}
+::selection { background: var(--shell); color: var(--shell-ink); }

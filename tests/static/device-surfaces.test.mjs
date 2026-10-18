@@ -4,6 +4,7 @@ import { moduleUrl } from "./helpers.mjs";
 
 const {
   SURFACES, shortSpoken, homeCards, incidentFacts, displayPlan, confirmDetails, resultFigures, alertDetails, chipsFor, createSurfaces,
+  lifecycleStep, LIFECYCLE,
 } = await import(moduleUrl("device/surfaces.js"));
 const { cardTags } = await import(moduleUrl("device/carousel.js"));
 
@@ -103,6 +104,15 @@ test("an inbox card carries at most two tags: start here, then risk or a critica
   assert.deepEqual(cardTags({ ...card, startHere: false }), [["at-risk", "12 critical units at risk"], ["state", "investigated"]]);
   assert.deepEqual(cardTags({ ...card, startHere: false, critical_units_at_risk: 0, status: "detected" }), [["critical", "Critical order"]]);
   assert.deepEqual(cardTags({ priority: "standard", critical_units_at_risk: 0, status: "detected" }), []);
+});
+
+test("the lifecycle strip follows detection, investigation, approval and execution", () => {
+  assert.equal(lifecycleStep(null), -1);
+  assert.equal(lifecycleStep({ ...snapshot, plans: [] }), 0);
+  assert.equal(lifecycleStep(snapshot), 1);
+  assert.equal(lifecycleStep({ ...snapshot, approvals: [{ plan_id: "p-express", source_version: 1 }] }), 2);
+  assert.equal(lifecycleStep({ ...snapshot, executions: [{ plan_id: "p-express", source_version: 1 }] }), 3);
+  assert.deepEqual(LIFECYCLE, ["Detected", "Investigated", "Approved", "Executed"]);
 });
 
 test("a confirmation or an alert is dismissed back to the card underneath", () => {

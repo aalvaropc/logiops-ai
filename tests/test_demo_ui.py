@@ -422,7 +422,10 @@ def test_the_device_page_is_the_full_screen_alexa_experience():
         assert hook in commands, hook
     voice = (root / "app" / "voice.js").read_text()
     assert 'device("voice", "speech-end")' in voice and "current.speechTimer = setTimeout(done, SPEECH_TIMEOUT_MS)" in voice
-    assert ".orb { animation: none !important; }" in style and "@media (max-width: 900px)" in style
+    assert ".orb, .orb span { animation: none !important; }" in style and "@media (min-width: 768px)" in style
+    assert "env(safe-area-inset-bottom)" in style and "viewport-fit=cover" in html
+    assert set(re.findall(r"#[0-9A-Fa-f]{6}\b", style)) <= {"#A86F00", "#6A4BB5", "#2F6FD6", "#8F6200", "#093F7D", "#7FD49A", "#FF9AA8"}
+    assert html.index("/assets/tokens.css") < html.index("/assets/device.css")
     console = (root / "console.html").read_text()
     assert 'id="device-orb"' not in console and "data-surface" not in console
 

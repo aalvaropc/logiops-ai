@@ -1,31 +1,34 @@
 <!doctype html>
-<html lang="en" data-theme="dark">
+<html lang="en" data-theme="light">
 <head>
 <meta charset="utf-8">
 <title>Resolution options</title>
 <style>
-  :root {
-    --bg: var(--color-background-primary, #071318); --card: var(--color-background-secondary, #0b1f27);
-    --text: var(--color-text-primary, #e6f6fb); --muted: var(--color-text-secondary, #9fc3cc);
-    --line: var(--color-border-primary, #1d4552); --accent: #1fc8ff; --accent-hover: #74dcff; --accent-ink: #071318;
-    --button: #12313b; --button-line: #2b6c80; --button-hover: #1d4552; --late: #ffb8b0; --ok: #8fe8c9;
-    --tag: #4a3a1c; --tag-ink: #ffe0b3; --preference: #f0d9a6; --pad: 16px;
+  :root, :root[data-theme="light"] {
+    --bg: var(--color-background-primary, #FFFFFF); --card: var(--color-background-secondary, #FFFFFF);
+    --text: var(--color-text-primary, #111418); --muted: var(--color-text-secondary, #454C55);
+    --line: var(--color-border-primary, #C9CED5); --rule: #111418; --accent: #0B4F9C; --accent-hover: #093F7D; --accent-ink: #FFFFFF;
+    --button: #FFFFFF; --button-hover: #F4F5F7; --late: #B8102A; --ok: #1D7A3C; --band-ink: #FFFFFF;
+    --tag: #FFF3D1; --tag-ink: #664400; --preference: #664400; --pad: 16px;
     --inset-top: 0px; --inset-right: 0px; --inset-bottom: 0px; --inset-left: 0px;
-    color-scheme: dark; font-family: var(--font-sans, ui-sans-serif, system-ui, sans-serif); color: var(--text); background: var(--bg);
+    color-scheme: light; font-family: var(--font-sans, ui-sans-serif, system-ui, sans-serif); color: var(--text); background: var(--bg);
   }
-  :root[data-theme="light"] {
-    --bg: var(--color-background-primary, #f6fafb); --card: var(--color-background-secondary, #ffffff);
-    --text: var(--color-text-primary, #0b2730); --muted: var(--color-text-secondary, #4a6670);
-    --line: var(--color-border-primary, #c5d9de); --accent: #0a6f8f; --accent-hover: #075a75; --accent-ink: #ffffff;
-    --button: #e8f2f5; --button-line: #8fb4bf; --button-hover: #d5e7ec; --late: #a3271c; --ok: #1d6b52;
-    --tag: #fbe7c2; --tag-ink: #5c3d00; --preference: #6b4a00;
-    color-scheme: light;
+  :root[data-theme="dark"] {
+    --bg: var(--color-background-primary, #111418); --card: var(--color-background-secondary, #1A1E24);
+    --text: var(--color-text-primary, #F2F4F6); --muted: var(--color-text-secondary, #B4BCC6);
+    --line: var(--color-border-primary, #39404A); --rule: #F2F4F6; --accent: #8AB8F0; --accent-hover: #A9CBF5; --accent-ink: #111418;
+    --button: #1A1E24; --button-hover: #262B33; --late: #FF9AA8; --ok: #7FD49A; --band-ink: #111418;
+    --tag: #3D3214; --tag-ink: #FFE3A3; --preference: #FFE3A3;
+    color-scheme: dark;
   }
   body { margin: 0; padding: var(--inset-top) var(--inset-right) var(--inset-bottom) var(--inset-left); background: var(--bg); font-size: 14px; line-height: 1.4; }
   h2 { margin: 0; }
   .visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
   .waiting { padding: var(--pad); color: var(--muted); }
-  .plan.pick { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px 24px; align-items: start; padding: 16px var(--pad); border-bottom: 1px solid var(--line); background: var(--card); }
+  .plan.pick { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px 24px; align-items: start; padding: 16px var(--pad); border-bottom: 2px solid var(--rule); background: var(--card); }
+  .band { grid-column: 1 / -1; margin: -16px calc(-1 * var(--pad)) 0; padding: 7px var(--pad); color: var(--band-ink); font-size: 12px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; }
+  .band.ok { background: var(--ok); }
+  .band.late { background: var(--late); }
   .pick-name { font-size: 18px; line-height: 1.3; letter-spacing: -.01em; text-wrap: balance; }
   .pick .figures { text-align: right; white-space: nowrap; }
   .cost { display: block; font-size: 30px; font-weight: 800; line-height: 1; letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
@@ -50,11 +53,11 @@
   .plans .figures { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
   .plans .figures strong { display: block; font-size: 16px; }
   .plans .figures small { display: block; color: var(--muted); font-size: 14px; }
-  button { min-height: 36px; padding: 6px 14px; border: 1px solid var(--button-line); border-radius: 99px; background: var(--button); color: var(--text); font: inherit; font-size: 14px; font-weight: 700; cursor: pointer; }
+  button { min-height: 44px; padding: 6px 16px; border: 2px solid var(--rule); border-radius: 6px; background: var(--button); color: var(--text); font: inherit; font-size: 15px; font-weight: 800; cursor: pointer; }
   button:hover { background: var(--button-hover); }
-  button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  button:focus-visible { outline: 3px solid var(--rule); outline-offset: 2px; }
   button.more { margin: 4px var(--pad) 0; }
-  .tag { display: inline-block; margin-left: 8px; padding: 1px 7px; border: 1px solid transparent; border-radius: 99px; vertical-align: 2px; color: var(--tag-ink); background: var(--tag); font-size: 12px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; }
+  .tag { display: inline-block; margin-left: 8px; padding: 1px 7px; border: 1.5px solid transparent; border-radius: 3px; vertical-align: 2px; color: var(--tag-ink); background: var(--tag); font-size: 12px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; }
   .tag.pick-tag { border-color: var(--accent); color: var(--accent); background: transparent; }
   .tag.done-tag { border-color: var(--ok); color: var(--ok); background: transparent; }
   .footnote { margin: 0; padding: 12px var(--pad) 14px; color: var(--muted); font-size: 13px; }
@@ -66,7 +69,8 @@
   body.compact .outcomes li { grid-template-columns: 6em minmax(0, 1fr); }
   body.compact .plans .plan { grid-template-columns: minmax(0, 1fr) auto; }
   body.compact .plans .plan button { grid-column: 1 / -1; justify-self: start; }
-  body.compact button { min-height: 40px; }
+  body.compact button { min-height: 48px; }
+  body.compact .pick button { justify-self: stretch; }
 </style>
 </head>
 <body>
@@ -155,6 +159,12 @@
 
   function pickCard(plan, hinted, preference, approved, executed) {
     const item = el("section", "plan pick");
+    const critical = (plan.orders || []).filter((order) => order.priority === "critical");
+    const late = (plan.orders || []).filter((order) => order.delay_hours);
+    const band = critical.length
+      ? critical.some((order) => order.delay_hours) ? ["late", "Leaves a critical order late"] : ["ok", "Critical order on time"]
+      : late.length ? ["late", `${late.length} order${late.length === 1 ? "" : "s"} late`] : ["ok", "Every order on time"];
+    item.append(el("p", `band ${band[0]}`, band[1]));
     const heading = el("h2", "pick-name");
     const name = el("strong", "", plan.label);
     const tags = [el("span", "tag pick-tag", hinted === plan.id ? "Agent pick" : "Default pick"), doneTag(plan, approved, executed),
