@@ -83,6 +83,7 @@ function setVoice(event, speaking = false) {
   }
   orb.state = next.state;
   $("device-orb").dataset.state = orb.state;
+  document.querySelector(".talk").dataset.voice = orb.state;
   if ($("device-state").textContent !== next.label) $("device-state").textContent = next.label;
   $("ask-input").placeholder = orb.state === "ready" ? "Ask LogiOps" : next.label;
 }
