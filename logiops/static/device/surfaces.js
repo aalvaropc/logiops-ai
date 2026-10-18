@@ -110,7 +110,7 @@ const delayText = (plan) => (plan.projected_customer_delay_hours ? `${plan.proje
 export function orderRows(plan) {
   const orders = plan.orders || [];
   if (!orders.length) return [["Customer delay", delayText(plan)]];
-  return orders.map((order) => [`${order.customer}${order.priority === "critical" ? " · critical" : ""}`,
+  return orders.map((order) => [`${order.customer} · ${order.quantity} unit${order.quantity === 1 ? "" : "s"}${order.priority === "critical" ? " · critical" : ""}`,
     order.delay_hours ? `+${order.delay_hours} h late` : "On time", order.delay_hours ? "late" : "on-time"]);
 }
 
@@ -146,6 +146,14 @@ export function resultFigures(snapshot, execution) {
     { label: "Notifications simulated", value: String(execution.notifications.length) },
     { label: "Customer delay", value: `${execution.projected_customer_delay_hours} h`, note: "projected" },
   ];
+}
+
+export function resultOutcome(plan) {
+  const { critical, onTime, total } = criticalOutcome(plan);
+  return {
+    value: onTime === total ? String(total) : `${onTime} of ${total}`,
+    label: `${critical ? "critical " : ""}unit${total === 1 ? "" : "s"} on time`, note: "projected",
+  };
 }
 
 export function alertDetails(alert) {

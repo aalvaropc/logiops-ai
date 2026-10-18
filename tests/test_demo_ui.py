@@ -217,7 +217,8 @@ def test_demo_has_basic_accessibility_hooks():
     assert 'container.setAttribute("role", "radiogroup")' in (root / "console.js").read_text()
     html = (root / "demo.html").read_text()
     assert 'lang="en"' in html and 'aria-live="polite"' in html and 'frameTitle: "Resolution options (MCP App)"' in script
-    assert 'aria-roledescription", "carousel"' in (root / "device" / "carousel.js").read_text()
+    assert 'list.setAttribute("aria-labelledby", labelledBy)' in (root / "device" / "queue.js").read_text()
+    assert 'labelledBy: "home-title"' in script and 'title.id = "home-title"' in (root / "device" / "render.js").read_text()
     assert 'node.setAttribute("role", "region")' in markdown and "node.tabIndex = 0" in markdown
     assert 'doc.createElement(empty ? "td" : "th")' in markdown
     assert "Math.min(6, previous + 1, 3 + block.level - top)" in markdown
@@ -296,7 +297,7 @@ def test_the_demo_is_an_inbox_of_incidents():
     assert "SHIP-4" not in page
     assert "state.app.incidentId !== snapshot.state.incident_id" in device
     assert 'card.setAttribute("aria-pressed", String(item.incident_id === state.incidentId));' in script
-    assert "aria-pressed" not in (root / "device" / "carousel.js").read_text() and ".incident-card[aria-pressed" not in (root / "device.css").read_text()
+    assert "aria-pressed" not in (root / "device" / "queue.js").read_text() and ".incident-card[aria-pressed" not in (root / "device.css").read_text()
     assert "DEFAULT_INCIDENT" not in device and "state.inbox[0]?.incident_id" in device
     assert "intent.mentionedIncident(text," in _static("app", "commands.js")
 

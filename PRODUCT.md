@@ -75,7 +75,7 @@ Success means:
 
 - **`/demo`: a simulated Alexa+ device.**
   - It is an Echo Show-style screen, and full screen on a phone.
-  - It shows one card at a time: home with the inbox as a carousel, incident,
+  - It shows one card at a time: home with the inbox as a queue, incident,
     plans with the MCP App inside, confirmation with Yes / No, receipt, alert
     and result.
   - Over the cards sits a conversation zone: what was heard, the short spoken
@@ -211,6 +211,6 @@ Success means:
   - The microphone needs Chrome or Edge, so the text field is always present.
 - **Built-in behaviour.**
   - Visible focus.
-  - The carousel works from the keyboard.
+  - The queue works from the keyboard: each incident is a button.
   - `prefers-reduced-motion` is honoured.
   - Spoken replies are announced through `aria-live`.

@@ -251,9 +251,9 @@ The console uses the same family and weights at fixed desk sizes (24px panel hea
 
 Mobile first. On a phone the device fills the viewport as a column: a 52px shell bar (safe-area aware), a four-step lifecycle strip with a 10px top margin, a scrolling card surface, and a fixed talk dock with a 2px ink top rule holding the heard line, the two-line spoken line, one horizontally scrolling row of chips, and the orb, 48px mic, field and send. Side gutters are 16px plus safe-area insets. One card shows at a time.
 
-From 768px the gutter becomes 24px, meta and body step down a pixel (more room, denser desk reading), facts sit in a three-column row, the incident sets its promise bars beside a route-map label column of up to 380px, the plan row becomes name, figures, select, and result figures go to four columns. From 1024px with a fine pointer the device becomes a 16:10 Echo Show at up to 1180px wide inside a 10px bezel with 28px corners, centred on Desk Grey with a note underneath. Coarse pointers drop the carousel arrows and rely on swipe; short landscape screens hide the lifecycle and heard line and clamp the spoken line to one.
+From 768px the gutter becomes 24px, meta and body step down a pixel (more room, denser desk reading), facts sit in a three-column row, the incident sets its promise bars beside a route-map label column of up to 380px, the plan row becomes name, figures, select, and result figures go to four columns. From 1024px with a fine pointer the device becomes a 16:10 Echo Show at up to 1180px wide inside a 10px bezel with 28px corners, centred on Desk Grey with a note underneath. Short landscape screens hide the lifecycle and heard line and clamp the spoken line to one.
 
-The inbox is a horizontal snap carousel: cards take min(320px, 85%) on phones and min(360px, 44%) from 768px, 12px apart. The console is a 1500px shell with 32px padding (16px under 650px): a four-column inbox, a summary strip, and a 1.65 : 0.85 workbench that stacks under 1050px.
+The inbox is a stacked queue under a one-line heading ("4 open incidents"): one column of incident cards on phones, 10px apart, and two columns from 768px, 12px apart, with the briefing's pick first and executed incidents last. The console is a 1500px shell with 32px padding (16px under 650px): a four-column inbox, a summary strip, and a 1.65 : 0.85 workbench that stacks under 1050px.
 
 Spacing is a loose 2px-step rhythm around 8, 12, 14 and 16px inside cards and 18 to 24px between panels. Touch targets are 44px minimum, 48px for the dock's primary controls.
 
@@ -270,7 +270,7 @@ The screen is flat. Depth is conveyed by tone (label stock on cool ground), 2px 
 
 ## Shapes
 
-Two corner families and one circle. Labels (cards, panels, bands, facts, lifecycle, transcript turns, tags, chips that report outcomes) are square (0). Controls a finger presses (buttons, input fields, suggestion chips, the alerts bell, file buttons) take a gentle 6px. Circles are reserved for the mic, the orb, the carousel arrows and the connection dot. Structural edges are 2px ink; internal dividers between rows are 1px hairline; outlined tags and the "simulated" stamp use 1.5px. Empty states and the console's developer panel use a 2px dashed hairline.
+Two corner families and one circle. Labels (cards, panels, bands, facts, lifecycle, transcript turns, tags, chips that report outcomes) are square (0). Controls a finger presses (buttons, input fields, suggestion chips, the alerts bell, file buttons) take a gentle 6px. Circles are reserved for the mic, the orb and the connection dot. Structural edges are 2px ink; internal dividers between rows are 1px hairline; outlined tags and the "simulated" stamp use 1.5px. Empty states and the console's developer panel use a 2px dashed hairline.
 
 ## Components
 
@@ -335,7 +335,7 @@ The dock is label stock under a 2px ink rule. The orb is a 40px circle with a 3p
 ### Don't:
 - **Don't** cast shadows, add gradients or glow on any screen surface; the bezel shadow is hardware only.
 - **Don't** use green, red or amber for decoration, branding or emphasis that is not a state.
-- **Don't** round a label; only pressable controls take the 6px radius, and only the mic, orb, arrows and status dot are circles.
+- **Don't** round a label; only pressable controls take the 6px radius, and only the mic, orb and status dot are circles.
 - **Don't** add an uppercase line above a heading unless it is a state band carrying a real state.
 - **Don't** introduce a size off the ladder or a second typeface.
 - **Don't** reach for the dark operations-dashboard look with a neon accent, or the white SaaS dashboard with blue pills.

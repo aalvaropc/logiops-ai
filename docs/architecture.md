@@ -27,7 +27,7 @@ locally, the instance role on EC2). `logiops/replay.py` provides an explicit
 deterministic local replay. `logiops/security.py` enforces a bearer token when
 configured, per-viewer limits for MCP and for agent runs, and `no-store`
 responses. Two pages call the same API: `/demo` is the simulated Alexa+ device
-(one card at a time: the inbox carousel, the incident with its map and promise
+(one card at a time: the inbox as a queue of incident cards, the incident with its map and promise
 bars, the plans with the MCP App inside, a confirmation with Yes / No, the
 receipt, a proactive alert and the result; voice, chips and a "More" sheet with
 the whole transcript and the tool trace), and `/console` is the operator

@@ -42,8 +42,8 @@ LOGIOPS_AGENT_MODE=replay uv run uvicorn logiops.api:app --host 127.0.0.1 --port
    `127.0.0.1` with `localhost`. On any other name (`[::1]`, a LAN IP, a tunnel) the
    card is not shown (it fails closed) and the rest of the demo still works.
 3. **The device screen.** `/demo` is a simulated Alexa+ device that shows one
-   card at a time: home (the inbox as a carousel; arrows, swipe or the arrow
-   keys move it, and a tap opens an incident), the incident (ETAs, local stock,
+   card at a time: home (the inbox as a stacked queue, the most urgent first;
+   a tap or Enter opens an incident), the incident (ETAs, local stock,
    the plan's legs on a route diagram with late legs in red and a text legend, and
    each order's promise against its projection), the plans (the MCP App card,
    or a plain list when no second origin is available), a confirmation (Yes /

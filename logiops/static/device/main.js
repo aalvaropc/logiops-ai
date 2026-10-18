@@ -14,14 +14,14 @@ import {
   visibleVersion, visibleApproval, visiblePlans, latestAgentEvent, namedPlanKinds,
   recommendedPlan as pickRecommended, planFromUtterance as pickFromUtterance, TIME_ZONE,
 } from "../app/selectors.js";
-import { welcomeText as greeting } from "../app/greeting.js";
+import { homeHeading, HOME_LINE } from "../app/greeting.js";
 import { checkBadge, checkNote, fallbackNote, traceSummary, executionSummary } from "../app/run-badges.js";
 import { renderMarkdown } from "../app/markdown-dom.js";
 import { sessionFigures, incidentTimes } from "../app/metrics.js";
 import { SURFACES, createSurfaces, shortSpoken, homeCards, livePick, displayPlan, chipsFor, lifecycleStep } from "./surfaces.js";
-import { createCarousel } from "./carousel.js";
+import { createQueue } from "./queue.js";
 import {
-  el, renderHome, renderIncident, renderPlanList, renderConfirm, renderReceipt, renderAlert, renderResult, renderTrace, renderTranscript,
+  el, renderHome, renderSession, renderIncident, renderPlanList, renderConfirm, renderReceipt, renderAlert, renderResult, renderTrace, renderTranscript,
 } from "./render.js";
 
 const $ = (id) => document.getElementById(id);
@@ -302,23 +302,19 @@ function summaryOf() {
   return state.inbox.find((item) => item.incident_id === state.incidentId) || null;
 }
 
-function welcomeText() {
-  return greeting({ inbox: state.inbox, incidentId: state.incidentId });
-}
-
 function openIncident(id) {
   if (id === state.incidentId && state.snapshot) showSurface("incident");
   else selectIncident(id).catch(() => {});
 }
 
-const carousel = createCarousel({ root: $("inbox"), onOpen: openIncident, reducedMotion });
-let carouselKey = "";
+const queue = createQueue({ root: $("inbox"), onOpen: openIncident, labelledBy: "home-title" });
+let queueKey = "";
 
-function updateCarousel(cards) {
+function updateQueue(cards) {
   const key = JSON.stringify([cards.map((card) => [card.incident_id, card.status, card.critical_units_at_risk, card.startHere]), state.incidentId]);
-  if (key === carouselKey) return;
-  carouselKey = key;
-  carousel.update(cards);
+  if (key === queueKey) return;
+  queueKey = key;
+  queue.update(cards);
 }
 
 function renderPlansSurface() {
@@ -349,8 +345,10 @@ function paintSurface(shown = surfaces.current()) {
   const section = sections[shown.name];
   const snapshot = state.snapshot;
   if (shown.name === "home") {
-    renderHome(section, { greeting: welcomeText(), lead: shown.payload.lead, session: state.metrics ? sessionFigures(state.metrics.session) : null });
-    updateCarousel(homeCards(state.inbox, livePick(state.inbox, shown.payload.pick ?? state.briefingPick)));
+    renderHome(section, {
+      heading: homeHeading(state.inbox), greeting: HOME_LINE, lead: shown.payload.lead, session: state.metrics ? sessionFigures(state.metrics.session) : null,
+    });
+    updateQueue(homeCards(state.inbox, livePick(state.inbox, shown.payload.pick ?? state.briefingPick)));
   } else if (shown.name === "incident" && snapshot) {
     renderIncident(section, { snapshot, plan: currentPlan(), summary: summaryOf(), route });
   } else if (shown.name === "plans") {
@@ -473,7 +471,7 @@ async function refresh() {
 async function loadMetrics() {
   state.metrics = await request("/metrics");
   const shown = surfaces.current();
-  if (shown.name === "home") renderHome(sections.home, { greeting: welcomeText(), lead: shown.payload.lead, session: sessionFigures(state.metrics.session) });
+  if (shown.name === "home") renderSession(sections.home, sessionFigures(state.metrics.session));
   else if (shown.name === "result") paintSurface();
 }
 

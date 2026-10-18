@@ -4,14 +4,14 @@ import { moduleUrl } from "./helpers.mjs";
 
 const {
   SURFACES, shortSpoken, homeCards, incidentFacts, displayPlan, confirmDetails, resultFigures, alertDetails, chipsFor, createSurfaces,
-  lifecycleStep, LIFECYCLE, cardTags, livePick, nextOpen, criticalOutcome, incidentBand,
+  lifecycleStep, LIFECYCLE, cardTags, resultOutcome, livePick, nextOpen, criticalOutcome, incidentBand,
 } = await import(moduleUrl("device/surfaces.js"));
 
 const plans = [
   { id: "p-wait", kind: "wait", label: "Keep the delayed shipment", incremental_cost_usd: 0, projected_customer_delay_hours: 12, late_units: 20,
-    orders: [{ order_id: "ORD-421", customer: "store", priority: "standard", delay_hours: 12 }], allocations: [{ source: "delayed-shipment", units: 20 }], source_version: 1 },
+    orders: [{ order_id: "ORD-421", customer: "store", priority: "standard", quantity: 20, delay_hours: 12, late_units: 20 }], allocations: [{ source: "delayed-shipment", units: 20 }], source_version: 1 },
   { id: "p-express", kind: "split-express", label: "Fulfill local stock and send the rest express", incremental_cost_usd: 120, projected_customer_delay_hours: 0,
-    orders: [{ order_id: "ORD-421", customer: "store", priority: "critical", delay_hours: 0 }],
+    orders: [{ order_id: "ORD-421", customer: "store", priority: "critical", quantity: 20, delay_hours: 0, late_units: 0 }],
     allocations: [{ source: "arequipa-stock", units: 12 }, { source: "express", units: 8 }], source_version: 1 },
 ];
 const snapshot = {
@@ -28,7 +28,7 @@ const inbox = [
   { incident_id: "SHIP-421", kind_label: "Delayed in transit", priority: "standard", critical_units_at_risk: 0, status: "detected", title: "y", route: "Lima → Arequipa", units: 20, due_eta: "2026-10-13T14:00:00-05:00" },
 ];
 
-test("the spoken line is short, and the home carousel starts with the briefing's pick", () => {
+test("the spoken line is short, and the home queue starts with the briefing's pick", () => {
   assert.equal(shortSpoken("**Hello** there", null, (text) => text.replaceAll("*", "")), "Hello there");
   assert.equal(shortSpoken("ignored", "Spoken line"), "Spoken line");
   const long = shortSpoken("x".repeat(400));
@@ -56,8 +56,8 @@ test("confirmation cards read back exactly what a yes would do", () => {
   const approval = confirmDetails({ kind: "approval", plan: plans[0] });
   assert.equal(approval.title, "Approve this plan?");
   assert.deepEqual(approval.figure, ["$0", "extra cost"]);
-  assert.deepEqual(approval.rows, [["store", "+12 h late", "late"], ["Allocation", "20 via delayed shipment"]]);
-  assert.deepEqual(confirmDetails({ kind: "approval", plan: plans[1] }).rows[0], ["store · critical", "On time", "on-time"]);
+  assert.deepEqual(approval.rows, [["store · 20 units", "+12 h late", "late"], ["Allocation", "20 via delayed shipment"]]);
+  assert.deepEqual(confirmDetails({ kind: "approval", plan: plans[1] }).rows[0], ["store · 20 units · critical", "On time", "on-time"]);
   assert.deepEqual(confirmDetails({ kind: "approval", plan: { ...plans[0], orders: [] } }).rows[0], ["Customer delay", "12 h"]);
   assert.equal(approval.warning, null);
   assert.equal(approval.yes, "Yes, approve");
@@ -77,6 +77,8 @@ test("the result card, the alert card and the chips come from the data", () => {
   const execution = { plan_id: "p-express", accounted_units: 20, incremental_cost_usd: 120, notifications: [1, 2], projected_customer_delay_hours: 0, fulfillments: [] };
   assert.deepEqual(resultFigures(snapshot, execution).map((item) => [item.label, item.value]),
     [["Units accounted for", "20"], ["Extra cost", "$120"], ["Notifications simulated", "2"], ["Customer delay", "0 h"]]);
+  assert.deepEqual(resultOutcome(plans[1]), { value: "20", label: "critical units on time", note: "projected" });
+  assert.deepEqual(resultOutcome(plans[0]), { value: "0 of 20", label: "units on time", note: "projected" });
   const alert = alertDetails({ incident_id: "SHIP-421", message: "Heads up.", approval_invalidated: true, new_plan: { label: "Reroute", incremental_cost_usd: 80, projected_customer_delay_hours: 3 } });
   assert.deepEqual(alert, { title: "Heads up on SHIP-421", text: "Heads up.", invalidated: true, plan: "Reroute · $80 · 3 h delay" });
   assert.equal(alertDetails({ incident_id: "SHIP-421", message: "Heads up on SHIP-421: Arequipa stock is now 20 units." }).text, "Arequipa stock is now 20 units.");
