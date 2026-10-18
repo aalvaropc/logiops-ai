@@ -75,11 +75,13 @@ Success means:
 
 - **`/demo`: a simulated Alexa+ device.**
   - It is an Echo Show-style screen, and full screen on a phone.
-  - It shows one card at a time: home with the inbox as a queue, incident,
-    plans with the MCP App inside, confirmation with Yes / No, receipt, alert
-    and result.
-  - Over the cards sits a conversation zone: what was heard, the short spoken
-    reply, a voice orb, suggestion chips, the microphone and a text field.
+  - It shows one surface at a time, drawn as light trails on a night road:
+    home with the open incidents as lanes, incident with the plan's map and
+    time scale, the agent at work, plans with the MCP App inside, confirmation
+    with Yes / No, receipt, alert and result.
+  - Under the surfaces sits a conversation dock: what was heard, the short
+    spoken reply, a voice light bar, suggestion chips, the microphone and a
+    text field.
   - "More" opens the full answer with the tool trace.
   - The Alexa+ developer tools are partner-only, so the page stands in for the
     wake word, speech recognition, voice, screen and account. Everything under
