@@ -48,6 +48,11 @@ export function createCommands({
       say("assistant", CAPABILITIES_TEXT, "help", CAPABILITIES_SPOKEN);
       return;
     }
+    if (intent.isNoise(text)) {
+      say("assistant", `I didn't catch that. Ask “any delays today?”, or ask what's happening with ${state.incidentId}.`, "not understood",
+        "I didn't catch that. Try asking “any delays today?”");
+      return;
+    }
     const pending = state.pendingApproval;
     state.pendingApproval = null;
     const pendingPurchase = purchase.take();
@@ -84,13 +89,27 @@ export function createCommands({
       return;
     }
     let command = intent.parseCommand(text);
-    if (command === "open") {
-      if (mentioned) {
-        const item = state.inbox.find((entry) => entry.incident_id === mentioned);
-        say("assistant", `Opened ${mentioned}: ${item?.title || "incident"}. Ask me what's happening, or say “investigate”.`);
+    const investigated = () => selectors.visiblePlans(state.snapshot).length > 0;
+    if (command === "open" || command === "show_incident") {
+      const id = command === "open" ? mentioned : state.incidentId;
+      if (id) {
+        const item = state.inbox.find((entry) => entry.incident_id === id);
+        const next = investigated() ? "Say “show the plans” or “approve the recommended plan”." : "Ask me what's happening, or say “investigate”.";
+        say("assistant", `${command === "open" ? "Opened" : "Here's"} ${id}: ${item?.title || "incident"}. ${next}`);
+        onSurface("incident");
         return;
       }
       command = null;
+    }
+    if (command === "show_plans") {
+      const count = selectors.visiblePlans(state.snapshot).length;
+      if (count) {
+        say("assistant", `Here are the ${count} plans for ${state.incidentId}. Only you approve.`);
+        onSurface("plans");
+      } else {
+        say("assistant", "There are no plans for the current data yet. Ask me what's happening first.");
+      }
+      return;
     }
     const awaitingExecute = state.awaitingExecute;
     state.awaitingExecute = false;
@@ -177,7 +196,7 @@ export function createCommands({
           state.pendingApproval = pending;
           throw error;
         }
-        say("assistant", `Approved “${plan.label}” for version ${plan.source_version}. Say “execute it” when you're ready.`);
+        say("assistant", `Approved “${plan.label}” on the current data. Nothing has run yet: say “execute it” when you're ready.`);
         state.awaitingExecute = true;
         onSurface("plans");
       } else if (command === "execute" || (command === "confirm" && awaitingExecute && selectors.visibleApproval(state.snapshot))) {

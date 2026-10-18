@@ -182,7 +182,7 @@ export function renderConfirm(section, payload, { onYes, onNo }, doc = globalThi
   card.append(el("p", "label", details.kind === "purchase" ? "Purchase · nothing charged yet" : "Approval · you decide", doc),
     el("h2", "", details.title, doc), el("p", "lead", details.lead, doc));
   const rows = el("dl", "rows", undefined, doc);
-  for (const [term, value] of details.rows) rows.append(el("dt", "", term, doc), el("dd", "", value, doc));
+  for (const [term, value, tone] of details.rows) rows.append(el("dt", "", term, doc), el("dd", tone || "", value, doc));
   card.append(rows);
   if (details.warning) card.append(el("p", "warning", details.warning, doc));
   card.append(el("p", "note", details.note, doc));

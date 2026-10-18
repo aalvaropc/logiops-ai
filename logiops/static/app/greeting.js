@@ -1,7 +1,8 @@
 export function welcomeText({ inbox = [], incidentId } = {}) {
   const open = inbox.filter((item) => item.status !== "verified");
   if (!inbox.length) {
-    return `Hi, I'm LogiOps. Ask me what's happening with ${incidentId}, and I'll investigate it with the MCP tools.`;
+    return incidentId ? `Hi, I'm LogiOps. Ask me what's happening with ${incidentId}, and I'll investigate it with the MCP tools.`
+      : "Hi, I'm LogiOps. Ask “any delays today?” for my briefing.";
   }
   const critical = open.filter((item) => item.priority === "critical").map((item) => item.incident_id);
   const atRisk = open.filter((item) => item.critical_units_at_risk > 0)

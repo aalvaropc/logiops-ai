@@ -25,13 +25,12 @@ import {
 } from "./render.js";
 
 const $ = (id) => document.getElementById(id);
-const DEFAULT_INCIDENT = "SHIP-421";
 const route = window.LogiOpsRoute;
 const markdown = window.LogiOpsMarkdown;
 const intent = window.LogiOpsIntent;
 const CLOCK = new Intl.DateTimeFormat("en-US", { timeZone: TIME_ZONE, weekday: "short", hour: "2-digit", minute: "2-digit", hourCycle: "h23", timeZoneName: "short" });
 const reducedMotion = () => matchMedia("(prefers-reduced-motion: reduce)").matches;
-const hashIncident = () => decodeURIComponent(location.hash.slice(1)).trim().toUpperCase() || DEFAULT_INCIDENT;
+const hashIncident = () => decodeURIComponent(location.hash.slice(1)).trim().toUpperCase() || null;
 const MCP_APP = { uriPrefix: "ui://logiops/resolution-options", proxyPath: "/mcp-app/sandbox.html" };
 const SANDBOX_ORIGIN = (() => {
   const value = document.querySelector('meta[name="logiops-sandbox-origin"]')?.content || "";
@@ -296,14 +295,19 @@ function welcomeText() {
   return greeting({ inbox: state.inbox, incidentId: state.incidentId });
 }
 
-const carousel = createCarousel({ root: $("inbox"), onOpen: (id) => selectIncident(id).catch(() => {}), reducedMotion });
+function openIncident(id) {
+  if (id === state.incidentId && state.snapshot) showSurface("incident");
+  else selectIncident(id).catch(() => {});
+}
+
+const carousel = createCarousel({ root: $("inbox"), onOpen: openIncident, reducedMotion });
 let carouselKey = "";
 
 function updateCarousel(cards) {
   const key = JSON.stringify([cards.map((card) => [card.incident_id, card.status, card.critical_units_at_risk, card.startHere]), state.incidentId]);
   if (key === carouselKey) return;
   carouselKey = key;
-  carousel.update(cards, state.incidentId);
+  carousel.update(cards);
 }
 
 function renderPlansSurface() {
@@ -356,7 +360,8 @@ function paintSurface(shown = surfaces.current()) {
 function renderChips(surface) {
   const box = $("chips");
   box.replaceChildren();
-  for (const [text, utterance] of chipsFor(surface, { snapshot: state.snapshot, incidentId: state.incidentId, inbox: state.inbox, plan: currentPlan() })) {
+  const pick = surfaces.current().payload.pick ?? state.briefingPick;
+  for (const [text, utterance] of chipsFor(surface, { snapshot: state.snapshot, incidentId: state.incidentId, inbox: state.inbox, plan: currentPlan(), pick })) {
     const chip = el("button", "chip", text);
     chip.type = "button";
     chip.dataset.say = utterance;
@@ -413,9 +418,11 @@ function noteFallback(run) {
 async function refresh() {
   state.inbox = (await request("/incidents")).incidents;
   if (!state.inbox.some((item) => item.incident_id === state.incidentId)) {
-    state.incidentId = state.inbox[0]?.incident_id || DEFAULT_INCIDENT;
-    history.replaceState(null, "", `#${encodeURIComponent(state.incidentId)}`);
+    const unknown = Boolean(state.incidentId);
+    state.incidentId = state.inbox[0]?.incident_id || null;
+    if (unknown && state.incidentId) history.replaceState(null, "", `#${encodeURIComponent(state.incidentId)}`);
   }
+  if (!state.incidentId) throw new Error("The inbox is empty. Import a scenario pack from the operator console.");
   render(await request(incidentPath()));
   loadMetrics().catch(() => {});
 }
@@ -619,7 +626,7 @@ function setUpVoice() {
 
 window.addEventListener("hashchange", () => {
   const id = hashIncident();
-  if (id !== state.incidentId) selectIncident(id).catch(() => {});
+  if (id && id !== state.incidentId) selectIncident(id).catch(() => {});
 });
 $("account").addEventListener("click", () => handleUtterance(state.session ? "sign out" : "link my account"));
 $("alerts-bell").addEventListener("click", async () => {

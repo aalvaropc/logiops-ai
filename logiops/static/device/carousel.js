@@ -29,7 +29,7 @@ export function createCarousel({ root, document: doc = globalThis.document, onOp
     return node;
   };
 
-  function update(cards, selectedId) {
+  function update(cards) {
     track.replaceChildren();
     for (const card of cards) {
       const item = doc.createElement("li");
@@ -37,7 +37,6 @@ export function createCarousel({ root, document: doc = globalThis.document, onOp
       button.type = "button";
       button.className = "incident-card";
       button.dataset.incident = card.incident_id;
-      button.setAttribute("aria-pressed", String(card.incident_id === selectedId));
       const top = tag("incident-top", "");
       top.append(tag("incident-id", card.incident_id), tag("kind", card.kind_label));
       if (card.priority === "critical") top.append(tag("critical", "Critical order"));
