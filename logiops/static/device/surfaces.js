@@ -168,11 +168,16 @@ export function resultOutcome(plan) {
 export function alertDetails(alert) {
   const plan = alert.new_plan;
   const before = alert.previous_plan;
+  const invalidated = Boolean(alert.approval_invalidated);
+  const change = alert.change ? `${capital(alert.change)}${invalidated ? ", so your approval no longer applies" : ", so the plans were recalculated"}.` : null;
   return {
-    title: `Heads up on ${alert.incident_id}`, text: String(alert.message).replace(`Heads up on ${alert.incident_id}: `, ""),
-    invalidated: Boolean(alert.approval_invalidated),
+    title: `Heads up on ${alert.incident_id}`, text: change || String(alert.message).replace(`Heads up on ${alert.incident_id}: `, ""),
+    invalidated,
     was: before?.label ? { label: before.label, figures: Number.isFinite(before.incremental_cost_usd) ? `$${before.incremental_cost_usd}` : "" } : null,
-    plan: plan ? { label: plan.label, figures: `$${plan.incremental_cost_usd} · ${plan.projected_customer_delay_hours} h delay` } : null,
+    plan: plan ? {
+      label: plan.label, figures: `$${plan.incremental_cost_usd} · ${plan.projected_customer_delay_hours ? `${plan.projected_customer_delay_hours} h late` : "on time"}`,
+      late: plan.projected_customer_delay_hours > 0,
+    } : null,
   };
 }
 
@@ -186,6 +191,7 @@ export function chipsFor(surface, { snapshot, incidentId, inbox = [], plan = nul
   const booked = (snapshot.bookings || []).some((booking) => plan && booking.plan_id === plan.id);
   const pay = plan && plan.incremental_cost_usd > 0 && !booked ? [["Book and pay", "Book and pay for the recommended plan", "act"]] : [];
   const approve = ["Approve the recommended plan", "Approve the recommended plan", "act"];
+  const execute = ["Execute approved plan", "Execute the approved plan", "act"];
   const current = inbox.find((item) => item.incident_id === incidentId);
   const lead = livePick(inbox, pick) ?? (current && !isOpen(current) ? nextOpen(inbox, incidentId)?.incident_id : null) ?? incidentId;
   const next = nextOpen(inbox, incidentId);
@@ -199,11 +205,11 @@ export function chipsFor(surface, { snapshot, incidentId, inbox = [], plan = nul
       return [...(approved ? [] : [approve]), ["Show the plans", "Show the plans"]];
     case "plans":
       if (executed) return [...pay, ["Any delays today?", briefing]];
-      if (approved) return [...pay, ["Why this plan?", "Why is that the recommended plan?"]];
+      if (approved) return [execute, ...pay, ["Why this plan?", "Why is that the recommended plan?"]];
       return [approve, ["Why this plan?", "Why is that the recommended plan?"], ["Show the incident", "Show the incident"], ...pay];
     case "receipt":
       if (executed) return [...result, ...openNext, ["Any delays today?", briefing]];
-      return [["Any delays today?", briefing]];
+      return approved ? [execute, ["Any delays today?", briefing]] : [["Any delays today?", briefing]];
     case "alert": return [["Approve the new pick", "Approve the recommended plan", "act"], ["Why did it change?", "Why did the recommended plan change?"]];
     case "result": return [...pay, ...openNext, ["Any delays today?", briefing]];
     default: return [];
