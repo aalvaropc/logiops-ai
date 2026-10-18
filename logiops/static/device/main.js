@@ -84,6 +84,7 @@ function setVoice(event, speaking = false) {
   orb.state = next.state;
   $("device-orb").dataset.state = orb.state;
   if ($("device-state").textContent !== next.label) $("device-state").textContent = next.label;
+  $("ask-input").placeholder = orb.state === "ready" ? "Ask LogiOps" : next.label;
 }
 
 function device(method, ...args) {
@@ -196,11 +197,18 @@ async function finishSignIn() {
 
 const mcpClient = createMcpClient({ getToken: () => state.token });
 
+function cardWidth() {
+  const surface = $("surface");
+  const style = getComputedStyle(surface);
+  const inner = surface.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight);
+  return Math.round(Math.max(280, $("mcp-app-slot").clientWidth || inner - 4));
+}
+
 function hostContext() {
-  const width = Math.round(Math.max(280, ($("surface")?.clientWidth || window.innerWidth) - 36));
+  const width = cardWidth();
   return {
     theme: state.cardTheme, displayMode: "inline", availableDisplayModes: ["inline"],
-    containerDimensions: { width, maxHeight: 640 }, locale: navigator.language || "en-US", timeZone: TIME_ZONE,
+    containerDimensions: { width }, locale: navigator.language || "en-US", timeZone: TIME_ZONE,
     platform: "web", deviceClass: width < 480 ? "compact" : "regular",
     deviceCapabilities: { touch: matchMedia("(pointer: coarse)").matches, hover: matchMedia("(hover: hover)").matches },
     safeAreaInsets: { top: 0, right: 0, bottom: 0, left: 0 },
@@ -210,7 +218,7 @@ function hostContext() {
 const mcpHost = createMcpAppHost({
   sandboxOrigin: SANDBOX_ORIGIN, hostOrigin: location.origin, proxyPath: MCP_APP.proxyPath, slot: $("mcp-app-slot"),
   mcp: mcpClient, uriPrefix: MCP_APP.uriPrefix, hostInfo: { name: "LogiOps Alexa+ device (simulated)", version: "2.0.0" },
-  hostContext, frameTitle: "Resolution options (MCP App)", rejectMessage: "Unknown or unavailable plan, or the device is busy",
+  hostContext, maxHeight: 2400, frameTitle: "Resolution options (MCP App)", rejectMessage: "Unknown or unavailable plan, or the device is busy",
   onMessage: (params) => selectFromApp(params),
   onHide: () => { $("mcp-app").hidden = true; $("plans").hidden = false; },
 });

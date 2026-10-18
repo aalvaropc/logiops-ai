@@ -34,6 +34,20 @@ def card_lead(page) -> str:
     raise AssertionError("the MCP App card did not render")
 
 
+def card_frame(page):
+    """The MCP App's inner frame once its card has rendered."""
+    for _ in range(50):
+        outer = next((frame for frame in page.frames if "/mcp-app/sandbox.html" in frame.url), None)
+        inner = outer.child_frames[0] if outer and outer.child_frames else None
+        try:
+            if inner and inner.evaluate("Boolean(document.querySelector('.plan'))"):
+                return inner
+        except Exception:
+            pass
+        page.wait_for_timeout(200)
+    raise AssertionError("the MCP App card did not render")
+
+
 def card_text(page, selector: str) -> str:
     """The text of the first element matching selector in the MCP App's inner frame, once the card has rendered again."""
     for _ in range(50):
@@ -99,7 +113,7 @@ def test_device_walkthrough(page, replay_server, page_errors, reset_demo, width)
     expect(plans).to_be_visible()
     expect(page.locator("#plans-state")).to_contain_text("Approved by you")
     assert card_lead(page).startswith("pick: Fly the hospital order")
-    assert card_text(page, ".done-tag") == "Approved" and card_text(page, "button") == ""
+    assert card_text(page, ".done-tag") == "Approved" and card_text(page, ".plan button") == ""
 
     assert "executed" in say_on_device(page, "execute it")
     result = page.locator('[data-surface="result"]')
@@ -127,6 +141,32 @@ def test_device_walkthrough(page, replay_server, page_errors, reset_demo, width)
     expect(page.locator("#sheet")).to_be_hidden()
 
     assert_accessible(page)
+    assert page_errors == []
+
+
+def test_the_plans_card_fits_a_phone_with_its_look_alike_and_its_font(page, replay_server, page_errors, reset_demo):
+    page.set_viewport_size({"width": 390, "height": 844})
+    page.goto(f"{replay_server}/demo")
+    expect(page.locator("#connection")).to_have_text("Connected")
+    say_on_device(page, "What's happening with SHIP-433, and which plan should we choose?")
+    expect(page.locator("#mcp-app")).to_be_visible()
+    frame = card_frame(page)
+    page.wait_for_function("""() => {
+        const frame = document.querySelector("#mcp-app iframe");
+        return frame && frame.getBoundingClientRect().height > 400;
+    }""")
+    card = frame.evaluate("""() => ({
+        compact: document.body.classList.contains("compact"),
+        others: document.querySelectorAll(".plans .plan").length,
+        lookAlike: document.querySelector(".plans .plan .diff")?.textContent || "",
+        more: document.querySelector("button.more")?.textContent || "",
+        scrolls: document.documentElement.scrollHeight > innerHeight + 1,
+    })""")
+    assert card["compact"] and card["others"] == 1 and card["lookAlike"], card
+    assert card["more"].startswith("See ") and not card["scrolls"], card
+    loaded = frame.evaluate("""() => document.fonts.load('800 16px "Atkinson Hyperlegible Next"')
+        .then((faces) => faces.length > 0 && faces.every((face) => face.status === "loaded")).catch(() => false)""")
+    assert loaded, "the card must render in its own embedded font"
     assert page_errors == []
 
 
