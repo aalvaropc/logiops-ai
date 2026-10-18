@@ -286,37 +286,36 @@ export function stepLabel(step) {
   return `${STEP_NAMES[step.tool] || step.tool}${detail ? ` · ${detail}` : ""}${step.is_error ? " · error" : ""}`;
 }
 
-export function renderTrace(box, run, { check, reducedMotion = false, setTimeout: schedule = globalThis.setTimeout } = {}, doc = globalThis.document) {
+function traceDetails(run, { open = false, fresh = false } = {}, doc = globalThis.document) {
   const steps = run?.tool_trace || [];
-  box.hidden = !steps.length;
-  const title = box.querySelector(".trace-title");
-  const badge = box.querySelector(".device-check");
-  const list = box.querySelector("ol");
-  list.replaceChildren();
-  title.textContent = `From the recorded tool trace · ${steps.length} MCP call${steps.length === 1 ? "" : "s"}`;
-  badge.textContent = check ? check.text : "";
-  badge.className = `device-check${check ? (check.passed ? " passed" : " failed") : ""}`;
-  badge.hidden = !check;
-  const timers = [];
-  if (run?.skill?.name) list.append(el("li", "skill", `Agent Skill · ${run.skill.name}`, doc));
+  if (!steps.length) return null;
+  const details = el("details", `turn-trace${fresh ? " fresh" : ""}`, undefined, doc);
+  details.open = open;
+  const list = el("ol", "device-steps", undefined, doc);
+  list.setAttribute("aria-label", "Steps the agent took, from the recorded tool trace");
+  if (run.skill?.name) list.append(el("li", "skill", `Agent Skill · ${run.skill.name}`, doc));
   steps.forEach((step, index) => {
     const item = el("li", step.is_error ? "error" : "", stepLabel(step), doc);
-    if (reducedMotion) list.append(item);
-    else timers.push(schedule(() => list.append(item), index * 220));
+    item.style.setProperty("--step", String(index));
+    list.append(item);
   });
-  return timers;
+  details.append(el("summary", "", `From the recorded tool trace · ${steps.length} MCP call${steps.length === 1 ? "" : "s"}`, doc), list);
+  return details;
 }
 
-export function renderTranscript(list, turns, renderMarkdown, doc = globalThis.document) {
+export function renderTranscript(list, turns, renderMarkdown, { fresh = null } = {}, doc = globalThis.document) {
   list.replaceChildren();
-  for (const entry of turns) {
+  const latest = turns.findLastIndex((entry) => entry.trace?.tool_trace?.length);
+  turns.forEach((entry, index) => {
     const item = el("li", `turn ${entry.role}`, undefined, doc);
     item.append(el("span", "turn-role", entry.role === "user" ? "You" : "LogiOps", doc));
     if (entry.role === "assistant") item.append(renderMarkdown(entry.text));
     else item.append(el("p", "", entry.text, doc));
     if (entry.check) item.append(el("span", `check-badge${entry.check.passed ? "" : " failed"}`, entry.check.text, doc));
     if (entry.meta) item.append(el("small", "", entry.meta, doc));
+    const trace = traceDetails(entry.trace, { open: index === latest, fresh: Boolean(fresh) && entry.trace === fresh }, doc);
+    if (trace) item.append(trace);
     list.append(item);
-  }
+  });
   list.scrollTop = list.scrollHeight;
 }

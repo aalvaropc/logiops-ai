@@ -136,7 +136,8 @@ def test_device_walkthrough(page, replay_server, page_errors, reset_demo, width)
     page.click("#more")
     expect(page.locator("#sheet")).to_be_visible()
     assert page.locator("#conversation > li").count() >= 8
-    expect(page.locator("#device-trace")).to_be_visible()
+    expect(page.locator("#conversation .turn-trace[open]")).to_have_count(1)
+    expect(page.locator("#conversation .turn-trace[open] .device-steps li").first).to_be_visible()
     page.click("#sheet-close")
     expect(page.locator("#sheet")).to_be_hidden()
 
@@ -167,6 +168,42 @@ def test_the_plans_card_fits_a_phone_with_its_look_alike_and_its_font(page, repl
     loaded = frame.evaluate("""() => document.fonts.load('800 16px "Atkinson Hyperlegible Next"')
         .then((faces) => faces.length > 0 && faces.every((face) => face.status === "loaded")).catch(() => false)""")
     assert loaded, "the card must render in its own embedded font"
+    assert page_errors == []
+
+
+def test_the_sheet_opens_at_the_latest_turn_and_keeps_focus_inside_and_enter_keeps_the_field(page, replay_server, page_errors, reset_demo):
+    page.set_viewport_size({"width": 390, "height": 844})
+    page.goto(f"{replay_server}/demo")
+    expect(page.locator("#connection")).to_have_text("Connected")
+    say_on_device(page, "Any delays today?")
+    say_on_device(page, "What's happening with SHIP-433, and which plan should we choose?")
+    assert page.evaluate("document.activeElement.id") == "ask-input"
+    for line in ("show the incident", "show the plans", "show the incident", "show the plans"):
+        say_on_device(page, line)
+        assert page.evaluate("document.activeElement.id") == "ask-input", line
+
+    page.click("#more")
+    expect(page.locator("#sheet")).to_be_visible()
+    expect(page.locator("#sheet-close")).to_be_focused()
+    view = page.evaluate("""() => {
+        const list = document.querySelector("#conversation");
+        const last = list.lastElementChild.getBoundingClientRect();
+        return { scrolled: list.scrollTop > 0, lastVisible: last.bottom <= list.getBoundingClientRect().bottom + 1, open: list.querySelectorAll(".turn-trace[open]").length };
+    }""")
+    assert view == {"scrolled": True, "lastVisible": True, "open": 1}, view
+    outside = []
+    for _ in range(15):
+        page.keyboard.press("Tab")
+        outside.append(page.evaluate("""() => {
+            const node = document.activeElement;
+            return node && node !== document.body && !node.closest("#sheet") ? node.id || node.className : null;
+        }"""))
+    assert [item for item in outside if item] == [], outside
+    page.keyboard.press("Escape")
+    expect(page.locator("#sheet")).to_be_hidden()
+    expect(page.locator("#more")).to_be_focused()
+    assert page.evaluate("document.querySelector('.talk').inert") is False
+    assert_accessible(page)
     assert page_errors == []
 
 

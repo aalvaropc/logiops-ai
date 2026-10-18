@@ -21,7 +21,7 @@ import { sessionFigures, incidentTimes } from "../app/metrics.js";
 import { SURFACES, createSurfaces, shortSpoken, homeCards, livePick, displayPlan, chipsFor, lifecycleStep } from "./surfaces.js";
 import { createQueue } from "./queue.js";
 import {
-  el, renderHome, renderSession, renderIncident, renderPlanList, renderConfirm, renderReceipt, renderAlert, renderResult, renderTrace, renderTranscript,
+  el, renderHome, renderSession, renderIncident, renderPlanList, renderConfirm, renderReceipt, renderAlert, renderResult, renderTranscript,
 } from "./render.js";
 
 const $ = (id) => document.getElementById(id);
@@ -41,7 +41,7 @@ const SANDBOX_ORIGIN = (() => {
 })();
 
 const store = createStore({
-  token: "", snapshot: null, selectedPlanId: null, busy: false, conversation: [], app: null, lastRun: null,
+  token: "", snapshot: null, selectedPlanId: null, busy: false, conversation: [], app: null,
   awaitingExecute: false, pendingApproval: null, incidentId: hashIncident(), inbox: [], conversations: {}, selections: {},
   briefingPick: null, cardTheme: "light", voice: { engine: "browser", voice: null, fillers: [] }, auth: { enabled: false }, session: null,
   memoryIncident: null, approver: "demo-operator", metrics: null,
@@ -51,7 +51,7 @@ const surfaces = createSurfaces(location.hash ? "incident" : "home");
 const sections = Object.fromEntries(SURFACES.map((name) => [name, document.querySelector(`[data-surface="${name}"]`)]));
 const incidentPath = (suffix = "") => `/incidents/${encodeURIComponent(state.incidentId)}${suffix}`;
 const orb = { state: "ready", started: 0, ticker: 0 };
-let traceTimers = [];
+let shownTrace = null;
 
 function message(text, success = false) {
   const box = $("message");
@@ -427,7 +427,7 @@ function paintTalk() {
 function renderControls() {
   const ready = Boolean(state.snapshot) && !state.busy;
   $("ask").disabled = !ready;
-  $("ask-input").disabled = !ready;
+  $("ask-input").readOnly = !ready;
   $("mic").disabled = !ready;
   for (const chip of document.querySelectorAll(".chip")) chip.disabled = !ready;
   for (const id of ["confirm-yes", "confirm-no"]) if ($(id)) $(id).disabled = state.busy;
@@ -447,7 +447,10 @@ function render(snapshot) {
   }
   const agentEvent = latestAgentEvent(snapshot);
   if (!state.conversation.length && agentEvent) {
-    state.conversation.push({ role: "assistant", text: agentEvent.data.display_answer || agentEvent.data.answer, meta: traceSummary(agentEvent.data), check: checkBadge(agentEvent.data), spoken: agentEvent.data.spoken });
+    state.conversation.push({
+      role: "assistant", text: agentEvent.data.display_answer || agentEvent.data.answer, meta: traceSummary(agentEvent.data), check: checkBadge(agentEvent.data),
+      spoken: agentEvent.data.spoken, trace: agentEvent.data,
+    });
   }
   paintTalk();
   paintSurface();
@@ -572,7 +575,7 @@ async function recallMemory() {
 function say(role, text, meta, spoken, check) {
   state.conversation.push({ role, text, meta, check, spoken });
   if (!state.forgetting && !String(meta || "").startsWith("welcome back")) remember(role, role === "assistant" ? (spoken || markdown.plainText(text)) : text);
-  if (!$("sheet").hidden) renderTranscript($("conversation"), state.conversation, (source) => renderMarkdown(source, { markdown }));
+  if (!$("sheet").hidden) paintSheet();
   if (role !== "assistant") {
     device("heard", text);
     return;
@@ -604,9 +607,14 @@ async function loadVoice() {
   }
 }
 
-function paintTrace() {
-  for (const timer of traceTimers) clearTimeout(timer);
-  traceTimers = renderTrace($("device-trace"), state.lastRun, { check: state.lastRun ? checkBadge(state.lastRun) : null, reducedMotion: reducedMotion() });
+function paintSheet() {
+  const latest = state.conversation.findLast((turn) => turn.trace?.tool_trace?.length)?.trace || null;
+  renderTranscript($("conversation"), state.conversation, (source) => renderMarkdown(source, { markdown }), { fresh: latest === shownTrace || reducedMotion() ? null : latest });
+  shownTrace = latest;
+}
+
+function setBackgroundInert(inert) {
+  for (const node of [...$("device").children, document.querySelector(".stage-note")]) if (node && node.id !== "sheet") node.inert = inert;
 }
 
 const commands = createCommands({
@@ -615,7 +623,12 @@ const commands = createCommands({
   badges: { checkBadge, traceSummary, executionSummary, noteCheck, noteFallback },
   preferences: { describe: describePreferences, effect: effectOf },
   say, act, device, stopSpeaking, selectIncident, hideMcpApp, showMcpApp, showMcpAppNote,
-  onInbox: () => paintSurface(), onRun: (run) => { state.lastRun = run; if (!$("sheet").hidden) paintTrace(); },
+  onInbox: () => paintSurface(),
+  onRun: (run) => {
+    const turn = state.conversation.at(-1);
+    if (turn?.role === "assistant") turn.trace = run;
+    if (!$("sheet").hidden) paintSheet();
+  },
   onSurface: (name, payload) => showSurface(name, payload),
   approvePlan, executeApproved, savePreferences: (update) => request("/operator/preferences", "PUT", mergedPreferences(state.snapshot?.operator_preferences, update)),
   linkAccount, signOut,
@@ -627,14 +640,15 @@ function handleUtterance(raw) {
 }
 
 function openSheet() {
-  renderTranscript($("conversation"), state.conversation, (source) => renderMarkdown(source, { markdown }));
-  paintTrace();
   $("sheet").hidden = false;
+  setBackgroundInert(true);
+  paintSheet();
   $("sheet-close").focus();
 }
 
 function closeSheet() {
   $("sheet").hidden = true;
+  setBackgroundInert(false);
   $("more").focus();
 }
 
@@ -691,6 +705,7 @@ $("ask-form").addEventListener("submit", (event) => {
   const input = $("ask-input");
   const text = input.value;
   input.value = "";
+  if (document.activeElement === $("ask")) input.focus({ preventScroll: true });
   handleUtterance(text);
 });
 $("more").addEventListener("click", openSheet);

@@ -443,13 +443,16 @@ def test_the_device_replays_the_recorded_tool_trace_and_the_check():
     root = Path(__file__).resolve().parents[1] / "logiops" / "static"
     html, script, render = (root / "demo.html").read_text(), (root / "device" / "main.js").read_text(), (root / "device" / "render.js").read_text()
     assert 'id="device-elapsed" class="device-elapsed" aria-hidden="true"' in html
-    assert 'aria-label="Steps the agent took, from the recorded tool trace"' in html and 'class="device-check"' in html
+    assert 'list.setAttribute("aria-label", "Steps the agent took, from the recorded tool trace");' in render
+    assert 'el("details", `turn-trace${fresh ? " fresh" : ""}`' in render and "turn.trace = run;" in script
+    assert 'id="sheet" class="sheet"' in html.split('<div id="device"')[1].split('<footer class="stage-note">')[0]
+    assert "setBackgroundInert(true);" in script and "setBackgroundInert(false);" in script
     assert script.count("device,") == 1 and _static("app", "commands.js").count('device("trace", run);') == 1
     assert "From the recorded tool trace · ${steps.length} MCP call" in render
     assert 'matchMedia("(prefers-reduced-motion: reduce)")' in script and "answered in ${" in script
     badges = _static("app", "run-badges.js")
     assert '"Checked against the data after one revision"' in badges and "Did not pass the data check" in badges
-    assert "check: state.lastRun ? checkBadge(state.lastRun) : null" in script
+    assert "lastRun" not in script and "device-trace" not in html
 
 
 def test_help_and_start_over_follow_the_alexa_guidelines():
