@@ -24,8 +24,10 @@ export function agentLine(run, check) {
   return [`${calls} MCP ${plural(calls, "call")} by the agent`, check?.text, run.mode === "replay" ? "scripted replay" : ""].filter(Boolean).join(" · ");
 }
 
+const DECISION_LEAD = /^([A-Z]+-\d+) needs a decision\.\s*I recommend:\s*/;
+
 export function shortSpoken(text, spoken, plain = (value) => value) {
-  const line = String(spoken || plain(String(text || ""))).trim();
+  const line = String(spoken || plain(String(text || ""))).trim().replace(DECISION_LEAD, "$1: ");
   return line.length > SPOKEN_LIMIT ? `${line.slice(0, SPOKEN_LIMIT - 1).trimEnd()}…` : line;
 }
 
@@ -82,7 +84,9 @@ export function incidentBand(snapshot, summary) {
     if (execution) return [allOnTime ? "ok" : "late", `Executed · ${text}`];
     return allOnTime ? ["warn", `Approved · ${text} once executed`] : ["late", `Approved · ${text}`];
   }
-  return summary?.critical_units_at_risk > 0 ? ["late", `${summary.critical_units_at_risk} critical units at risk`] : null;
+  if (!(summary?.critical_units_at_risk > 0)) return null;
+  const pending = visiblePlans(snapshot).length ? " until a plan is approved" : "";
+  return ["late", `${summary.critical_units_at_risk} critical units at risk${pending}`];
 }
 
 const capital = (name) => `${name[0].toUpperCase()}${name.slice(1)}`;
