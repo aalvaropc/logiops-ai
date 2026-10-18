@@ -18,10 +18,11 @@ import { homeHeading } from "../app/greeting.js";
 import { checkBadge, checkNote, fallbackNote, traceSummary, executionSummary } from "../app/run-badges.js";
 import { renderMarkdown } from "../app/markdown-dom.js";
 import { sessionFigures, incidentTimes } from "../app/metrics.js";
-import { SURFACES, createSurfaces, shortSpoken, homeCards, livePick, displayPlan, chipsFor, lifecycleStep } from "./surfaces.js";
+import { SURFACES, createSurfaces, shortSpoken, homeCards, livePick, displayPlan, chipsFor, lifecycleStep, stageLine, stageCaption, agentLine } from "./surfaces.js";
 import { createQueue } from "./queue.js";
+import { createStage } from "./stage.js";
 import {
-  el, renderHome, renderSession, renderIncident, renderPlanList, renderConfirm, renderReceipt, renderAlert, renderResult, renderTranscript,
+  el, renderHome, renderSession, renderIncident, renderPlanList, renderConfirm, renderReceipt, renderAlert, renderResult, renderTranscript, renderAgentLine,
 } from "./render.js";
 
 const $ = (id) => document.getElementById(id);
@@ -51,7 +52,8 @@ const state = store.state;
 const surfaces = createSurfaces(location.hash ? "incident" : "home");
 const sections = Object.fromEntries(SURFACES.map((name) => [name, document.querySelector(`[data-surface="${name}"]`)]));
 const incidentPath = (suffix = "") => `/incidents/${encodeURIComponent(state.incidentId)}${suffix}`;
-const orb = { state: "ready", started: 0, ticker: 0 };
+const orb = { state: "ready", started: 0, ticker: 0, answered: null };
+const stage = createStage({ root: $("agent-stage"), surface: $("surface"), reducedMotion });
 let shownTrace = null;
 
 function message(text, success = false) {
@@ -67,7 +69,10 @@ function tick() {
 }
 
 function elapsed() {
-  if (orb.started) $("device-elapsed").textContent = `${Math.floor((performance.now() - orb.started) / 1000)} s`;
+  if (!orb.started) return;
+  const seconds = Math.floor((performance.now() - orb.started) / 1000);
+  $("device-elapsed").textContent = `${seconds} s`;
+  stage.tick(seconds);
 }
 
 function setVoice(event, speaking = false) {
@@ -79,8 +84,10 @@ function setVoice(event, speaking = false) {
     orb.ticker = setInterval(elapsed, 250);
   } else if (next.state !== "thinking" && orb.state === "thinking") {
     clearInterval(orb.ticker);
-    if (orb.started) $("device-elapsed").textContent = `answered in ${((performance.now() - orb.started) / 1000).toFixed(1)} s`;
+    orb.answered = orb.started ? (performance.now() - orb.started) / 1000 : null;
+    if (orb.answered !== null) $("device-elapsed").textContent = `answered in ${orb.answered.toFixed(1)} s`;
     orb.started = 0;
+    stage.settle();
   }
   orb.state = next.state;
   $("device-orb").dataset.state = orb.state;
@@ -102,6 +109,7 @@ function device(method, ...args) {
     $("more").hidden = false;
     setVoice("reply", speaking);
   }
+  else if (method === "trace") stage.replay(args[0], checkBadge(args[0]), stageCaption(args[0], orb.answered));
 }
 
 function setBusy(busy) {
@@ -122,14 +130,18 @@ const api = createApi({
     state.approver = session?.username || "demo-operator";
     renderAccount();
   },
-  onAgentCall: (phase) => {
+  onAgentCall: (phase, path) => {
     if (phase === "request") {
       device("voice", "request");
+      stage.ask(stageLine(path));
       startFiller();
       return;
     }
     voice.cancelFiller();
-    if (phase === "error") device("voice", "error");
+    if (phase === "error") {
+      device("voice", "error");
+      stage.clear();
+    }
   },
 });
 const { request, storedToken, storeToken, readSession, keepSession, signOut, randomText } = api;
@@ -344,6 +356,8 @@ function renderPlansSurface() {
     : approval ? `Approved by ${approver}: “${approvedPlan?.label || approval.plan_id}”. Nothing has run yet.`
     : plans.length ? "Only you approve. Selecting a plan does not approve it." : "Ask what's happening to calculate them";
   $("execute-plan").hidden = !approval || executed;
+  const investigation = latestAgentEvent(snapshot)?.data;
+  renderAgentLine($("plans-agent"), agentLine(investigation, investigation && checkBadge(investigation)), investigation);
   renderPlanList($("plans"), {
     plans: recommended ? [recommended, ...plans.filter((plan) => plan.id !== recommended.id)] : plans, selectedId: state.selectedPlanId, recommendedId: recommended?.id, preferredId: snapshot.preference?.preferred_plan_id,
     locked: Boolean(approval || executed), onSelect: (plan) => selectPlan(plan),

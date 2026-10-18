@@ -42,6 +42,7 @@
           <div class="plans-head">
             <h2 id="plans-title">Plans</h2>
             <p id="plans-state" class="sub">Only you approve. Selecting a plan does not approve it.</p>
+            <p id="plans-agent" class="agent-line" hidden></p>
             <button id="execute-plan" type="button" class="primary" hidden>Execute approved plan</button>
           </div>
           <div id="mcp-app" class="mcp-app" hidden>
@@ -54,6 +55,11 @@
         <section data-surface="alert" class="card alert" aria-label="Proactive alert" hidden></section>
         <section data-surface="result" class="card result" aria-label="Result" hidden></section>
       </main>
+      <div id="agent-stage" class="agent-stage" aria-hidden="true" hidden>
+        <p class="agent-ask"></p>
+        <div class="agent-track"><span class="agent-comet"></span><ol class="agent-stations"></ol></div>
+        <p class="agent-meta"></p>
+      </div>
       <div class="talk" role="region" aria-label="Talk to LogiOps" data-voice="ready">
         <div class="turns">
           <p class="heard"><span id="heard-label" class="label" hidden>You said</span> <span id="device-heard">Try “any delays today?”</span></p>

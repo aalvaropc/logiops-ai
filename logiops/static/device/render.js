@@ -369,6 +369,17 @@ export function stepLabel(step) {
   return `${STEP_NAMES[step.tool] || step.tool}${detail ? ` · ${detail}` : ""}${step.is_error ? " · error" : ""}`;
 }
 
+export function renderAgentLine(node, text, run, doc = globalThis.document) {
+  node.replaceChildren();
+  node.hidden = !text;
+  if (!text) return;
+  const dots = el("span", "agent-dots", undefined, doc);
+  dots.setAttribute("aria-hidden", "true");
+  for (const step of run.tool_trace) dots.append(el("span", step.is_error ? "error" : "", undefined, doc));
+  if (run.evaluations?.length) dots.append(el("span", run.grounded ? "check" : "check failed", undefined, doc));
+  node.append(dots, el("span", "", text, doc));
+}
+
 function traceDetails(run, { open = false, fresh = false } = {}, doc = globalThis.document) {
   const steps = run?.tool_trace || [];
   if (!steps.length) return null;

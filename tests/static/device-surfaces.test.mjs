@@ -4,7 +4,7 @@ import { moduleUrl } from "./helpers.mjs";
 
 const {
   SURFACES, shortSpoken, homeCards, incidentFacts, displayPlan, confirmDetails, resultFigures, alertDetails, chipsFor, createSurfaces,
-  lifecycleStep, LIFECYCLE, cardTags, resultOutcome, livePick, nextOpen, criticalOutcome, incidentBand,
+  lifecycleStep, LIFECYCLE, cardTags, resultOutcome, livePick, nextOpen, criticalOutcome, incidentBand, stageLine, stageCaption, agentLine,
 } = await import(moduleUrl("device/surfaces.js"));
 
 const plans = [
@@ -185,4 +185,16 @@ test("the incident band follows the approved or executed plan, not the risk it h
   assert.deepEqual(incidentBand(executed, { critical_units_at_risk: 0 }), ["ok", "Executed · 12 critical units projected on time"]);
   const standard = { ...base, plans: [{ ...fly, orders: [{ ...orders[1], delay_hours: 0, late_units: 0 }] }], executions: [{ plan_id: "p-fly", source_version: 1 }] };
   assert.deepEqual(incidentBand(standard, null), ["ok", "Executed · 18 units projected on time"]);
+});
+
+test("the agent stage names who is asked and captions the recorded trace honestly", () => {
+  assert.deepEqual(stageLine("/incidents/SHIP-433/agent/investigate"), ["Asking the agent about", "SHIP-433"]);
+  assert.deepEqual(stageLine("/agent/briefing"), ["Asking the agent about", "your queue"]);
+  assert.deepEqual(stageLine("/incidents/SHIP-433/agent/ask"), ["Asking the agent", ""]);
+  const run = { tool_trace: [{ tool: "get_shipment" }, { tool: "investigate_incident" }], mode: "replay" };
+  assert.equal(stageCaption(run, 13.04), "Replayed from the recorded tool trace · 2 MCP calls · answered in 13.0 s · scripted replay");
+  assert.equal(stageCaption({ tool_trace: [{ tool: "list_incidents" }], mode: "bedrock" }, null), "Replayed from the recorded tool trace · 1 MCP call");
+  assert.equal(agentLine(run, { passed: true, text: "Checked against the data" }), "2 MCP calls by the agent · Checked against the data · scripted replay");
+  assert.equal(agentLine({ tool_trace: [], mode: "bedrock" }, null), "");
+  assert.equal(agentLine(undefined, null), "");
 });
