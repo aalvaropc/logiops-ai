@@ -101,7 +101,7 @@ export function createCommands({
         onInbox();
         say("assistant", run.answer, `briefing · ${badges.traceSummary(run)}`, run.spoken, badges.checkBadge(run));
         runNotes(run);
-        onSurface("home", { lead: run.spoken || run.answer, pick: run.start_with });
+        onSurface("home", { pick: run.start_with });
       } catch (error) {
         say("assistant", `I couldn't do that: ${error.message || error}`);
       }

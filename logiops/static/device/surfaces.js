@@ -1,9 +1,28 @@
 import { dollars } from "../app/purchase.js";
-import { formatDate, allocationSummary, localWarehouse, visiblePlans, visibleApproval } from "../app/selectors.js";
+import { formatDate, allocationSummary, localWarehouse, visiblePlans, visibleApproval, plural } from "../app/selectors.js";
 
 export const SPOKEN_LIMIT = 260;
 export const SURFACES = ["home", "incident", "plans", "confirm", "receipt", "alert", "result"];
 const TRANSIENT = new Set(["confirm", "alert"]);
+
+export function stageLine(path) {
+  const investigated = /\/incidents\/([^/]+)\/agent\/investigate$/.exec(path || "");
+  if (investigated) return ["Asking the agent about", decodeURIComponent(investigated[1])];
+  if (/\/agent\/briefing$/.test(path || "")) return ["Asking the agent about", "your queue"];
+  return ["Asking the agent", ""];
+}
+
+export function stageCaption(run, seconds) {
+  const calls = run.tool_trace?.length || 0;
+  return ["Replayed from the recorded tool trace", `${calls} MCP ${plural(calls, "call")}`,
+    Number.isFinite(seconds) ? `answered in ${seconds.toFixed(1)} s` : "", run.mode === "replay" ? "scripted replay" : ""].filter(Boolean).join(" · ");
+}
+
+export function agentLine(run, check) {
+  const calls = run?.tool_trace?.length || 0;
+  if (!calls) return "";
+  return [`${calls} MCP ${plural(calls, "call")} by the agent`, check?.text, run.mode === "replay" ? "scripted replay" : ""].filter(Boolean).join(" · ");
+}
 
 export function shortSpoken(text, spoken, plain = (value) => value) {
   const line = String(spoken || plain(String(text || ""))).trim();

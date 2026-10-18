@@ -69,7 +69,7 @@ export function createApi({ fetch: doFetch, storage, crypto: webCrypto, origin, 
   const vault = storage ?? createStorage();
   const randomness = () => webCrypto ?? globalThis.crypto;
   const current = () => ({ token: "", session: null, auth: { enabled: false }, ...(credentials ? credentials() : {}) });
-  const agentCall = (phase) => { if (onAgentCall) onAgentCall(phase); };
+  const agentCall = (phase, path) => { if (onAgentCall) onAgentCall(phase, path); };
 
   function randomText(size) {
     const bytes = new Uint8Array(size);
@@ -175,7 +175,7 @@ export function createApi({ fetch: doFetch, storage, crypto: webCrypto, origin, 
     if (token) headers.Authorization = `Bearer ${token}`;
     if (body !== undefined) headers["Content-Type"] = "application/json";
     const agent = method === "POST" && /\/agent\//.test(path);
-    if (agent) agentCall("request");
+    if (agent) agentCall("request", path);
     let response;
     try {
       response = await fetcher(path, { method, headers, body: body === undefined ? undefined : JSON.stringify(body), cache: "no-store" });
