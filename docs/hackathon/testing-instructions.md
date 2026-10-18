@@ -42,14 +42,19 @@ LOGIOPS_AGENT_MODE=replay uv run uvicorn logiops.api:app --host 127.0.0.1 --port
    `127.0.0.1` with `localhost`. On any other name (`[::1]`, a LAN IP, a tunnel) the
    card is not shown (it fails closed) and the rest of the demo still works.
 3. **The device screen.** `/demo` is a simulated Alexa+ device that shows one
-   card at a time: home (the inbox as a stacked queue, the most urgent first;
-   a tap or Enter opens an incident), the incident (ETAs, local stock,
-   the plan's legs on a route diagram with late legs in red and a text legend, and
-   each order's promise against its projection), the plans (the MCP App card,
+   surface at a time: home (the critical units at risk, and the open incidents as
+   lanes to their promise with their delay in dashed red, then the queue, the most
+   urgent first; a tap or Enter opens an incident), the incident (a wide map of the
+   plan's legs with late legs dashed red and a text list for screen readers, its
+   one large figure, and each order on one time scale against its promise), the
+   agent stage while an investigation runs (each MCP tool call lit as it returns,
+   then the data check, captioned "Live from the MCP tool calls", plus "scripted
+   replay" in replay mode), the plans (the MCP App card with its decision field,
    or a plain list when no second origin is available), a confirmation (Yes /
    No), the receipt, a proactive alert and the result. Every request below plays
-   on the device: the orb moves from Listening (voice) to Thinking (with elapsed
-   seconds) to Speaking or Ready, and the heard and spoken lines update. "More"
+   on the device: the voice light bar and its label move from Listening (voice) to
+   Thinking (with elapsed seconds) to Speaking or Ready, and the heard and spoken
+   lines update. "More"
    opens the whole conversation with the Agent Skill (`logiops-exception-desk`,
    read over MCP) listed first, then the steps of the recorded tool trace one by
    one, each under the reply it belongs to, and the "Checked against the data" badge. The MCP App card highlights the

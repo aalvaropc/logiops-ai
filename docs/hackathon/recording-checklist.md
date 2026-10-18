@@ -18,7 +18,7 @@ The narration and timings are in `video-script.md`. This list covers the setup.
 - [ ] The deployed demo (token or sign-in loaded, never shown), or locally: `aws login --region us-east-1`, then start the server without `LOGIOPS_AGENT_MODE`.
 - [ ] "More" shows **bedrock mode** and a non-zero token count. This cannot be rehearsed in replay.
 - [ ] Voice input is shown at least once ("Listening…"); if it fails, type the phrase: the flow is the same.
-- [ ] On the device: the orb's Thinking state with its seconds, the spoken line in large type, the plans card with the MCP App and its "Agent pick", the confirmation card, the result card with "Decided in …", the receipt card, the alert card, and in "More" the Agent Skill and the tool-trace steps with "Checked against the data".
+- [ ] On the device: the agent stage lighting each tool call live with its seconds and "Live from the MCP tool calls", the spoken line in large type, the plans card with the MCP App, its decision field and "Agent pick", the incident's map with the chosen plan, the confirmation card, the result card with "Decided in …", the receipt card, the alert card, and in "More" the Agent Skill and the tool-trace steps with "Checked against the data".
 - [ ] Approval → execution → "30 units accounted for" on SHIP-433.
 - [ ] A stock change from the console raises the alert on the device (bell → card).
 - [ ] The scenario pack import shows SHIP-470 in both pages.

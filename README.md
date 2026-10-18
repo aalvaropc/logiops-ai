@@ -10,15 +10,17 @@ approves with one "yes", the agent executes and verifies the result, and can
 book and pay the carriers after reading the price back. Every answer is checked
 against the incident's data before it is shown.
 
-![The simulated Alexa+ device: home card with the incident inbox as a stacked queue](docs/img/device-home.png)
+![The simulated Alexa+ device at home: 12 critical units at risk in large red type, and the four open incidents as light lanes that run to their promise and trail their delay in dashed red](docs/img/device-home.png)
 
-| The plans, with the interactive MCP App card inside the device | Approve with one yes | The result, verified |
+| The agent at work: each MCP tool call lit as it returns | The plans: the MCP App card with its decision field | The shipment's journey with the chosen plan |
 |---|---|---|
-| ![Plans card](docs/img/device-plans.png) | ![Confirmation card](docs/img/device-confirm.png) | ![Result card](docs/img/device-result.png) |
+| ![The agent stage: "Asking the agent about SHIP-433", five tool-call stations on a lit rail, the data check, and "Live from the MCP tool calls"](docs/img/device-agent.png) | ![The plans card: every plan placed by delay and cost, the pick lit with a ring, the plan that leaves the hospital late as a hollow red ring](docs/img/device-plans.png) | ![The incident: the route from Lima to Cusco with the air leg as a white trail and the late ground leg dashed red, 12 critical units on time, and each order on one time scale](docs/img/device-journey.png) |
 
-| The operator console: the same incident in full, with the session's metrics | The device on a phone |
-|---|---|
-| ![Operator console](docs/img/console.png) | ![The device on a phone](docs/img/device-phone.png) |
+| Approve with one yes | The result, verified | The device on a phone |
+|---|---|---|
+| ![Confirmation: $390 in large type, each order's trail to its promise, Yes and No](docs/img/device-confirm.png) | ![Result: the executed route and 12 critical units on time, with the decision times](docs/img/device-result.png) | ![The device on a phone: SHIP-433 with its booked shipment delay of +24 h](docs/img/device-phone.png) |
+
+![The operator console: the same incidents in full, with the session's measured outcomes, the decision field beside the plans and the audit trail](docs/img/console.png)
 
 **Who it is for (illustrative):** the exceptions desk of a mid-size regional
 distributor that ships electronics and medical supplies from its hubs to
@@ -199,17 +201,20 @@ same server without `LOGIOPS_AGENT_MODE=replay`.
 
 Open the browser demo at <http://127.0.0.1:8000/demo>. It is a simulated
 Alexa+ device (an Echo Show-style screen, full-screen on a phone) that shows
-one card at a time: the home card with the incident inbox as a stacked queue (open
-ones first, then by critical units at risk, priority and due time; "Start
-here" marks the briefing's pick); the incident card with its ETAs, local stock,
-the plan's legs on a route diagram and each order's promise against its projected
-arrival; the plans card with the interactive MCP App; a confirmation card that
-reads an approval or a price back with Yes / No; the receipt; a proactive
-alert; and the result card after execution. Below the card, the device shows
-what it heard and the short spoken reply in large type, a voice orb (Ready,
-Listening, Thinking with the seconds elapsed, Speaking), suggestion chips, the
-microphone (Chrome, Edge) and a text field; "More" opens the whole
-conversation with the recorded tool trace and the data-check badge. Open an
+one surface at a time, drawn as light on a night road: home leads with the
+critical units at risk and the open incidents as lanes that run to their promise
+and trail their delay (open ones first, then by critical units at risk, priority
+and due time; "Start here" marks the briefing's pick); the incident is a wide
+map of the plan's legs (late legs dashed red) with its one large figure and each
+order on one time scale against its promise; while the agent investigates, a
+stage lights each MCP tool call as it returns, then the data check; the plans
+show the interactive MCP App with a decision field of every plan by delay and
+cost; a confirmation reads an approval or a price back with Yes / No; then the
+receipt, a proactive alert and the result after execution. Below, the dock shows
+what it heard and the short spoken reply in large type, a voice light bar
+(Ready, Listening, Thinking with the seconds elapsed, Speaking), suggestion
+chips, the microphone (Chrome, Edge) and a text field; "More" opens the whole
+conversation with the tool trace of each reply and the data-check badge. Open an
 incident by tapping its card, by linking to it (`/demo#SHIP-433`) or by naming
 it ("what about SHIP-452?"); each incident keeps its own conversation.
 

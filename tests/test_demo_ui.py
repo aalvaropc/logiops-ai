@@ -430,7 +430,7 @@ def test_the_device_page_is_the_full_screen_alexa_experience():
     assert 'device("voice", "speech-end")' in voice and "current.speechTimer = setTimeout(done, SPEECH_TIMEOUT_MS)" in voice
     assert ".orb, .orb span { animation: none !important; }" in style and "@media (min-width: 768px)" in style
     assert "env(safe-area-inset-bottom)" in style and "viewport-fit=cover" in html
-    assert set(re.findall(r"#[0-9A-Fa-f]{6}\b", style)) <= {"#A86F00", "#6A4BB5", "#2F6FD6", "#8F6200"}
+    assert set(re.findall(r"#[0-9A-Fa-f]{6}\b", style)) == set(), "device colours come from tokens.css"
     loose = [line for line in style.splitlines() if re.search(r"font-size: \d+px", line) and ".place-label" not in line and not line.startswith("input ")]
     assert loose == [], "device sizes come from the ladder; map labels use SVG units and the field stays 16px against zoom"
     assert html.index("/assets/tokens.css") < html.index("/assets/device.css")
