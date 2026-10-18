@@ -138,7 +138,7 @@ export function renderSession(section, session, doc = globalThis.document) {
   strip.setAttribute("aria-label", "This session's outcomes, from the recorded events");
   if (!session.length) strip.append(el("li", "", EMPTY_SESSION, doc));
   for (const [value, label] of session) {
-    const item = el("li", "", undefined, doc);
+    const item = el("li", /\blate\b/.test(label) && Number(value) > 0 ? "late" : "", undefined, doc);
     item.append(el("strong", "", value, doc), el("span", "", label, doc));
     strip.append(item);
   }

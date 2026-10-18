@@ -31,6 +31,7 @@ const inbox = [
 test("the spoken line is short, and the home queue starts with the briefing's pick", () => {
   assert.equal(shortSpoken("**Hello** there", null, (text) => text.replaceAll("*", "")), "Hello there");
   assert.equal(shortSpoken("ignored", "Spoken line"), "Spoken line");
+  assert.equal(shortSpoken("", "SHIP-433 needs a decision. I recommend: Fly the hospital order."), "SHIP-433: Fly the hospital order.");
   const long = shortSpoken("x".repeat(400));
   assert.equal(long.length, 260);
   assert.ok(long.endsWith("…"));
@@ -176,7 +177,8 @@ test("the incident band follows the approved or executed plan, not the risk it h
   const base = { ...snapshot, plans: [fly, slow] };
   assert.deepEqual(criticalOutcome(fly), { critical: true, onTime: 12, total: 12 });
   assert.deepEqual(criticalOutcome({ orders: [orders[1]] }), { critical: false, onTime: 0, total: 18 });
-  assert.deepEqual(incidentBand(base, { critical_units_at_risk: 12 }), ["late", "12 critical units at risk"]);
+  assert.deepEqual(incidentBand(base, { critical_units_at_risk: 12 }), ["late", "12 critical units at risk until a plan is approved"]);
+  assert.deepEqual(incidentBand({ ...base, plans: [] }, { critical_units_at_risk: 12 }), ["late", "12 critical units at risk"]);
   assert.equal(incidentBand(base, { critical_units_at_risk: 0 }), null);
   const approve = (id) => ({ ...base, approvals: [{ plan_id: id, source_version: 1 }] });
   assert.deepEqual(incidentBand(approve("p-fly"), { critical_units_at_risk: 12 }), ["warn", "Approved · 12 critical units projected on time once executed"]);

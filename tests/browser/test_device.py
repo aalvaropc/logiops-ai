@@ -262,6 +262,7 @@ def test_the_phone_dock_expands_its_reply_toggles_the_voice_and_keeps_the_shell_
     page.goto(f"{replay_server}/demo#SHIP-421")
     expect(page.locator("#connection")).to_have_text("Connected")
     say_on_device(page, "What's happening with SHIP-421?")
+    say_on_device(page, "open SHIP-433")
     line = page.locator("#device-spoken")
     assert line.evaluate("(node) => node.scrollHeight > node.clientHeight + 1"), "a long reply starts clamped"
     line.click()
