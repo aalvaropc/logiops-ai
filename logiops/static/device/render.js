@@ -181,6 +181,9 @@ export function renderConfirm(section, payload, { onYes, onNo }, doc = globalThi
   const card = el("div", `confirm-card ${details.kind}`, undefined, doc);
   card.append(el("p", "label", details.kind === "purchase" ? "Purchase · nothing charged yet" : "Approval · you decide", doc),
     el("h2", "", details.title, doc), el("p", "lead", details.lead, doc));
+  const figure = el("p", "confirm-figure", undefined, doc);
+  figure.append(el("strong", "", details.figure[0], doc), " ", el("span", "", details.figure[1], doc));
+  card.append(figure);
   const rows = el("dl", "rows", undefined, doc);
   for (const [term, value, tone] of details.rows) rows.append(el("dt", "", term, doc), el("dd", tone || "", value, doc));
   card.append(rows);

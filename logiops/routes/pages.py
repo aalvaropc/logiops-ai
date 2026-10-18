@@ -14,7 +14,7 @@ from .context import Context
 
 LOOPBACK_PAIRS = {"127.0.0.1": "localhost", "localhost": "127.0.0.1"}
 SANDBOX_META = '<meta name="logiops-sandbox-origin" content="">'
-ASSET_TYPES = {".css": "text/css", ".js": "text/javascript", ".svg": "image/svg+xml", ".png": "image/png"}
+ASSET_TYPES = {".css": "text/css", ".js": "text/javascript", ".svg": "image/svg+xml", ".png": "image/png", ".woff2": "font/woff2"}
 
 
 def router(ctx: Context, *, auth_enabled: bool) -> APIRouter:

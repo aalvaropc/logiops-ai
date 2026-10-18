@@ -1,5 +1,14 @@
 import { formatDate } from "../app/selectors.js";
 
+export function cardTags(card) {
+  const tags = [];
+  if (card.startHere) tags.push(["start-here", "Start here"]);
+  if (card.critical_units_at_risk > 0) tags.push(["at-risk", `${card.critical_units_at_risk} critical units at risk`]);
+  else if (card.priority === "critical") tags.push(["critical", "Critical order"]);
+  if (card.status !== "detected") tags.push(["state", card.status]);
+  return tags.slice(0, 2);
+}
+
 export function createCarousel({ root, document: doc = globalThis.document, onOpen, label = "Incident inbox", reducedMotion = () => false }) {
   root.classList.add("carousel");
   root.setAttribute("aria-roledescription", "carousel");
@@ -38,13 +47,9 @@ export function createCarousel({ root, document: doc = globalThis.document, onOp
       button.className = "incident-card";
       button.dataset.incident = card.incident_id;
       const top = tag("incident-top", "");
-      top.append(tag("incident-id", card.incident_id), tag("kind", card.kind_label));
-      if (card.priority === "critical") top.append(tag("critical", "Critical order"));
-      if (card.critical_units_at_risk > 0) top.append(tag("at-risk", `${card.critical_units_at_risk} critical units at risk`));
-      top.append(tag("state", card.status));
-      if (card.startHere) top.append(tag("start-here", "Start here"));
+      top.append(tag("incident-id", card.incident_id), ...cardTags(card).map(([className, text]) => tag(className, text)));
       const due = doc.createElement("small");
-      due.textContent = `${card.route} · ${card.units} units · due ${formatDate(card.due_eta)}`;
+      due.textContent = `${card.kind_label} · ${card.route} · ${card.units} units · due ${formatDate(card.due_eta)}`;
       button.append(top, tag("incident-text", card.title), due);
       button.addEventListener("click", () => onOpen(card.incident_id));
       item.append(button);

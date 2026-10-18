@@ -60,6 +60,7 @@ export function confirmDetails(payload) {
     const card = String(quote.payment_method).replace(/\s*\(simulated\)$/i, "").toLowerCase();
     return {
       kind: "purchase", title: payload.purchase.approve ? "Approve and pay?" : "Pay for the booking?", lead: quote.plan_label,
+      figure: [dollars(quote.total_usd), "total, charged once"],
       rows: [["Carriers and services", dollars(quote.base_usd)], ["Service fee", dollars(quote.service_fee_usd)],
         [quote.tax_label, dollars(quote.tax_usd)], ["Total", dollars(quote.total_usd)]],
       note: `Charged once to the ${card}. Nothing is charged until you say yes.`, warning: lateWarning(payload.plan),
@@ -69,7 +70,8 @@ export function confirmDetails(payload) {
   const plan = payload.plan;
   return {
     kind: "approval", title: "Approve this plan?", lead: plan.label,
-    rows: [["Extra cost", `$${plan.incremental_cost_usd}`], ...orderRows(plan), ["Allocation", allocationSummary(plan)]],
+    figure: [`$${plan.incremental_cost_usd}`, "extra cost"],
+    rows: [...orderRows(plan), ["Allocation", allocationSummary(plan)]],
     note: "Approval records the exact plan and data version. Nothing is executed yet.", warning: lateWarning(plan),
     yes: "Yes, approve", no: "No",
   };

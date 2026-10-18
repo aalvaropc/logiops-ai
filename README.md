@@ -646,3 +646,6 @@ if the skill resource is missing.
 ## License
 
 MIT — see [LICENSE](LICENSE).
+
+The pages use the Atkinson Hyperlegible Next typeface (latin subset), under the
+SIL Open Font License 1.1: see [logiops/static/fonts/OFL.txt](logiops/static/fonts/OFL.txt).
