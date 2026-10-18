@@ -1,23 +1,27 @@
-.console-head { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: end; gap: 24px; padding: 40px 0 28px; }
-.console-head h1 { margin: 10px 0 8px; font-size: 40px; letter-spacing: -.04em; }
-.console-head p { max-width: 640px; margin: 0; color: #a4b8bb; font-size: 15px; line-height: 1.65; }
+.console-head { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: end; gap: 24px; padding: 36px 0 26px; }
+.console-head h1 { margin: 10px 0 8px; }
+.console-head p { max-width: 640px; margin: 0; color: var(--ink-2); font-size: 16px; line-height: 1.6; }
 .console-head .account-row { margin: 0; }
+.account-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 0 0 12px; }
+.account-row[hidden] { display: none; }
+.account-status { color: var(--ink-2); font-size: 14px; font-weight: 700; }
+.account-row.signed-in .account-status { color: var(--ok); }
 .metrics-strip { list-style: none; display: flex; flex-wrap: wrap; gap: 10px; margin: 18px 0 0; padding: 0; }
 .metrics-strip[hidden] { display: none; }
-.metrics-strip li { display: grid; gap: 2px; min-width: 120px; padding: 10px 14px; border: 1px solid #294249; border-radius: 10px; background: #142329; }
-.metrics-strip strong { font-size: 18px; letter-spacing: -.02em; }
-.metrics-strip span { color: #8fa4a9; font-size: 11px; }
-.metrics-strip.empty li { min-width: 0; padding: 0; border: 0; background: none; color: #8fa4a9; font-size: 13px; }
-.page-link { color: #9ff0dc; text-decoration: none; }
-.page-link:hover { text-decoration: underline; }
-.developer { margin-top: 18px; padding: 16px 20px; border: 1px dashed #4f7f76; border-radius: 14px; background: #0f1d22; }
-.developer summary { cursor: pointer; color: #9ff0dc; font-size: 12px; font-weight: 800; letter-spacing: .14em; text-transform: uppercase; }
-.developer label { display: block; margin-top: 14px; color: #c7d7d7; font-size: 12px; font-weight: 650; }
-.developer label span { color: #80989c; font-weight: 400; }
-.developer .quiet { margin-top: 14px; }
-.developer-links { margin: 14px 0 0; color: #80989c; font-size: 12px; }
-.developer-links a { color: #9ff0dc; }
-.developer input[type=file] { padding: 8px 10px; color: #c7d7d7; }
-.developer input[type=file]::file-selector-button { margin-right: 10px; padding: 6px 10px; border: 1px solid #44726d; border-radius: 6px; background: #1b3939; color: #d9eee9; font: inherit; font-size: 12px; cursor: pointer; }
-#pack-result.failed { color: #ffd1bd; }
-@media (max-width: 760px) { .console-head { grid-template-columns: minmax(0, 1fr); align-items: start; padding: 28px 0 18px; } .console-head h1 { font-size: 30px; } }
+.metrics-strip li { display: grid; gap: 2px; min-width: 130px; padding: 10px 14px; border: 2px solid var(--rule); border-radius: var(--radius-label); background: var(--surface); }
+.metrics-strip strong { font-size: 20px; font-variant-numeric: tabular-nums; }
+.metrics-strip span { color: var(--ink-3); font-size: 14px; }
+.metrics-strip.empty li { min-width: 0; padding: 0; border: 0; background: none; color: var(--ink-3); font-size: 14px; }
+.developer { margin-top: 18px; padding: 16px 20px; border: 2px dashed var(--hairline); border-radius: var(--radius-label); background: var(--surface); }
+.developer summary { min-height: 32px; color: var(--ink-2); font-size: 12px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; cursor: pointer; }
+.developer label { display: block; margin-top: 14px; color: var(--ink-2); font-size: 14px; font-weight: 700; }
+.developer label span { color: var(--ink-3); font-weight: 400; }
+.developer .quiet { margin-top: 12px; }
+.developer-links { margin: 14px 0 0; color: var(--ink-3); font-size: 14px; }
+.developer-links a { color: var(--shell); font-weight: 700; }
+.developer input[type=file] { padding: 8px 10px; }
+.developer input[type=file]::file-selector-button { margin-right: 10px; padding: 6px 10px; border: 2px solid var(--rule); border-radius: var(--radius-control); background: var(--surface); color: var(--ink); font: inherit; font-size: 14px; font-weight: 700; cursor: pointer; }
+#pack-result.failed { color: var(--late); }
+@media (max-width: 760px) {
+  .console-head { grid-template-columns: minmax(0, 1fr); align-items: start; padding: 26px 0 18px; }
+}
