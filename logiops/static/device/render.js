@@ -235,6 +235,20 @@ export function drawBars(list, plan, { route, journey }, shipment, doc = globalT
   });
 }
 
+function incidentFigure(snapshot, plan, doc) {
+  const figure = el("p", "incident-figure", undefined, doc);
+  if (plan) {
+    const outcome = resultOutcome(plan);
+    figure.append(el("strong", "", outcome.value, doc), " ", el("span", "", outcome.label, doc), " ", el("small", "", outcome.note, doc));
+    return figure;
+  }
+  const shipment = snapshot.state.shipment;
+  const hours = Math.round((Date.parse(shipment.delayed_eta) - Date.parse(shipment.original_eta)) / 3600000);
+  figure.classList.add("late");
+  figure.append(el("strong", "", `+${hours} h`, doc), " ", el("span", "", "booked shipment delay", doc));
+  return figure;
+}
+
 export function renderIncident(section, { snapshot, plan, summary, route, journey }, doc = globalThis.document) {
   const facts = incidentFacts(snapshot);
   const head = el("div", "incident-head", undefined, doc);
@@ -248,7 +262,7 @@ export function renderIncident(section, { snapshot, plan, summary, route, journe
   const map = svg("svg", { id: "device-map", viewBox: `0 0 ${journey.WIDE.width} ${journey.WIDE.height}`, role: "img", "aria-labelledby": "device-map-title" }, undefined, doc);
   const caption = el("figcaption", "", undefined, doc);
   caption.id = "device-map-caption";
-  figure.append(map, caption);
+  figure.append(map, incidentFigure(snapshot, plan, doc), caption);
   drawMap(map, caption, snapshot, plan, { route, journey }, doc);
   const promise = el("div", "device-promise", undefined, doc);
   const bars = el("ol", "promise-list", undefined, doc);
