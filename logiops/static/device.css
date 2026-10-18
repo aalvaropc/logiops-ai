@@ -135,6 +135,8 @@ button:focus-visible, input:focus-visible, a:focus-visible, .conversation:focus-
 .promise .verdict { font-size: var(--type-meta); font-weight: 700; }
 .promise.on-time .verdict { color: var(--ok); }
 .promise.late .verdict { color: var(--late); }
+.promise.pending .verdict { color: var(--ink-2); font-weight: 400; }
+.label-split { display: grid; grid-template-columns: minmax(0, 1fr); }
 
 .plans-head { margin-bottom: 12px; }
 .plans-head h2 { font-size: var(--type-title); }
@@ -304,6 +306,11 @@ input::placeholder { color: var(--ink-3); }
   .device-elapsed { display: inline; }
   .sheet { padding: 16px; align-items: center; }
   .sheet-panel { max-height: 100%; border: 2px solid var(--rule); border-radius: var(--radius-label); }
+}
+@media (min-width: 900px) {
+  .confirm-card, .receipt-card, .alert-card, .result-card { max-width: none; }
+  .label-split { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 0 32px; align-items: start; }
+  .label-side > :first-child { margin-top: 4px; }
 }
 @media (min-width: 1024px) and (pointer: fine) {
   :root { --type-meta: 15px; --type-body: 16px; }
