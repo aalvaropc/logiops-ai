@@ -9,8 +9,8 @@
     --bg: var(--color-background-primary, #0D1118); --card: var(--color-background-secondary, #0D1118);
     --text: var(--color-text-primary, #F4F1E8); --muted: var(--color-text-secondary, #8A97AB);
     --line: var(--color-border-primary, #232A35); --rule: #3A4352; --accent: #F4F1E8; --accent-hover: #D8D3C6; --accent-ink: #07090D;
-    --button: #151B25; --button-hover: #1A212C; --late: #FF453A; --ok: #F4F1E8; --band-ink: #07090D;
-    --tag: #2A2110; --tag-ink: #FFB224; --preference: #FFB224; --pad: 16px;
+    --button-hover: #1A212C; --late: #FF453A; --ok: #F4F1E8;
+    --tag-ink: #FFB224; --preference: #FFB224; --pad: 16px;
     --inset-top: 0px; --inset-right: 0px; --inset-bottom: 0px; --inset-left: 0px;
     --type-tag: 12px; --type-meta: 14px; --type-body: 15px; --type-lead: clamp(17px, 1.5vw, 20px); --type-figure: clamp(28px, 2.6vw, 34px);
     color-scheme: dark; font-family: var(--font-sans, "Overpass", ui-sans-serif, system-ui, sans-serif); font-synthesis: none;
@@ -20,8 +20,8 @@
     --bg: var(--color-background-primary, #FFFFFF); --card: var(--color-background-secondary, #FFFFFF);
     --text: var(--color-text-primary, #111418); --muted: var(--color-text-secondary, #454C55);
     --line: var(--color-border-primary, #C9CED5); --rule: #111418; --accent: #0B4F9C; --accent-hover: #093F7D; --accent-ink: #FFFFFF;
-    --button: #FFFFFF; --button-hover: #F4F5F7; --late: #B8102A; --ok: #1D7A3C; --band-ink: #FFFFFF;
-    --tag: #FFF3D1; --tag-ink: #664400; --preference: #664400;
+    --button-hover: #F4F5F7; --late: #B8102A; --ok: #1D7A3C;
+    --tag-ink: #664400; --preference: #664400;
     color-scheme: light;
   }
   body { margin: 0; padding: var(--inset-top) var(--inset-right) var(--inset-bottom) var(--inset-left); background: var(--bg); font-size: var(--type-meta); line-height: 1.4; }
@@ -50,8 +50,7 @@
   .field-key .late::before { background: var(--muted); }
   .field-key .critical-late::before { box-sizing: border-box; border: 2px solid var(--late); background: transparent; }
   .plan.pick { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px 24px; align-items: start; padding: 16px var(--pad); border-bottom: 1px solid var(--line); background: var(--card); }
-  .band { grid-column: 1 / -1; display: flex; align-items: center; gap: 10px; margin: 0; font-size: var(--type-tag); font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
-  .band::before { content: ""; flex: 0 0 28px; height: 3px; border-radius: 2px; background: currentColor; }
+  .band { margin: 0; font-size: var(--type-body); font-weight: 700; line-height: 1.4; }
   .band.ok { color: var(--ok); }
   .band.late { color: var(--late); }
   .pick-name { font-size: var(--type-lead); line-height: 1.3; letter-spacing: -.01em; text-wrap: balance; }
@@ -62,8 +61,8 @@
   p.preference { margin: 0; padding: 12px var(--pad) 0; color: var(--preference); line-height: 1.5; }
   .outcomes { grid-column: 1 / -1; display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; font-size: var(--type-body); }
   .outcomes li { display: grid; grid-template-columns: 7em minmax(0, 1fr); gap: 12px; align-items: baseline; }
-  .outcomes .verdict { justify-self: start; padding: 2px 7px; border-radius: 4px; background: var(--ok); color: var(--band-ink); font-size: var(--type-tag); font-weight: 800; letter-spacing: .05em; text-transform: uppercase; white-space: nowrap; }
-  .outcomes .late .verdict { background: var(--late); }
+  .outcomes .verdict { justify-self: start; color: var(--ok); font-size: var(--type-tag); font-weight: 800; letter-spacing: .06em; text-transform: uppercase; white-space: nowrap; }
+  .outcomes .late .verdict { color: var(--late); text-decoration: underline dashed 2px; text-underline-offset: 4px; }
   .pick-text { display: grid; gap: 6px; min-width: 0; }
   .allocation { margin: 0; color: var(--muted); }
   .pick button { grid-column: 1 / -1; justify-self: start; border-color: var(--accent); background: var(--accent); color: var(--accent-ink); }
@@ -82,11 +81,11 @@
   button:focus-visible { outline: 3px solid var(--rule); outline-offset: 2px; }
   button.more { margin: 4px var(--pad) 0; }
   .diff { font-weight: 800; text-decoration: underline; text-decoration-color: var(--accent); text-decoration-thickness: 3px; text-underline-offset: 4px; text-decoration-skip-ink: none; }
-  .chip { display: inline-block; padding: 2px 7px; border-radius: 4px; background: var(--ok); color: var(--band-ink); font-size: var(--type-tag); font-weight: 800; letter-spacing: .05em; text-transform: uppercase; white-space: nowrap; }
-  .chip.late { background: var(--late); }
-  .tag { display: inline-block; margin-left: 8px; padding: 1px 7px; border: 1.5px solid transparent; border-radius: 4px; vertical-align: 2px; color: var(--tag-ink); background: var(--tag); font-size: var(--type-tag); font-weight: 800; letter-spacing: .04em; text-transform: uppercase; }
-  .tag.pick-tag { border-color: var(--accent); color: var(--accent); background: transparent; }
-  .tag.done-tag { border-color: var(--ok); color: var(--ok); background: transparent; }
+  .chip { display: inline-block; color: var(--ok); font-size: var(--type-tag); font-weight: 800; letter-spacing: .06em; text-transform: uppercase; white-space: nowrap; }
+  .chip.late { color: var(--late); text-decoration: underline dashed 2px; text-underline-offset: 4px; }
+  .tag { display: inline-block; margin-left: 10px; vertical-align: 2px; color: var(--tag-ink); font-size: var(--type-tag); font-weight: 800; letter-spacing: .06em; text-transform: uppercase; }
+  .tag.pick-tag { color: var(--accent); }
+  .tag.done-tag { color: var(--ok); }
   .footnote { margin: 0; padding: 12px var(--pad) 14px; color: var(--muted); font-size: var(--type-meta); }
   body.compact { --pad: 12px; --type-meta: 15px; --type-body: 16px; }
   body.compact .plan.pick { grid-template-columns: minmax(0, 1fr); gap: 10px; }
@@ -106,7 +105,6 @@
     .field .dot.on-time, .field .dot.late, .field .dot.chosen, .field .dot-label, .field .axis-label { fill: CanvasText; }
     .field .dot.critical-late { fill: Canvas; }
     .field .dot-glow { display: none; }
-    .band::before { forced-color-adjust: none; background: CanvasText; }
   }
 </style>
 </head>
@@ -297,7 +295,6 @@
     const band = critical.length
       ? critical.some((order) => order.delay_hours) ? ["late", "Leaves a critical order late"] : ["ok", "Critical order on time"]
       : late.length ? ["late", `${late.length} order${late.length === 1 ? "" : "s"} late`] : ["ok", "Every order on time"];
-    item.append(el("p", `band ${band[0]}`, band[1]));
     const heading = el("h2", "pick-name");
     const name = el("strong");
     name.append(...labelNodes(plan.label, labels));
@@ -306,7 +303,7 @@
     name.append(...tags.filter(Boolean).slice(0, 2));
     heading.append(name);
     const text = el("div", "pick-text");
-    text.append(heading, el("p", "allocation", summary(plan)));
+    text.append(heading, el("p", `band ${band[0]}`, band[1]), el("p", "allocation", summary(plan)));
     const figures = el("div", "figures");
     figures.append(el("span", "cost", `$${plan.incremental_cost_usd}`),
       el("span", "delay", plan.projected_customer_delay_hours ? `${plan.projected_customer_delay_hours} h delay` : "No delay"));
