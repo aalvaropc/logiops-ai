@@ -14,7 +14,7 @@ import {
   visibleVersion, visibleApproval, visiblePlans, latestAgentEvent, namedPlanKinds, plural,
   recommendedPlan as pickRecommended, planFromUtterance as pickFromUtterance, TIME_ZONE,
 } from "../app/selectors.js";
-import { homeHeading, HOME_LINE } from "../app/greeting.js";
+import { homeHeading } from "../app/greeting.js";
 import { checkBadge, checkNote, fallbackNote, traceSummary, executionSummary } from "../app/run-badges.js";
 import { renderMarkdown } from "../app/markdown-dom.js";
 import { sessionFigures, incidentTimes } from "../app/metrics.js";
@@ -26,6 +26,7 @@ import {
 
 const $ = (id) => document.getElementById(id);
 const route = window.LogiOpsRoute;
+const journey = window.LogiOpsJourney;
 const markdown = window.LogiOpsMarkdown;
 const intent = window.LogiOpsIntent;
 const CLOCK = new Intl.DateTimeFormat("en-US", { timeZone: TIME_ZONE, weekday: "short", hour: "2-digit", minute: "2-digit", hourCycle: "h23", timeZoneName: "short" });
@@ -359,11 +360,11 @@ function paintSurface(shown = surfaces.current()) {
   const snapshot = state.snapshot;
   if (shown.name === "home") {
     renderHome(section, {
-      heading: homeHeading(state.inbox), greeting: HOME_LINE, lead: shown.payload.lead, session: state.metrics ? sessionFigures(state.metrics.session) : null,
+      heading: homeHeading(state.inbox), inbox: state.inbox, journey, session: state.metrics ? sessionFigures(state.metrics.session) : null,
     });
     updateQueue(homeCards(state.inbox, livePick(state.inbox, shown.payload.pick ?? state.briefingPick)));
   } else if (shown.name === "incident" && snapshot) {
-    renderIncident(section, { snapshot, plan: currentPlan(), summary: summaryOf(), route });
+    renderIncident(section, { snapshot, plan: currentPlan(), summary: summaryOf(), route, journey });
   } else if (shown.name === "plans") {
     renderPlansSurface();
   } else if (shown.name === "confirm") {
@@ -587,7 +588,6 @@ async function recallMemory() {
   state.memoryIncident = recalled.last_incident || null;
   if (recalled.welcome && !state.conversation.some((turn) => turn.role === "user")) {
     say("assistant", recalled.welcome, "welcome back · from memory", recalled.welcome);
-    if (surfaces.current().name === "home") showSurface("home", { lead: recalled.welcome });
   }
 }
 

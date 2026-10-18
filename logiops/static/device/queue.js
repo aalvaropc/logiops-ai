@@ -1,4 +1,3 @@
-import { formatDate } from "../app/selectors.js";
 import { cardTags } from "./surfaces.js";
 
 export function createQueue({ root, document: doc = globalThis.document, onOpen, labelledBy = null }) {
@@ -24,9 +23,7 @@ export function createQueue({ root, document: doc = globalThis.document, onOpen,
       button.dataset.incident = card.incident_id;
       const top = tag("incident-top", "");
       top.append(tag("incident-id", card.incident_id), ...cardTags(card).map(([className, text]) => tag(className, text)));
-      const due = doc.createElement("small");
-      due.textContent = `${card.kind_label} · ${card.route} · ${card.units} units · due ${formatDate(card.due_eta)}`;
-      button.append(top, tag("incident-text", card.title), due);
+      button.append(top, tag("incident-text", card.title));
       button.addEventListener("click", () => onOpen(card.incident_id));
       item.append(button);
       list.append(item);

@@ -415,9 +415,9 @@ def test_the_device_page_is_the_full_screen_alexa_experience():
                    'id="mcp-app-slot"', 'id="console-link" href="/console"', 'id="more"', 'role="dialog" aria-modal="true"'):
         assert marker in html, marker
     assert "SHIP-4" not in html and "ui://" not in html and "Operator view" not in html and '<header class="device-bar" role="banner">' in html
-    order = [html.index(f"/assets/{name}") for name in ("markdown.js", "intent.js", "route.js", "device/main.js")]
+    order = [html.index(f"/assets/{name}") for name in ("markdown.js", "intent.js", "route.js", "journey.js", "device/main.js")]
     assert order == sorted(order)
-    assert "createElementNS(SVG" in render and 'viewBox: `0 0 ${route.VIEW.width} ${route.VIEW.height}`, role: "img"' in render
+    assert "createElementNS(SVG" in render and 'viewBox: `0 0 ${journey.WIDE.width} ${journey.WIDE.height}`, role: "img"' in render
     for hook in ('device("voice", "request")', 'device("voice", "error")', 'device("voice", "listen-start")',
                  'device("voice", "listen-end")', 'device("reply", text, spoken, speaking)', 'device("heard", text)',
                  'onSurface: (name, payload) => showSurface(name, payload)', 'onReadback: (pending, plan) => showSurface("confirm"',
