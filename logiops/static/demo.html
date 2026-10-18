@@ -25,7 +25,7 @@
           <span id="device-clock" class="device-clock">--:--</span>
         </div>
       </header>
-      <main id="surface" class="surface">
+      <main id="surface" class="surface" tabindex="0">
         <div id="message" class="message" role="status" aria-live="polite"></div>
         <section data-surface="home" class="card home" aria-label="Home">
           <div id="inbox"></div>
@@ -33,12 +33,10 @@
         <section data-surface="incident" class="card incident" aria-label="Incident" hidden></section>
         <section data-surface="plans" class="card plans-card" aria-label="Resolution options" hidden>
           <div class="plans-head">
-            <p class="label">Resolution options · only you approve</p>
             <h2 id="plans-title">Plans</h2>
-            <p id="plans-state" class="sub"></p>
+            <p id="plans-state" class="sub">Only you approve. Selecting a plan does not approve it.</p>
           </div>
           <div id="mcp-app" class="mcp-app" hidden>
-            <div class="mcp-app-head"><span class="mcp-app-label">Interactive card <span id="mcp-app-status"></span></span><button id="mcp-app-theme" type="button" class="secondary mcp-app-theme" aria-pressed="false">Light card</button></div>
             <div id="mcp-app-slot"></div>
           </div>
           <div id="plans" class="plans"></div>
@@ -71,6 +69,7 @@
       <div class="sheet-head">
         <h2 id="sheet-title">Conversation</h2>
         <label id="speak-toggle" class="speak-toggle" hidden><input id="speak-replies" type="checkbox"> Read replies aloud<span id="speak-engine"></span></label>
+        <button id="mcp-app-theme" type="button" class="secondary mcp-app-theme" aria-pressed="false">Light plans card</button>
         <button id="sheet-close" type="button" class="secondary">Close</button>
       </div>
       <ol id="conversation" class="conversation" aria-label="Conversation" tabindex="0"></ol>

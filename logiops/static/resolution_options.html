@@ -7,48 +7,65 @@
   :root {
     --bg: var(--color-background-primary, #071318); --card: var(--color-background-secondary, #0b1f27);
     --text: var(--color-text-primary, #e6f6fb); --muted: var(--color-text-secondary, #9fc3cc);
-    --line: var(--color-border-primary, #1d4552); --accent: #1fc8ff; --accent-ink: #071318; --glow: rgba(31, 200, 255, .18);
-    --button: #12313b; --button-line: #2b6c80; --button-hover: #1d4552; --order: #b9d4da; --late: #ffb8b0;
-    --tag: #4a3a1c; --tag-ink: #ffe0b3; --preference: #f0d9a6;
+    --line: var(--color-border-primary, #1d4552); --accent: #1fc8ff; --accent-hover: #74dcff; --accent-ink: #071318;
+    --button: #12313b; --button-line: #2b6c80; --button-hover: #1d4552; --late: #ffb8b0; --ok: #8fe8c9;
+    --tag: #4a3a1c; --tag-ink: #ffe0b3; --preference: #f0d9a6; --pad: 16px;
     --inset-top: 0px; --inset-right: 0px; --inset-bottom: 0px; --inset-left: 0px;
     color-scheme: dark; font-family: var(--font-sans, Inter, ui-sans-serif, system-ui, sans-serif); color: var(--text); background: var(--bg);
   }
   :root[data-theme="light"] {
     --bg: var(--color-background-primary, #f6fafb); --card: var(--color-background-secondary, #ffffff);
     --text: var(--color-text-primary, #0b2730); --muted: var(--color-text-secondary, #4a6670);
-    --line: var(--color-border-primary, #c5d9de); --accent: #0a6f8f; --accent-ink: #ffffff; --glow: rgba(10, 111, 143, .15);
-    --button: #e8f2f5; --button-line: #8fb4bf; --button-hover: #d5e7ec; --order: #33515a; --late: #a3271c;
+    --line: var(--color-border-primary, #c5d9de); --accent: #0a6f8f; --accent-hover: #075a75; --accent-ink: #ffffff;
+    --button: #e8f2f5; --button-line: #8fb4bf; --button-hover: #d5e7ec; --late: #a3271c; --ok: #1d6b52;
     --tag: #fbe7c2; --tag-ink: #5c3d00; --preference: #6b4a00;
     color-scheme: light;
   }
-  body {
-    margin: 0;
-    padding: calc(14px + var(--inset-top)) calc(14px + var(--inset-right)) calc(14px + var(--inset-bottom)) calc(14px + var(--inset-left));
-    background: var(--bg);
-  }
-  h1 { margin: 0 0 4px; font-size: 15px; letter-spacing: -.01em; }
-  p.note { margin: 0 0 12px; color: var(--muted); font-size: 12px; }
-  .plans { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
-  .plan { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px 14px; align-items: center; padding: 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--card); }
-  .plan.pick { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent) inset, 0 0 16px var(--glow); }
-  .plan strong { font-size: 13px; }
-  .plan small { display: block; margin-top: 3px; color: var(--muted); font-size: 11px; }
-  .figures { text-align: right; font-size: 13px; font-weight: 700; white-space: nowrap; }
-  .figures small { font-weight: 400; }
-  button { grid-column: 1 / -1; justify-self: start; padding: 6px 12px; border: 1px solid var(--button-line); border-radius: 99px; background: var(--button); color: var(--text); font: inherit; font-size: 12px; font-weight: 700; cursor: pointer; }
+  body { margin: 0; padding: var(--inset-top) var(--inset-right) var(--inset-bottom) var(--inset-left); background: var(--bg); font-size: 14px; line-height: 1.4; }
+  h2 { margin: 0; }
+  .visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  .waiting { padding: var(--pad); color: var(--muted); }
+  .plan.pick { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px 24px; align-items: start; padding: 16px var(--pad); border-bottom: 1px solid var(--line); background: var(--card); }
+  .pick-name { font-size: 18px; line-height: 1.3; letter-spacing: -.01em; text-wrap: balance; }
+  .pick .figures { text-align: right; white-space: nowrap; }
+  .cost { display: block; font-size: 30px; font-weight: 800; line-height: 1; letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
+  .delay { display: block; margin-top: 6px; color: var(--muted); }
+  .why { grid-column: 1 / -1; margin: 0; color: var(--preference); line-height: 1.5; }
+  p.preference { margin: 0; padding: 12px var(--pad) 0; color: var(--preference); line-height: 1.5; }
+  .outcomes { grid-column: 1 / -1; display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; font-size: 15px; }
+  .outcomes li { display: grid; grid-template-columns: 7em minmax(0, 1fr); gap: 12px; align-items: baseline; }
+  .outcomes .verdict { color: var(--ok); font-weight: 700; font-variant-numeric: tabular-nums; }
+  .outcomes .late .verdict { color: var(--late); }
+  .pick-text { display: grid; gap: 6px; min-width: 0; }
+  .allocation { margin: 0; color: var(--muted); }
+  .pick button { grid-column: 1 / -1; justify-self: start; border-color: var(--accent); background: var(--accent); color: var(--accent-ink); }
+  .pick button:hover { background: var(--accent-hover); }
+  .others { padding: 14px var(--pad) 2px; color: var(--muted); font-size: 14px; font-weight: 600; }
+  .plans { margin: 0; padding: 0; list-style: none; }
+  .plans .plan { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 6px 16px; align-items: center; padding: 10px var(--pad); }
+  .plans .plan + .plan { border-top: 1px solid var(--line); }
+  .plan-name { font-size: 15px; }
+  .orders { display: block; margin-top: 2px; color: var(--muted); }
+  .orders .late { color: var(--late); }
+  .plans .figures { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+  .plans .figures strong { display: block; font-size: 16px; }
+  .plans .figures small { display: block; color: var(--muted); font-size: 14px; }
+  button { min-height: 36px; padding: 6px 14px; border: 1px solid var(--button-line); border-radius: 99px; background: var(--button); color: var(--text); font: inherit; font-size: 14px; font-weight: 700; cursor: pointer; }
   button:hover { background: var(--button-hover); }
   button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-  button.more { margin-top: 8px; }
-  .waiting { color: var(--muted); font-size: 13px; }
-  .orders span { display: block; margin-top: 2px; color: var(--order); font-size: 11px; }
-  .orders .late { color: var(--late); }
-  .tag { display: inline-block; margin-left: 6px; padding: 2px 6px; border-radius: 99px; color: var(--tag-ink); background: var(--tag); font-size: 9px; font-weight: 800; text-transform: uppercase; }
-  .tag.pick-tag { color: var(--accent-ink); background: var(--accent); }
-  p.preference { margin: 0 0 10px; color: var(--preference); font-size: 12px; line-height: 1.5; }
-  body.compact { padding: calc(10px + var(--inset-top)) calc(10px + var(--inset-right)) calc(10px + var(--inset-bottom)) calc(10px + var(--inset-left)); }
-  body.compact .plan { grid-template-columns: minmax(0, 1fr); }
-  body.compact .figures { text-align: left; }
-  body.compact .figures small { display: inline; margin-left: 6px; }
+  button.more { margin: 4px var(--pad) 0; }
+  .tag { display: inline-block; margin-left: 8px; padding: 1px 7px; border: 1px solid transparent; border-radius: 99px; vertical-align: 2px; color: var(--tag-ink); background: var(--tag); font-size: 12px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; }
+  .tag.pick-tag { border-color: var(--accent); color: var(--accent); background: transparent; }
+  .footnote { margin: 0; padding: 12px var(--pad) 14px; color: var(--muted); font-size: 13px; }
+  body.compact { --pad: 12px; }
+  body.compact .plan.pick { grid-template-columns: minmax(0, 1fr); gap: 10px; }
+  body.compact .pick .figures { text-align: left; }
+  body.compact .cost { display: inline; font-size: 26px; }
+  body.compact .delay { display: inline; margin: 0 0 0 8px; }
+  body.compact .outcomes li { grid-template-columns: 6em minmax(0, 1fr); }
+  body.compact .plans .plan { grid-template-columns: minmax(0, 1fr) auto; }
+  body.compact .plans .plan button { grid-column: 1 / -1; justify-self: start; }
+  body.compact button { min-height: 40px; }
 </style>
 </head>
 <body>
@@ -105,39 +122,75 @@
     document.body.classList.toggle("compact", context.deviceClass === "compact" || (Number.isFinite(width) && width < 480));
   }
 
-  function pageOf(plans, pick) {
-    if (expanded || plans.length <= PAGE) return { shown: plans, hidden: 0 };
-    const shown = plans.slice(0, PAGE);
-    const picked = plans.find((plan) => plan.id === pick);
-    if (picked && !shown.includes(picked)) shown[PAGE - 1] = picked;
-    return { shown, hidden: plans.length - PAGE };
+  function pageOf(plans, limit) {
+    if (expanded || plans.length <= limit) return { shown: plans, hidden: 0 };
+    return { shown: plans.slice(0, limit), hidden: plans.length - limit };
   }
 
-  function card(plan, pick, hinted, preference) {
-    const item = el("li", `plan${plan.id === pick ? " pick" : ""}`);
-    const text = el("div");
-    const name = el("strong", "", plan.label);
-    if (plan.id === pick) name.append(el("span", "tag pick-tag", hinted === pick ? "Agent pick" : "Default pick"));
-    if (preference && plan.id === preference.preferred_plan_id) name.append(el("span", "tag", "Your preference"));
-    text.append(name, el("small", "", summary(plan)));
-    if ((plan.orders || []).length > 1) {
-      const orders = el("div", "orders");
-      for (const order of plan.orders) {
-        orders.append(el("span", order.delay_hours ? "late" : "",
-          `${order.order_id}${order.priority === "critical" ? " (critical)" : ""}: ${order.delay_hours ? `+${order.delay_hours} h` : "on time"}`));
-      }
-      text.append(orders);
-    }
-    const figures = el("div", "figures", `$${plan.incremental_cost_usd}`);
-    figures.append(el("small", "", `${plan.projected_customer_delay_hours} h delay`));
-    const select = el("button", "", "Select for approval");
+  const verdict = (order) => (order.delay_hours ? `+${order.delay_hours} h` : "on time");
+
+  function namer(orders) {
+    const priorities = orders.map((order) => order.priority);
+    if (new Set(priorities).size < priorities.length) return (order) => order.customer;
+    return (order) => (order.priority === "critical" ? "Critical" : "Standard");
+  }
+
+  function selectButton(plan, text) {
+    const select = el("button", "", text);
     select.type = "button";
+    select.setAttribute("aria-label", `Select “${plan.label}” for approval`);
     select.addEventListener("click", () => {
       request("ui/message", { role: "user", content: { type: "text", text: `Select plan ${plan.id}` } })
         .then(() => { select.textContent = "Selected — your host asks you to confirm"; })
-        .catch(() => { select.textContent = "The host did not accept the selection"; });
+        .catch(() => { select.textContent = "The host did not accept the selection"; })
+        .finally(() => select.removeAttribute("aria-label"));
     });
-    item.append(text, figures, select);
+    return select;
+  }
+
+  function pickCard(plan, hinted, preference) {
+    const item = el("section", "plan pick");
+    const heading = el("h2", "pick-name");
+    const name = el("strong", "", plan.label);
+    name.append(el("span", "tag pick-tag", hinted === plan.id ? "Agent pick" : "Default pick"));
+    if (plan.id === preference?.preferred_plan_id) name.append(el("span", "tag", "Your preference"));
+    heading.append(name);
+    const text = el("div", "pick-text");
+    text.append(heading, el("p", "allocation", summary(plan)));
+    const figures = el("div", "figures");
+    figures.append(el("span", "cost", `$${plan.incremental_cost_usd}`),
+      el("span", "delay", plan.projected_customer_delay_hours ? `${plan.projected_customer_delay_hours} h delay` : "No delay"));
+    item.append(text, figures);
+    if (preference?.changes_pick && plan.id === preference.preferred_plan_id) item.append(el("p", "why", `Your preference: ${preference.reason}`));
+    const outcomes = el("ul", "outcomes");
+    outcomes.setAttribute("aria-label", "Each order's projected arrival against its promise");
+    for (const order of plan.orders || []) {
+      const row = el("li", order.delay_hours ? "late" : "on-time");
+      row.append(el("span", "verdict", order.delay_hours ? `+${order.delay_hours} h late` : "On time"),
+        el("span", "who", `${order.customer} · ${order.quantity} units${order.priority === "critical" ? " · critical" : ""}`));
+      outcomes.append(row);
+    }
+    item.append(outcomes, selectButton(plan, "Select for approval"));
+    return item;
+  }
+
+  function planRow(plan, preference, nameOf) {
+    const item = el("li", "plan");
+    const text = el("div");
+    const name = el("strong", "plan-name", plan.label);
+    if (plan.id === preference?.preferred_plan_id) name.append(el("span", "tag", "Your preference"));
+    text.append(name);
+    if ((plan.orders || []).length > 1) {
+      const orders = el("span", "orders");
+      plan.orders.forEach((order, index) => {
+        if (index) orders.append(" · ");
+        orders.append(el("span", order.delay_hours ? "late" : "", `${nameOf(order)} ${verdict(order)}`));
+      });
+      text.append(orders);
+    }
+    const figures = el("div", "figures");
+    figures.append(el("strong", "", `$${plan.incremental_cost_usd}`), el("small", "", `${plan.projected_customer_delay_hours} h delay`));
+    item.append(text, figures, selectButton(plan, "Select"));
     return item;
   }
 
@@ -146,20 +199,26 @@
     const plans = Array.isArray(result?.structuredContent?.plans) ? result.structuredContent.plans : [];
     const root = document.getElementById("root");
     root.className = "";
-    root.replaceChildren();
-    root.append(el("h1", "", incident ? `Resolution options · ${incident}` : "Resolution options"),
-      el("p", "note", "Projections from synthetic carrier quotes. Selecting a plan does not approve it."));
+    root.replaceChildren(el("h1", "visually-hidden", incident ? `Resolution options · ${incident}` : "Resolution options"));
     const preference = result?.structuredContent?.operator_preferences;
-    if (preference?.changes_pick) root.append(el("p", "preference", `Your preference: ${preference.reason}`));
     const hinted = result?._meta?.["logiops/recommended_plan_id"];
     const pick = plans.some((plan) => plan.id === hinted) ? hinted
       : plans.some((plan) => plan.id === preference?.preferred_plan_id) ? preference.preferred_plan_id
       : plans.length ? [...plans].sort(byRank)[0].id : null;
-    const { shown, hidden } = pageOf(plans, pick);
-    const list = el("ul", "plans");
-    list.setAttribute("aria-label", `${plans.length} calculated plan${plans.length === 1 ? "" : "s"}`);
-    for (const plan of shown) list.append(card(plan, pick, hinted, preference));
-    root.append(list);
+    const picked = plans.find((plan) => plan.id === pick);
+    if (preference?.changes_pick && picked?.id !== preference.preferred_plan_id) root.append(el("p", "preference", `Your preference: ${preference.reason}`));
+    if (picked) root.append(pickCard(picked, hinted, preference));
+    const others = plans.filter((plan) => plan !== picked);
+    const { shown, hidden } = pageOf(others, picked ? PAGE - 1 : PAGE);
+    if (shown.length) {
+      const title = el("h2", "others", picked ? `Other plan${others.length === 1 ? "" : "s"}` : `${plans.length} calculated plans`);
+      title.id = "others-title";
+      const list = el("ul", "plans");
+      list.setAttribute("aria-labelledby", "others-title");
+      const nameOf = namer(plans[0]?.orders || []);
+      for (const plan of shown) list.append(planRow(plan, preference, nameOf));
+      root.append(title, list);
+    }
     if (hidden) {
       const more = el("button", "more", `See ${hidden} more plan${hidden === 1 ? "" : "s"}`);
       more.type = "button";
@@ -169,6 +228,8 @@
       });
       root.append(more);
     }
+    if (!plans.length) root.append(el("p", "waiting", "No feasible plan for this incident's current data."));
+    root.append(el("p", "footnote", `${incident ? `${incident} · ` : ""}Projections from synthetic carrier quotes. Selecting a plan does not approve it.`));
   }
 
   window.addEventListener("message", (event) => {

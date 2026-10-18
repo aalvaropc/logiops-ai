@@ -61,10 +61,10 @@ def test_a_scenario_pack_imported_from_the_drawer_reaches_the_device(page, fresh
     expect(incident.locator(".incident-id")).to_have_text("SHIP-470")
     expect(incident.locator("#device-map")).to_be_visible()
     expect(incident.locator("#device-map-caption")).to_contain_text("Investigate to see a plan's legs")
-    from tests.browser.test_device import say_on_device
+    from tests.browser.test_device import card_lead, say_on_device
 
     say_on_device(page, "What's happening with SHIP-470, and which plan should we choose?")
     expect(page.locator('[data-surface="plans"]')).to_be_visible()
-    expect(page.locator("#plans-state")).to_contain_text("Agent pick")
+    assert card_lead(page).startswith("pick: ")
     assert_accessible(page)
     assert page_errors == []

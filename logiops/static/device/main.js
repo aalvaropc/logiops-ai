@@ -233,7 +233,6 @@ async function showMcpApp(run) {
   });
   if (!resource) return;
   state.app = wanted;
-  $("mcp-app-status").textContent = resource.invoked || "";
   $("mcp-app").classList.toggle("borderless", !resource.prefersBorder);
   $("mcp-app").hidden = false;
   $("plans").hidden = true;
@@ -249,7 +248,6 @@ function showMcpAppNote(text) {
   mcpHost.hide("note");
   const note = el("p", "mcp-app-note", text);
   $("mcp-app-slot").replaceChildren(note);
-  $("mcp-app-status").textContent = "";
   $("mcp-app").hidden = false;
   $("plans").hidden = false;
 }
@@ -319,9 +317,9 @@ function renderPlansSurface() {
   else if (!plans.some((plan) => plan.id === state.selectedPlanId)) state.selectedPlanId = recommended?.id || plans[0]?.id || null;
   $("plans-title").textContent = plans.length ? `${plans.length} plans for ${snapshot.state.incident_id}` : `No plans yet for ${snapshot.state.incident_id}`;
   $("plans-state").textContent = executed ? "Executed and verified" : approval ? `Approved by ${approval.approved_by} · say “execute it”`
-    : recommended ? `Agent pick: ${recommended.label}` : "Ask what's happening to calculate them";
+    : plans.length ? "Only you approve. Selecting a plan does not approve it." : "Ask what's happening to calculate them";
   renderPlanList($("plans"), {
-    plans, selectedId: state.selectedPlanId, recommendedId: recommended?.id, preferredId: snapshot.preference?.preferred_plan_id,
+    plans: recommended ? [recommended, ...plans.filter((plan) => plan.id !== recommended.id)] : plans, selectedId: state.selectedPlanId, recommendedId: recommended?.id, preferredId: snapshot.preference?.preferred_plan_id,
     locked: Boolean(approval || executed), onSelect: (plan) => selectPlan(plan),
   });
 }

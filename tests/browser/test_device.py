@@ -15,14 +15,17 @@ def say_on_device(page, text: str) -> str:
     return page.locator("#device-spoken").inner_text()
 
 
-def card_pick(page) -> str:
-    """The plan the MCP App highlights, read from the sandboxed inner frame once it renders."""
+def card_lead(page) -> str:
+    """The first plan the MCP App shows and whether it is the pick, read from the sandboxed inner frame once it renders."""
     for _ in range(50):
         outer = next((frame for frame in page.frames if "/mcp-app/sandbox.html" in frame.url), None)
         inner = outer.child_frames[0] if outer and outer.child_frames else None
         if inner:
             try:
-                text = inner.evaluate("""[...document.querySelectorAll(".plan.pick strong")].map((n) => n.textContent).join(" | ")""")
+                text = inner.evaluate("""(() => {
+                    const first = document.querySelector("#root .plan");
+                    return first ? `${first.classList.contains("pick") ? "pick" : "other"}: ${first.querySelector("strong").textContent}` : "";
+                })()""")
             except Exception:
                 text = ""
             if text:
@@ -56,8 +59,8 @@ def test_device_walkthrough(page, replay_server, page_errors, reset_demo, width)
     plans = page.locator('[data-surface="plans"]')
     expect(plans).to_be_visible()
     expect(page.locator("#mcp-app")).to_be_visible()
-    assert card_pick(page).startswith("Fly the hospital order")
-    expect(page.locator("#plans-state")).to_contain_text("Agent pick: Fly the hospital order")
+    assert card_lead(page).startswith("pick: Fly the hospital order; rebook the store order on ground")
+    expect(page.locator("#plans-state")).to_contain_text("Only you approve")
 
     say_on_device(page, "approve the recommended plan")
     confirm = page.locator('[data-surface="confirm"]')
