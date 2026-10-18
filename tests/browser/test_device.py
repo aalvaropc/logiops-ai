@@ -297,6 +297,27 @@ def test_the_echo_show_reads_each_decision_without_scrolling(page, replay_server
     assert page_errors == []
 
 
+@pytest.mark.parametrize("size", ((320, 700), (360, 740)))
+def test_the_yes_of_a_confirmation_is_in_reach_on_small_phones(page, replay_server, page_errors, reset_demo, size):
+    page.set_viewport_size({"width": size[0], "height": size[1]})
+    page.goto(f"{replay_server}/demo#SHIP-433")
+    expect(page.locator("#connection")).to_have_text("Connected")
+    say_on_device(page, "What's happening with SHIP-433, and which plan should we choose?")
+    say_on_device(page, "approve the recommended plan")
+    expect(page.locator('[data-surface="confirm"]')).to_be_visible()
+    inside = page.evaluate("""() => {
+        const surface = document.querySelector("#surface").getBoundingClientRect();
+        return ["#confirm-yes", "#confirm-no"].map((id) => {
+            const box = document.querySelector(id).getBoundingClientRect();
+            return box.top >= surface.top && box.bottom <= surface.bottom + 1;
+        });
+    }""")
+    assert inside == [True, True], inside
+    page.click("#confirm-yes")
+    expect(page.locator("#plans-state")).to_contain_text("Approved by you")
+    assert page_errors == []
+
+
 def test_the_device_fits_a_small_phone(page, replay_server, page_errors, reset_demo):
     page.set_viewport_size({"width": 360, "height": 740})
     page.goto(f"{replay_server}/demo")
