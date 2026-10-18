@@ -138,6 +138,10 @@ components:
     textColor: "{colors.shell-ink}"
     rounded: "{rounded.round}"
     size: "48px"
+  orb-toggle:
+    backgroundColor: "{colors.surface}"
+    rounded: "{rounded.round}"
+    size: "44px"
   chip:
     backgroundColor: "{colors.surface}"
     textColor: "{colors.ink}"
@@ -265,19 +269,19 @@ The world explicitly rejects the dark operations dashboard with a neon accent, a
 A cool, clinical neutral palette with one label-blue shell and three state colours that never decorate.
 
 ### Primary
-- **Label Blue** (shell): the device's shell bar, primary buttons (including "Execute approved plan"), the mic, the outline and text of action chips, selected plans, the start-here tag and agent-pick badge, the look-alike underline, links and the theme colour. It means "the product" or "act here", never a state.
+- **Label Blue** (shell): the device's shell bar, primary buttons (including "Execute approved plan"), the mic, the outline and text of action chips, the orb's core while replies are read aloud, selected plans, the start-here tag and agent-pick badge, the look-alike underline, links and the theme colour. It means "the product" or "act here", never a state.
 - **Deep Label Blue** (shell-deep): hover for primary buttons only, on the device, the console and the MCP App card's pick button.
 - **Blue Wash** (shell-tint): hover on incident cards and chips, the user's conversation turns, the current-plan line, the console boundary note.
 
 ### Secondary (state)
-- **Dispensed Green** (ok) with **Green Wash** (ok-tint): on time, executed, verified, done lifecycle steps, the outlined Executed tag, success messages.
-- **Alert Red** (late) with **Red Wash** (late-tint): late, critical units at risk, approval invalidated, errors, the active mic.
+- **Dispensed Green** (ok) with **Green Wash** (ok-tint): on time, executed, verified, done lifecycle steps, the outlined Executed tag, success messages, the alert's "Now" line when the new pick is on time.
+- **Alert Red** (late) with **Red Wash** (late-tint): late, critical units at risk, approval invalidated, errors, the active mic, the alert's "Now" line when the new pick is late.
 - **Caution Amber** (warn), **Amber Ink** (warn-ink) and **Amber Wash** (warn-tint): attention. Solid amber always carries ink text (the alerts bell, the critical tag, the warn band, the connecting dot); amber washes always carry amber ink (the delayed-ETA fact, preference notes, the MCP App fallback note).
 - **Signal Green** (signal-ok) and **Signal Rose** (signal-late): the connected and failed states of the 9px connection dot on the shell bar, light enough to read on Label Blue. They exist only on the shell; everywhere on label stock the full-strength green and red carry state.
 
 ### Neutral
 - **Ink** (ink): text, rules, the current lifecycle step, the send button, focus rings.
-- **Graphite** (ink-2) and **Slate** (ink-3): secondary and tertiary text, labels inside facts, muted metadata.
+- **Graphite** (ink-2) and **Slate** (ink-3): secondary and tertiary text, labels inside facts, muted metadata; Graphite carries the alert's "Was" line and Slate the orb's core while read-aloud is off.
 - **Hairline** (hairline): 1 px internal dividers between rows and facts, transcript turns, trace steps, the idle orb ring.
 - **Label Stock** (surface): every card, panel, control, the talk dock and the conversation sheet.
 - **Sunken** (sunken): secondary button hover, promise-bar track, code and table headers.
@@ -305,7 +309,7 @@ A cool, clinical neutral palette with one label-blue shell and three state colou
 - **Figure** (800, clamp(28px, 2.6vw, 34px), 1.05, tabular): the one dominant number on a confirmation, receipt or result card. The MCP App card's pick cost uses the same role, with tabular slashed-zero numerals.
 - **Title** (700, clamp(22px, 2.4vw, 30px), 1.15, -0.01em): the card heading on the device, the home heading ("4 open incidents") and the plans heading.
 - **Stat** (700, 20px, tabular): secondary numbers that sit below the one Figure: incident ids in queue cards (800), fact values, the session strip, plan figures, the result card's four execution numbers, and the conversation sheet heading.
-- **Spoken** (700, clamp(18px, 1.6vw, 22px), 1.3): the assistant's spoken line in the dock, clamped to two lines with a More button.
+- **Spoken** (700, clamp(18px, 1.6vw, 22px), 1.3): the assistant's spoken line in the dock, clamped to two lines with a More button; tapping the line expands it in place up to 38vh, and the next reply collapses it.
 - **Lead** (600, clamp(17px, 1.5vw, 20px), 1.4): the sentence under a card title, queue-card text from 768px, the result figure's label.
 - **Body** (400, 16px, 1.5): incident text, rows, plan names, transcript, the home greeting.
 - **Meta** (400, 15px): secondary lines, fact labels, legends, chips, trace summaries.
@@ -322,11 +326,11 @@ The console uses the same family and weights at its own fixed desk sizes, record
 
 ## Layout
 
-Mobile first. On a phone the device fills the viewport as a column: a 52px shell bar (safe-area aware), a four-step lifecycle strip with a 10px top margin, a scrolling card surface, and a fixed talk dock with a 2px ink top rule holding the heard line, the two-line spoken line, one horizontally scrolling row of chips, and the orb, 48px mic, field and send. Side gutters are 16px plus safe-area insets. One card shows at a time. Under 400px the lifecycle cells size to their content instead of splitting the width equally.
+Mobile first. On a phone the device fills the viewport as a column: a 52px shell bar (safe-area aware), a four-step lifecycle strip with a 10px top margin, a scrolling card surface, and a fixed talk dock with a 2px ink top rule holding the heard line, the two-line spoken line, one horizontally scrolling row of chips, and the 44px orb toggle, 48px mic, field and send. Side gutters are 16px plus safe-area insets. One card shows at a time. Under 480px an alerts bell shortens to "N alert(s)" and, while a bell shows, the connection keeps only its dot. Under 400px the lifecycle cells size to their content instead of splitting the width equally, and Send becomes a 48px arrow icon.
 
 Home is a stacked queue: a Title heading ("4 open incidents") and a one-line greeting, then an ordered list of incident cards, one column on phones 10px apart and two columns from 768px 12px apart, then the session strip of outcome stats (two columns on phones, wrapping 130px tiles from 768px).
 
-From 768px the gutter becomes 24px, facts sit in a three-column row, the incident sets its promise bars beside a route-map label column of up to 380px, the plan row becomes name, figures, select, and the result card's four stats go to four columns. From 1024px with a fine pointer the device becomes a 16:10 Echo Show at up to 1180px wide inside a 10px bezel with 28px corners, centred on Desk Grey with a stage note underneath that carries the console link and the "Dark plans card" developer toggle. Short landscape screens hide the lifecycle and heard line and clamp the spoken line to one.
+From 768px the gutter becomes 24px, facts sit in a three-column row, the incident sets its promise bars beside a route-map label column of up to 380px, the plan row becomes name, figures, select, and the result card's four stats go to four columns. From 900px wide, whatever the pointer, the confirmation, receipt, alert and result cards drop their width cap and become two-column labels: the decision column (heading, lead, figure, notes) on the left and the evidence column (rows, plan lines, stats) on the right, 32px apart; below 900px the two columns stack. From 1024px with a fine pointer the device becomes a 16:10 Echo Show at up to 1180px wide inside a 10px bezel with 28px corners, centred on Desk Grey with a stage note underneath that carries the console link and the "Dark plans card" developer toggle. Short landscape screens hide the lifecycle and heard line and clamp the spoken line to one.
 
 The console is a 1500px shell with 32px padding (16px under 650px): a four-column inbox (two under 1050px, one under 650px), a summary strip, and a 1.65 : 0.85 workbench that stacks under 1050px.
 
@@ -354,15 +358,15 @@ Firm, square-shouldered, heavy-weight text.
 - **Shape:** gently rounded (6px), 2px border, 48px tall on the device (44px on the console and inside the MCP App card unless compact).
 - **Primary:** Label Blue fill, white 800-weight text, 18px side padding. One per card: the "yes", or "Execute approved plan" in the plans header and on a receipt when the plan is approved but has not run.
 - **Hover / Focus:** primary deepens to Deep Label Blue; secondary and plan Select take the Sunken fill. Focus is a 3px ink outline at 2px offset (white on the shell bar, inset on the scrolling surface). Disabled drops to 45% opacity.
-- **Secondary:** label stock with a 2px ink border; used for No, Close, Select, More, "Open printable receipt", "See N more plans" and console actions.
-- **Send:** solid ink with white text, sitting at the end of the dock.
+- **Secondary:** label stock with a 2px ink border; used for No, Keep it, Close, Select, More, "Open printable receipt", "See N more plans" and console actions.
+- **Send:** solid ink with white text, sitting at the end of the dock; under 400px a 48px stroked SVG arrow replaces the word and the accessible name stays "Send".
 - **Mic:** 48px Label Blue circle with a stroked SVG microphone; turns Alert Red while listening.
 - **Quiet:** text-only Graphite, underline on hover, for secondary console actions.
 - **Stage toggle:** the "Dark plans card" developer switch in the desktop stage note, 32px, 1.5px slate outline, filled ink when pressed.
 
 ### Chips
 - **Question chips:** label stock, 1.5px ink border, 6px radius, 44px tall, Meta type at 600; one scrolling row in the dock, wrapping on the console. Hover shifts the border to Label Blue over Blue Wash.
-- **Action chips:** the chips that act rather than ask (approve the recommended plan, approve the new pick, book and pay) take a 2px Label Blue outline and Label Blue 800 text, so a tap that changes state never looks like a question.
+- **Action chips:** the chips that act rather than ask (approve the recommended plan, approve the new pick, book and pay, execute approved plan) take a 2px Label Blue outline and Label Blue 800 text, so a tap that changes state never looks like a question. While a plan is approved and not executed, "Execute approved plan" leads the chips on the plans card and on a receipt booked before execution, alongside the primary button.
 - **Outcome chips:** square, solid green or red, white uppercase tag type; one per order row ("on time", "+8 h late").
 - **Incident tags:** square uppercase tags, at most two per card: start here (blue), critical units at risk (red), critical order (amber with ink), and the investigated or approved state as words in a 1.5px slate outline. An executed incident shows only the Executed tag, a 1.5px green outline with green text, which outranks start here.
 - **Badges:** agent pick and zero delay in blue; "your preference" in Amber Wash with Amber Ink.
@@ -373,6 +377,8 @@ Firm, square-shouldered, heavy-weight text.
 - **Shadow Strategy:** none (see Elevation & Depth).
 - **Border:** 2px ink.
 - **Internal Padding:** 14 to 16px on the device (18px for queue cards from 768px), 24px for console panels (18px under 650px).
+- **Two-column labels:** from 900px wide the confirmation, receipt, alert and result cards split into a decision column and an evidence column under one band; below 900px they stack in that order.
+- **Confirmation card:** heading, the plan name as the lead, one Figure, then the rows and a slate note, with the primary yes and a secondary no. Approval ("Yes, approve" / "No"), payment and withdrawal ("Withdraw this approval?", "Yes, withdraw" / "Keep it") share it; a red band appears only when the plan leaves a critical order late.
 - **Queue cards:** whole-card buttons with the incident id at Stat size, up to two tags, the incident text and a meta line; hover takes Blue Wash.
 
 ### Inputs / Fields
@@ -381,7 +387,7 @@ Firm, square-shouldered, heavy-weight text.
 - **Checkboxes and radios:** native, 18 to 20px, accent Label Blue.
 
 ### Navigation
-- **Shell bar:** Label Blue, white text, 52px (44px in short landscape). The wordmark is 800 weight with an outlined uppercase "simulated" stamp. Right side: the amber alerts bell, the account button (outlined white, filled white when signed in), the connection state with a 9px dot (amber connecting, Signal Green connected, Signal Rose failed), and a tabular clock from 768px.
+- **Shell bar:** Label Blue, white text, 52px (44px in short landscape). The wordmark is 800 weight with an outlined uppercase "simulated" stamp. Right side: the amber alerts bell ("N alert(s) · incident", shortened to "N alert(s)" under 480px), the account button (outlined white, filled white when signed in), the connection state with a 9px dot (amber connecting, Signal Green connected, Signal Rose failed), and a tabular clock from 768px.
 - **Console top bar:** 68px, separated by a 2px ink rule, a square blue monogram mark and Label Blue text links.
 
 ### State Band (signature)
@@ -391,25 +397,25 @@ A strip at the top of a card, padded 8px 16px, uppercase tag type with 0.06em tr
 Detected, Investigated, Approved, Executed in four cells inside a 2px ink frame with 2px ink dividers, in 800-weight tag-size type. Done steps are Green Wash with green text, the current step is solid ink with white text, future steps are slate. It sits at the same place and scale on every incident.
 
 ### Look-Alike Guard (signature)
-Wherever plan names appear together (plan list, current-plan line, confirmation lead, alert plan lines, result heading, MCP App card), each name is compared word by word with its nearest neighbour. When two names share at least two words and at least half of the name without being identical, the words that differ are set in 800 weight with a 3px Label Blue underline offset 4px. Otherwise the name stands plain.
+Wherever plan names appear together (plan list, current-plan line, confirmation lead, alert plan lines, MCP App card), each name is compared word by word with its nearest neighbour. When two names share at least two words and at least half of the name without being identical, the words that differ are set in 800 weight with a 3px Label Blue underline offset 4px. Otherwise the name stands plain. The result heading names the executed plan alone and always stands plain.
 
 ### Facts and Promise Bars
-Incident facts are a stacked list (three columns from 768px) with label, a Stat-size tabular value and note; the delayed ETA fact is Amber Wash with Amber Ink. Each late order's promise is a 12px Sunken track with a 1px ink zero line, filled red in proportion to its delay, under the customer line and above a red verdict. On-time orders hide the empty track and keep only the green verdict.
+Incident facts are a stacked list (three columns from 768px) with label, a Stat-size tabular value and note; the delayed ETA fact is Amber Wash with Amber Ink. Each late order's promise is a 12px Sunken track with a 1px ink zero line, filled red in proportion to its delay, under the customer line and above a red verdict. On-time orders hide the empty track and keep only the green verdict. Before investigation each affected order is listed with its customer, units and critical-order tag over a Graphite "Promised … · no plan yet" verdict in regular weight, with no track. The amber critical-order tag never wraps.
 
-### Result and Receipt Cards
-The result card opens with the green "Executed · operationally verified" band, the plan name as the Title, and the incident as the lead. It then carries one Figure ("12 critical units on time", with the label at Lead size and a slate "projected"), followed by order rows that end in outcome chips. The four execution numbers (units accounted for, extra cost, notifications simulated, customer delay) follow as Stat-size secondary figures over hairline rules. The receipt shows the paid total as its Figure, then rows that start with the "Carriers and services" subtotal and indent its paid lines beneath it in slate Meta type without a rule, then fees, and a total row in 800 weight over a 2px ink rule.
+### Result, Receipt and Alert Cards
+The result card opens with the green "Executed · operationally verified" band, the plan name as the Title, and the incident as the lead. It then carries one Figure ("12 critical units on time", with the label at Lead size and a slate "projected"), followed by order rows that end in outcome chips. The four execution numbers (units accounted for, extra cost, notifications simulated, customer delay) follow as Stat-size secondary figures over hairline rules. The receipt shows the paid total as its Figure, then rows that start with the "Carriers and services" subtotal and indent its paid lines beneath it in slate Meta type without a rule, then fees, and a total row in 800 weight over a 2px ink rule. The alert card opens with an amber band (red once an approval is invalidated), a "Heads up on" Title and a one-line lead built from the change; its evidence column carries a Graphite "Was …" line above an 800-weight "Now …" line on Green Wash with green text when the new pick is on time, or on Red Wash with red text when it is late.
 
 ### Conversation Sheet
-A dialog inside the device: bottom-anchored with a 2px ink top rule on phones, a centred 2px-ink-framed panel up to 860px wide from 768px. Its heading is Stat size beside the read-aloud toggle and a secondary Close. Each assistant reply carries its own tool trace as a disclosure under it: a hairline rule, a 700 Meta summary, and square hairline step tiles (green for a skill, red for an error) that rise in on a 120ms stagger.
+A dialog inside the device: bottom-anchored with a 2px ink top rule on phones, a centred 2px-ink-framed panel up to 860px wide from 768px. Its heading is Stat size with a secondary Close beside it; the read-aloud checkbox sits on its own row beneath. Turns cap at min(92%, 72ch). Each assistant reply carries its own tool trace as a disclosure under it: a hairline rule, a 700 Meta summary, and square hairline step tiles (green for a skill, red for an error) that rise in on a 120ms stagger.
 
 ### MCP App Card
 The plan picker as an MCP App, self-contained (see The Self-Contained Card Rule). The pick leads with a green or red state band, the name at Lead size with up to two tags (agent or default pick outlined in blue, approved or executed outlined in green, your preference in Amber Wash), the cost as the Figure, order outcomes as chips, and a primary "Select for approval" button until a plan is approved. The remaining plans follow with the pick's nearest look-alike first; in compact mode only that one shows, with a "See N more plans" button for the rest. All figures use tabular slashed-zero numerals.
 
 ### Talk Dock and Orb
-The dock is label stock under a 2px ink rule. The orb is a 40px circle with a 3px hairline ring and a blue core that pulses while listening or speaking and spins its ring while thinking, on cubic-bezier(.16, 1, .3, 1). All motion stops under reduced motion.
+The dock is label stock under a 2px ink rule. The orb is a 44px circular button, the "Read replies aloud" toggle (pressed state exposed): a 3px hairline ring around a Label Blue core when on and a Slate core when off; it is disabled, showing the off core, where no voice exists. It still reports listening, thinking and speaking: the ring turns blue, the core pulses while listening or speaking and the ring spins while thinking, on cubic-bezier(.16, 1, .3, 1). All motion stops under reduced motion.
 
 ### Forced Colours
-Under forced colours the current lifecycle step takes Highlight with HighlightText, done steps are underlined, the promise fill becomes CanvasText, and state bands, outcome chips, incident tags and action chips gain a 1px system border so no state rides on colour alone.
+Under forced colours the current lifecycle step takes Highlight with HighlightText, done steps are underlined, the promise fill becomes CanvasText, state bands, outcome chips and incident tags gain a 1px CanvasText border, action chips thicken to a 3px border, Send and the mic gain a 1px ButtonText outline, and the route map's places, labels and legs draw in CanvasText, so no state rides on colour alone.
 
 ## Do's and Don'ts
 
