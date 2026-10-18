@@ -158,15 +158,17 @@ function renderPlans(snapshot) {
     });
     const description = document.createElement("div");
     const title = document.createElement("strong");
-    const [before, diff, after] = distinguishing(plan.label, labels);
-    if (diff === undefined) {
-      title.textContent = before;
-    } else {
+    distinguishing(plan.label, labels).forEach(([text, marked], index) => {
+      const space = index ? " " : "";
+      if (!marked) {
+        title.append(`${space}${text}`);
+        return;
+      }
       const mark = document.createElement("span");
       mark.className = "diff";
-      mark.textContent = diff;
-      title.append(...[before && `${before} `, mark, after && ` ${after}`].filter(Boolean));
-    }
+      mark.textContent = text;
+      title.append(...[space, mark].filter(Boolean));
+    });
     const badges = [];
     if (isRecommended) badges.push(["Agent pick", "badge"]);
     if (plan.id === snapshot.preference?.preferred_plan_id) badges.push(["Your preference", "badge preference"]);
@@ -185,9 +187,11 @@ function renderPlans(snapshot) {
       lines.className = "order-lines";
       for (const order of plan.orders) {
         const line = document.createElement("span");
-        line.className = order.delay_hours ? "late" : "";
-        line.textContent = `${order.order_id} · ${order.customer}${order.priority === "critical" ? " (critical)" : ""}: `
-          + (order.delay_hours ? `+${order.delay_hours} h` : "on time");
+        line.textContent = `${order.order_id} · ${order.customer}${order.priority === "critical" ? " (critical)" : ""}`;
+        const outcome = document.createElement("span");
+        outcome.className = `outcome${order.delay_hours ? " late" : ""}`;
+        outcome.textContent = order.delay_hours ? `+${order.delay_hours} h` : "on time";
+        line.append(outcome);
         lines.append(line);
       }
       description.append(lines);

@@ -25,9 +25,10 @@ function svg(tag, attributes, text, doc = globalThis.document) {
 }
 
 export function labelNodes(label, labels, doc = globalThis.document) {
-  const [before, diff, after] = distinguishing(label, labels);
-  if (diff === undefined) return [before];
-  return [before && `${before} `, el("span", "diff", diff, doc), after && ` ${after}`].filter(Boolean);
+  return distinguishing(label, labels).flatMap(([text, marked], index) => {
+    const space = index ? " " : "";
+    return marked ? [space, el("span", "diff", text, doc)] : [`${space}${text}`];
+  }).filter(Boolean);
 }
 
 function when(iso) {
@@ -137,7 +138,12 @@ export function renderIncident(section, { snapshot, plan, summary, route }, doc 
   head.append(title, el("p", "incident-title", summary?.kind_label ? `${summary.kind_label} · ${facts.title}` : facts.title, doc),
     el("p", "incident-route", `${facts.route} · ${facts.units} units of ${facts.sku} · ${facts.orders === 1 ? "1 order" : `${facts.orders} orders`}`, doc));
   if (summary?.critical_units_at_risk > 0) head.prepend(el("p", "band late", `${summary.critical_units_at_risk} critical units at risk`, doc));
-  if (plan) head.append(el("p", "plan-line", `${plan.label} · $${plan.incremental_cost_usd}`, doc));
+  if (plan) {
+    const line = el("p", "plan-line", undefined, doc);
+    const labels = snapshot.plans.filter((item) => item.source_version === plan.source_version).map((item) => item.label);
+    line.append(...labelNodes(plan.label, labels, doc), ` · $${plan.incremental_cost_usd}`);
+    head.append(line);
+  }
   const facts3 = el("div", "facts", undefined, doc);
   const fact = (label, value, note, className = "") => {
     const box = el("div", `fact ${className}`.trim(), undefined, doc);
@@ -155,7 +161,8 @@ export function renderIncident(section, { snapshot, plan, summary, route }, doc 
   const promise = el("div", "device-promise", undefined, doc);
   const bars = el("ol", "promise-list", undefined, doc);
   bars.id = "device-bars";
-  promise.append(el("p", "label", "Promise vs projection", doc), bars);
+  bars.setAttribute("aria-label", "Each order's promise against the projection");
+  promise.append(bars);
   drawBars(bars, plan, route, doc);
   const grid = el("div", "incident-grid", undefined, doc);
   grid.append(figure, promise);
@@ -195,7 +202,11 @@ export function renderConfirm(section, payload, { onYes, onNo, labels = [] }, do
   figure.append(el("strong", "", details.figure[0], doc), " ", el("span", "", details.figure[1], doc));
   card.append(figure);
   const rows = el("dl", "rows", undefined, doc);
-  for (const [term, value, tone] of details.rows) rows.append(el("dt", "", term, doc), el("dd", tone || "", value, doc));
+  for (const [term, value, tone] of details.rows) {
+    const cell = el("dd", "", tone ? undefined : value, doc);
+    if (tone) cell.append(el("span", `outcome ${tone}`, value, doc));
+    rows.append(el("dt", "", term, doc), cell);
+  }
   card.append(rows);
   card.append(el("p", "note", details.note, doc));
   const actions = el("div", "confirm-actions", undefined, doc);
@@ -230,7 +241,10 @@ export function renderAlert(section, alert, doc = globalThis.document) {
 
 export function renderResult(section, { snapshot, execution, plan, booking, times = [] }, doc = globalThis.document) {
   const card = el("div", "result-card", undefined, doc);
-  card.append(el("p", "band ok", "Executed · operationally verified", doc), el("h2", "", plan?.label || execution.plan_id, doc),
+  const heading = el("h2", "", undefined, doc);
+  const labels = snapshot.plans.filter((item) => item.source_version === plan?.source_version).map((item) => item.label);
+  heading.append(...(plan ? labelNodes(plan.label, labels, doc) : [execution.plan_id]));
+  card.append(el("p", "band ok", "Executed · operationally verified", doc), heading,
     el("p", "lead", `${snapshot.state.incident_id} · ${snapshot.state.title}`, doc));
   const figures = el("div", "figures", undefined, doc);
   for (const item of resultFigures(snapshot, execution)) {

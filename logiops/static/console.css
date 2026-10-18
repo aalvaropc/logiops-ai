@@ -11,6 +11,7 @@
 .metrics-strip li { display: grid; gap: 2px; min-width: 130px; padding: 10px 14px; border: 2px solid var(--rule); border-radius: var(--radius-label); background: var(--surface); }
 .metrics-strip strong { font-size: 20px; font-variant-numeric: tabular-nums; }
 .metrics-strip span { color: var(--ink-3); font-size: 14px; }
+.metrics-strip.empty { padding: 0; border: 0; text-align: left; }
 .metrics-strip.empty li { min-width: 0; padding: 0; border: 0; background: none; color: var(--ink-3); font-size: 14px; }
 .developer { margin-top: 18px; padding: 16px 20px; border: 2px dashed var(--hairline); border-radius: var(--radius-label); background: var(--surface); }
 .developer summary { min-height: 32px; color: var(--ink-2); font-size: 12px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; cursor: pointer; }
