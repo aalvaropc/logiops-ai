@@ -1,11 +1,4 @@
 (function (root) {
-  const VIEW = { width: 240, height: 210 };
-  const ROW = { top: 54, bottom: VIEW.height - 54 };
-
-  function round(value) {
-    return Math.round(value * 10) / 10;
-  }
-
   const SHIPMENT_SOURCE = "delayed-shipment";
   const LEG_LABELS = {
     delayed: "Delayed shipment", local: "Local stock", ground: "Ground carrier",
@@ -54,27 +47,6 @@
     return [...legs.values()];
   }
 
-  function layout(shipment, legs) {
-    const key = (name) => String(name).toLowerCase();
-    const destinationName = placeName(shipment.destination);
-    const originName = placeName(shipment.origin);
-    const names = [];
-    for (const name of [originName, ...legs.map((leg) => leg.from.name)]) {
-      if (name && key(name) !== key(destinationName) && !names.some((known) => key(known) === key(name))) names.push(name);
-    }
-    const step = names.length > 1 ? (VIEW.width - 88) / (names.length - 1) : 0;
-    const places = names.map((name, index) => ({
-      name, role: key(name) === key(originName) ? "origin" : "source",
-      x: round(names.length > 1 ? 44 + index * step : VIEW.width / 2), y: ROW.top,
-    }));
-    const destination = { name: destinationName, role: "destination", x: VIEW.width / 2, y: ROW.bottom };
-    const find = (name) => places.find((place) => key(place.name) === key(name)) || destination;
-    return {
-      places, destination,
-      legs: legs.map((leg) => ({ ...leg, from: find(leg.from.name), to: destination, loop: key(leg.from.name) === key(destinationName) })),
-    };
-  }
-
   function promiseBars(plan, scaleHours = 48) {
     const orders = (plan && plan.orders) || [];
     const longest = Math.max(scaleHours, ...orders.map((order) => order.delay_hours || 0));
@@ -102,16 +74,7 @@
     return { state: next, label: VOICE_LABELS[next] || VOICE_LABELS.ready };
   }
 
-  function arc(from, to, lift = 0.25) {
-    if (!from || !to) return "";
-    const midX = (from.x + to.x) / 2;
-    const midY = (from.y + to.y) / 2;
-    const dx = to.x - from.x;
-    const dy = to.y - from.y;
-    return `M${from.x} ${from.y} Q${Math.round((midX - dy * lift) * 10) / 10} ${Math.round((midY + dx * lift) * 10) / 10} ${to.x} ${to.y}`;
-  }
-
-  const api = { VIEW, LEG_LABELS, VOICE_LABELS, legType, placeName, shortName, legsFor, layout, promiseBars, voiceState, arc };
+  const api = { LEG_LABELS, VOICE_LABELS, legType, placeName, shortName, legsFor, promiseBars, voiceState };
   if (typeof module === "object" && module.exports) module.exports = api;
   else root.LogiOpsRoute = api;
 })(typeof window === "undefined" ? globalThis : window);

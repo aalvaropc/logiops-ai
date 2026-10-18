@@ -15,8 +15,6 @@ export function welcomeText({ inbox = [], incidentId } = {}) {
   return `Hi, I'm LogiOps. ${queue}. Ask “any delays today?” for my briefing, or ask what's happening with ${incidentId}.`;
 }
 
-export const HOME_LINE = "Hi, I'm LogiOps. Ask “any delays today?” for my briefing.";
-
 export function homeHeading(inbox = []) {
   const open = inbox.filter((item) => item.status !== "verified").length;
   if (!inbox.length) return "No incidents in the inbox";

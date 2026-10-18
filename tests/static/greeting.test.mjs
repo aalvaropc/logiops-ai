@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { moduleUrl } from "./helpers.mjs";
 
-const { welcomeText, homeHeading, HOME_LINE } = await import(moduleUrl("app/greeting.js"));
+const { welcomeText, homeHeading } = await import(moduleUrl("app/greeting.js"));
 
 test("the greeting names the open queue, its critical orders and the units at risk", () => {
   assert.equal(welcomeText({ inbox: [], incidentId: "SHIP-421" }),
@@ -25,5 +25,4 @@ test("the home heading counts the open incidents in one line", () => {
   assert.equal(homeHeading(inbox.slice(1)), "1 open incident");
   assert.equal(homeHeading([{ status: "verified" }]), "Every incident is resolved");
   assert.equal(homeHeading([]), "No incidents in the inbox");
-  assert.equal(HOME_LINE, "Hi, I'm LogiOps. Ask “any delays today?” for my briefing.");
 });

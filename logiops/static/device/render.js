@@ -65,15 +65,64 @@ function button(text, className, onClick, doc = globalThis.document) {
   return node;
 }
 
-export function renderHome(section, { heading, greeting, lead, session }, doc = globalThis.document) {
+export function renderHome(section, { heading, session, inbox = [], journey }, doc = globalThis.document) {
   section.querySelector(".home-head")?.remove();
   const head = el("div", "home-head", undefined, doc);
   const title = el("h2", "", heading, doc);
   title.id = "home-title";
   head.append(title);
-  if (!lead) head.append(el("p", "sub", greeting, doc));
+  if (inbox.length && journey) head.append(nightFigure(inbox, doc), nightLanes(section, inbox, journey, doc));
   section.prepend(head);
   renderSession(section, session, doc);
+}
+
+function nightFigure(inbox, doc) {
+  const risk = inbox.filter((item) => item.status !== "verified").reduce((sum, item) => sum + (item.critical_units_at_risk || 0), 0);
+  const figure = el("p", `night-figure${risk ? " late" : ""}`, undefined, doc);
+  const words = el("span", "", "critical units", doc);
+  words.append(el("br", "", undefined, doc), "at risk");
+  figure.append(el("strong", "", String(risk), doc), " ", words);
+  return figure;
+}
+
+function glow(id, doc) {
+  const defs = svg("defs", {}, undefined, doc);
+  const filter = svg("filter", { id, x: "-10%", y: "-60%", width: "120%", height: "220%" }, undefined, doc);
+  filter.append(svg("feGaussianBlur", { stdDeviation: 2.6 }, undefined, doc));
+  defs.append(filter);
+  return defs;
+}
+
+function settle(holder, figure, key) {
+  figure.classList.toggle("settled", holder.dataset.drawn === key);
+  holder.dataset.drawn = key;
+}
+
+function nightLanes(section, inbox, journey, doc) {
+  const night = journey.queueTrails(inbox);
+  const figure = el("figure", "night", undefined, doc);
+  settle(section, figure, night.lanes.map((lane) => `${lane.id}:${lane.done}`).join(","));
+  const said = night.lanes.map((lane) => (lane.done ? `${lane.id} executed` : `${lane.id} delayed ${lane.delay} h`)).join(", ");
+  const map = svg("svg", { class: "night-lanes", viewBox: `0 0 ${night.width} ${night.height}`, role: "img", "aria-label": `Open incidents on one time scale: ${said}` }, undefined, doc);
+  const trails = svg("g", { class: "trails" }, undefined, doc);
+  const labels = svg("g", { class: "lane-labels" }, undefined, doc);
+  for (const lane of night.lanes) {
+    const kind = lane.done ? " done" : lane.late ? " late" : "";
+    if (!lane.done) trails.append(svg("path", { d: lane.lead, class: "trail-glow", filter: "url(#lane-glow)" }, undefined, doc));
+    trails.append(svg("path", { d: lane.lead, class: `lane-lead${kind}${lane.risk ? " risk" : ""}` }, undefined, doc));
+    if (lane.late) trails.append(svg("path", { d: lane.tail, class: `lane-tail${lane.risk ? " risk" : ""}` }, undefined, doc));
+    trails.append(svg("line", { x1: lane.promise, x2: lane.promise, y1: lane.y - 6, y2: lane.y + 6, class: "lane-promise" }, undefined, doc),
+      svg("circle", { cx: lane.end, cy: lane.y, r: 3.5, class: `lane-end${kind}` }, undefined, doc));
+    labels.append(svg("text", { x: journey.NIGHT.start, y: lane.y - 8, class: "lane-id" }, lane.id, doc),
+      svg("text", { x: lane.end + 8, y: lane.y + 4, class: `lane-delay${kind}` }, lane.done ? "done" : lane.late ? `+${lane.delay} h` : "on time", doc));
+  }
+  trails.append(svg("circle", { cx: night.hub.x, cy: night.hub.y, r: 4, class: "lane-hub" }, undefined, doc));
+  map.append(glow("lane-glow", doc), trails, labels);
+  const key = el("figcaption", "lane-key", undefined, doc);
+  key.setAttribute("aria-hidden", "true");
+  key.append(el("span", "key-promise", undefined, doc), "promise", el("span", "key-delay", undefined, doc), "delay");
+  figure.append(map, key);
+  return figure;
 }
 
 export function renderSession(section, session, doc = globalThis.document) {
@@ -91,118 +140,120 @@ export function renderSession(section, session, doc = globalThis.document) {
 }
 
 function drawPlace(layer, place, doc) {
-  const below = place.role === "destination";
+  const below = place.role === "origin" || place.role === "source";
   layer.append(
-    svg("circle", { cx: place.x, cy: place.y, r: place.role === "source" ? 4 : 5, class: `place place-${place.role}` }, undefined, doc),
-    svg("text", { x: place.x, y: place.y + (below ? 17 : -10), "text-anchor": "middle", class: "place-label" }, place.name, doc),
+    svg("circle", { cx: place.x, cy: place.y, r: place.role === "destination" ? 5.5 : 4.5, class: `place place-${place.role}` }, undefined, doc),
+    svg("text", { x: place.x, y: place.y + (below ? 22 : -13), "text-anchor": "middle", class: "place-label" }, place.name, doc),
   );
 }
 
-export function drawMap(map, caption, snapshot, plan, route, doc = globalThis.document) {
+export function drawMap(map, caption, snapshot, plan, { route, journey }, doc = globalThis.document) {
   map.replaceChildren(svg("title", { id: "device-map-title" }, "Plan route diagram", doc));
   caption.replaceChildren();
-  const shipment = snapshot?.state?.shipment;
-  if (!shipment) return;
-  const view = route.layout(shipment, route.legsFor(snapshot.state, plan));
-  const layer = svg("g", { class: "legs" }, undefined, doc);
-  const lifts = [0.22, -0.22, 0.42, -0.42];
-  let travelling = 0;
-  if (!view.legs.length && view.places.length) layer.append(svg("path", { d: route.arc(view.places[0], view.destination, 0.22), class: "leg leg-delayed" }, undefined, doc));
-  for (const leg of view.legs) {
-    const className = `leg leg-${leg.type}${leg.late ? " late" : ""}`;
-    if (leg.loop) {
-      layer.append(svg("circle", { cx: leg.to.x, cy: leg.to.y, r: 8, class: className }, undefined, doc));
-    } else {
-      layer.append(svg("path", { d: route.arc(leg.from, leg.to, lifts[travelling % lifts.length]), class: className }, undefined, doc));
-      travelling += 1;
-    }
-  }
-  const places = svg("g", { class: "places" }, undefined, doc);
-  for (const place of [...view.places, view.destination]) drawPlace(places, { ...place, name: route.shortName(place.name, view.places.length > 2 ? 10 : 14) }, doc);
-  map.append(layer, places);
-  if (!view.legs.length) {
-    caption.append(el("span", "muted", "Delayed route. Investigate to see a plan's legs.", doc));
-    return;
-  }
-  const list = el("ul", "legend", undefined, doc);
-  for (const leg of view.legs) {
-    const item = el("li", `leg-${leg.type}${leg.late ? " late" : ""}`, undefined, doc);
-    const where = leg.loop ? `at ${leg.to.name}` : `${leg.from.name} → ${leg.to.name}`;
-    item.append(el("span", "swatch", undefined, doc), el("span", "", `${leg.label}: ${leg.units} units ${where}, ${when(leg.arrival_eta)}${leg.late ? " · late" : ""}`, doc));
-    list.append(item);
-  }
-  caption.append(list);
-}
-
-export function drawBars(list, plan, route, doc = globalThis.document, orders = []) {
-  list.replaceChildren();
-  const bars = route.promiseBars(plan);
-  if (!bars.length) {
-    for (const order of orders) {
-      const item = el("li", "promise pending", undefined, doc);
-      const who = el("span", "who", `${order.customer} · ${order.quantity} units`, doc);
-      if (order.priority === "critical") who.append(" ", el("span", "critical-tag", "critical order", doc));
-      item.append(who, el("span", "verdict", `Promised ${when(order.due_eta)} · no plan yet`, doc));
-      list.append(item);
-    }
-    list.append(el("li", "muted", "Ask what's happening to project each order against its promise.", doc));
-    return;
-  }
-  for (const bar of bars) {
-    const item = el("li", `promise${bar.on_time ? " on-time" : " late"}`, undefined, doc);
-    const who = el("span", "who", `${bar.customer} · ${bar.quantity} units`, doc);
-    if (bar.priority === "critical") who.append(" ", el("span", "critical-tag", "critical order", doc));
-    const track = el("span", "track", undefined, doc);
-    track.setAttribute("aria-hidden", "true");
-    const fill = el("span", "fill", undefined, doc);
-    fill.style.width = `${Math.max(bar.on_time ? 0 : 6, Math.round(bar.ratio * 100))}%`;
-    track.append(fill);
-    const verdict = bar.on_time
-      ? `On time · promised ${when(bar.due_eta)}`
-      : `+${bar.delay_hours} h · ${bar.late_units} units late · promised ${when(bar.due_eta)}`;
-    item.append(who, track, el("span", "verdict", verdict, doc));
-    list.append(item);
-  }
-}
-
-export function renderIncident(section, { snapshot, plan, summary, route }, doc = globalThis.document) {
-  const facts = incidentFacts(snapshot);
-  const head = el("div", "incident-head", undefined, doc);
-  const title = el("h2", "", undefined, doc);
-  title.append(el("span", "incident-id", facts.id, doc));
-  head.append(title, el("p", "incident-title", summary?.kind_label ? `${summary.kind_label} · ${facts.title}` : facts.title, doc),
-    el("p", "incident-route", `${facts.route} · ${facts.units} units of ${facts.sku} · ${facts.orders === 1 ? "1 order" : `${facts.orders} orders`}`, doc));
-  const band = incidentBand(snapshot, summary);
-  if (band) head.prepend(el("p", `band ${band[0]}`, band[1], doc));
   if (plan) {
     const line = el("p", "plan-line", undefined, doc);
     const labels = snapshot.plans.filter((item) => item.source_version === plan.source_version).map((item) => item.label);
     line.append(...labelNodes(plan.label, labels, doc), ` · $${plan.incremental_cost_usd}`);
-    head.append(line);
+    caption.append(line);
   }
-  const facts3 = el("div", "facts", undefined, doc);
-  const fact = (label, value, note, className = "") => {
-    const box = el("div", `fact ${className}`.trim(), undefined, doc);
-    box.append(el("span", "", label, doc), el("strong", "", value, doc), el("small", "", note, doc));
-    return box;
-  };
-  facts3.append(fact("Original ETA", facts.originalEta, facts.promiseLabel), fact("Delayed ETA", facts.delayedEta, `+${facts.delayHours} hours`, "warning"),
-    fact("Local stock", facts.stock ? `${facts.stock.available} units` : "None", facts.stock ? facts.stock.name : "No local warehouse"));
+  const shipment = snapshot?.state?.shipment;
+  if (!shipment) return;
+  const view = journey.wideLayout(shipment, route.legsFor(snapshot.state, plan));
+  const trails = svg("g", { class: "trails" }, undefined, doc);
+  const labels = svg("g", { class: "trail-labels" }, undefined, doc);
+  if (!view.legs.some((leg) => leg.type === "delayed")) trails.append(svg("path", { d: view.booked.d, class: view.legs.length ? "trail ghost" : "trail late" }, undefined, doc));
+  for (const leg of view.legs) {
+    if (!leg.late) trails.append(svg("path", { d: leg.d, class: "trail-glow", filter: "url(#trail-glow)" }, undefined, doc));
+    trails.append(svg("path", { d: leg.d, class: `trail leg-${leg.type}${leg.late ? " late" : ""}` }, undefined, doc));
+    const text = `${leg.label} · ${leg.units}`;
+    const spot = journey.labelSpot(leg, text.length * 8.4);
+    labels.append(svg("text", { x: spot.x, y: spot.y, "text-anchor": spot.anchor, class: `trail-label${leg.late ? " late" : ""}` }, text, doc));
+  }
+  const places = svg("g", { class: "places" }, undefined, doc);
+  for (const place of view.places) drawPlace(places, { ...place, name: route.shortName(place.name, 14) }, doc);
+  map.append(glow("trail-glow", doc), trails, places, labels);
+  if (!view.legs.length) {
+    caption.append(el("span", "muted", "Investigate to see a plan's legs.", doc));
+    return;
+  }
+  const list = el("ul", "legend visually-hidden", undefined, doc);
+  for (const leg of view.legs) {
+    const where = leg.loop ? `at ${leg.to.name}` : `${leg.from.name} → ${leg.to.name}`;
+    list.append(el("li", "", `${leg.label}: ${leg.units} units ${where}, ${when(leg.arrival_eta)}${leg.late ? " · late" : ""}`, doc));
+  }
+  caption.append(list);
+}
+
+function track(position, doc) {
+  const line = el("span", "track", undefined, doc);
+  line.setAttribute("aria-hidden", "true");
+  const reach = position.end === null ? position.promise : Math.min(position.end, position.promise);
+  const lit = el("span", "lit", undefined, doc);
+  lit.style.width = `${reach}%`;
+  line.append(lit);
+  if (position.late) {
+    const over = el("span", "over", undefined, doc);
+    over.style.left = `${position.promise}%`;
+    over.style.width = `${position.end - position.promise}%`;
+    line.append(over);
+  }
+  const tick = el("span", "tick", undefined, doc);
+  tick.style.left = `${position.promise}%`;
+  line.append(tick);
+  if (position.end !== null) {
+    const dot = el("span", "dot", undefined, doc);
+    dot.style.left = `${position.end}%`;
+    line.append(dot);
+  }
+  return line;
+}
+
+export function drawBars(list, plan, { route, journey }, shipment, doc = globalThis.document, orders = []) {
+  list.replaceChildren();
+  const bars = route.promiseBars(plan);
+  const rows = bars.length ? bars : orders.map((order) => ({ ...order, pending: true }));
+  const tracks = journey.promiseTracks(shipment, rows);
+  const booked = el("li", "promise shipment late", undefined, doc);
+  const hours = Math.round((Date.parse(shipment.delayed_eta) - Date.parse(shipment.original_eta)) / 3600000);
+  booked.append(el("span", "who", "Booked shipment", doc), track(tracks.shipment, doc), el("span", "verdict", `+${hours} h · now ${when(shipment.delayed_eta)}`, doc));
+  list.append(booked);
+  rows.forEach((row, index) => {
+    const item = el("li", `promise${row.pending ? " pending" : row.on_time ? " on-time" : " late"}`, undefined, doc);
+    const who = el("span", "who", `${row.customer} · ${row.quantity} units`, doc);
+    if (row.priority === "critical") who.append(" ", el("span", "critical-tag", "critical order", doc));
+    const verdict = row.pending ? `Promised ${when(row.due_eta)} · no plan yet`
+      : row.on_time ? `On time · promised ${when(row.due_eta)}`
+      : `+${row.delay_hours} h · ${row.late_units} units late · promised ${when(row.due_eta)}`;
+    item.append(who, track(tracks.rows[index], doc), el("span", "verdict", verdict, doc));
+    list.append(item);
+  });
+}
+
+export function renderIncident(section, { snapshot, plan, summary, route, journey }, doc = globalThis.document) {
+  const facts = incidentFacts(snapshot);
+  const head = el("div", "incident-head", undefined, doc);
+  const title = el("h2", "", undefined, doc);
+  title.append(el("span", "incident-id", facts.id, doc));
+  head.append(title, el("p", "incident-route", [summary?.kind_label, facts.route, `${facts.units} units`].filter(Boolean).join(" · "), doc));
+  const band = incidentBand(snapshot, summary);
+  if (band) head.prepend(el("p", `band ${band[0]}`, band[1], doc));
   const figure = el("figure", "device-map", undefined, doc);
-  const map = svg("svg", { id: "device-map", viewBox: `0 0 ${route.VIEW.width} ${route.VIEW.height}`, role: "img", "aria-labelledby": "device-map-title" }, undefined, doc);
+  settle(section, figure, `${facts.id}:${plan?.id || ""}`);
+  const map = svg("svg", { id: "device-map", viewBox: `0 0 ${journey.WIDE.width} ${journey.WIDE.height}`, role: "img", "aria-labelledby": "device-map-title" }, undefined, doc);
   const caption = el("figcaption", "", undefined, doc);
   caption.id = "device-map-caption";
   figure.append(map, caption);
-  drawMap(map, caption, snapshot, plan, route, doc);
+  drawMap(map, caption, snapshot, plan, { route, journey }, doc);
   const promise = el("div", "device-promise", undefined, doc);
   const bars = el("ol", "promise-list", undefined, doc);
   bars.id = "device-bars";
-  bars.setAttribute("aria-label", "Each order's promise against the projection");
+  bars.setAttribute("aria-label", "The booked shipment and each order's promise against the projection, on one time scale");
   promise.append(bars);
-  drawBars(bars, plan, route, doc, snapshot.state.orders);
+  drawBars(bars, plan, { route, journey }, snapshot.state.shipment, doc, snapshot.state.orders);
+  if (facts.stock) promise.append(el("p", "stock-line", `Local stock · ${facts.stock.available} units at ${facts.stock.name}`, doc));
   const grid = el("div", "incident-grid", undefined, doc);
   grid.append(figure, promise);
-  section.replaceChildren(head, facts3, grid);
+  section.replaceChildren(head, grid);
 }
 
 export function renderPlanList(container, { plans, selectedId, recommendedId, preferredId, locked, onSelect }, doc = globalThis.document) {
