@@ -10,6 +10,7 @@
   --rule: #111418;
   --hairline: #C9CED5;
   --shell: #0B4F9C;
+  --shell-deep: #093F7D;
   --shell-ink: #FFFFFF;
   --shell-tint: #E4ECF7;
   --ok: #1D7A3C;
@@ -20,6 +21,9 @@
   --warn-ink: #664400;
   --warn-tint: #FFF3D1;
   --bezel: #1A1D21;
+  --signal-ok: #7FD49A;
+  --signal-late: #FF9AA8;
+  --scrim: rgba(17, 20, 24, .5);
   --focus: #111418;
   --radius-label: 0;
   --radius-control: 6px;

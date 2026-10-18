@@ -30,7 +30,7 @@ input, select { width: 100%; min-width: 0; min-height: 44px; padding: 0 12px; bo
 input::placeholder { color: var(--ink-3); }
 .primary, .secondary { min-height: 44px; border-radius: var(--radius-control); font-size: 15px; font-weight: 800; }
 .primary { display: inline-flex; align-items: center; justify-content: space-between; gap: 24px; margin-top: 16px; padding: 0 18px; border: 2px solid var(--shell); background: var(--shell); color: var(--shell-ink); }
-.primary:hover:not(:disabled) { background: #093F7D; border-color: #093F7D; }
+.primary:hover:not(:disabled) { background: var(--shell-deep); border-color: var(--shell-deep); }
 .secondary { padding: 0 16px; border: 2px solid var(--rule); background: var(--surface); color: var(--ink); white-space: nowrap; }
 .secondary:hover:not(:disabled) { background: var(--sunken); }
 .quiet { display: block; min-height: 44px; margin-top: 12px; padding: 0; border: none; background: transparent; color: var(--ink-2); font-weight: 700; text-align: left; }

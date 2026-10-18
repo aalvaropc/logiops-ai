@@ -1,3 +1,5 @@
+import { plural } from "./selectors.js";
+
 export const CHECK_FAILED_NOTE = "This answer did not pass the automatic check against the incident's data. The plan cards are calculated by code; rely on them.";
 export const BUDGET_NOTE = "Today's live model budget is used, so answers come from the scripted replay until midnight (UTC-05:00).";
 
@@ -21,7 +23,7 @@ export function fallbackNote(run) {
 export function traceSummary(run) {
   const tokens = (run.usage?.inputTokens || 0) + (run.usage?.outputTokens || 0);
   const fallback = run.fallback === "daily_budget" ? " · daily live budget used" : "";
-  return `${run.tool_trace.length} MCP calls · ${run.mode} mode${fallback} · ${tokens} tokens${run.truncated ? " · truncated" : ""}`;
+  return `${run.tool_trace.length} ${plural(run.tool_trace.length, "MCP call")} · ${run.mode} mode${fallback} · ${tokens} tokens${run.truncated ? " · truncated" : ""}`;
 }
 
 export function executionSummary(snapshot, execution) {

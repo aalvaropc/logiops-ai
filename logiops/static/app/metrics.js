@@ -1,4 +1,5 @@
 import { dollars } from "./purchase.js";
+import { plural } from "./selectors.js";
 
 export function seconds(value) {
   if (value === null || value === undefined) return null;
@@ -11,8 +12,8 @@ export const EMPTY_SESSION = "No plan approved yet this session. Outcomes appear
 export function sessionFigures(totals) {
   if (!totals.decided && !totals.executed && !totals.booked_usd) return [];
   return [
-    [`${totals.executed} of ${totals.incidents}`, "incidents executed"],
-    [String(totals.decided), "plans approved"],
+    [`${totals.executed} of ${totals.incidents}`, plural(totals.incidents, "incident executed", "incidents executed")],
+    [String(totals.decided), plural(totals.decided, "plan approved", "plans approved")],
     [`$${totals.extra_cost_usd}`, "extra cost committed"],
     [dollars(totals.booked_usd), "booked and paid"],
     [String(totals.late_units), "units late after execution"],
