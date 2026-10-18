@@ -104,7 +104,7 @@ class AlertWatcher:
             verdict = (f"“{pick['label']}” still works and is still my pick: ${pick['incremental_cost_usd']}, {_delay(pick)}."
                        if same else f"The new pick is “{pick['label']}”: ${pick['incremental_cost_usd']}, {_delay(pick)}.")
             message = (f"{lead} I recalculated the plans. {verdict}{risk} Nothing was approved; "
-                       "approve it in the panel or ask me about it.")
+                       "say “approve the recommended plan”, or ask me about it.")
             spoken = (f"Heads up on {incident_id}: {change}. I recalculated; "
                       + (f"{pick['label']} still works, ${pick['incremental_cost_usd']}, {_delay(pick, 'hours')}."
                          if same else f"the new pick is {pick['label']}, ${pick['incremental_cost_usd']}, {_delay(pick, 'hours')}.")

@@ -39,12 +39,13 @@ export function renderHome(section, { greeting, lead, session }, doc = globalThi
   section.querySelector(".home-head")?.remove();
   section.querySelector(".session-strip")?.remove();
   const head = el("div", "home-head", undefined, doc);
-  head.append(el("p", "label", "Alexa+ · LogiOps", doc), el("p", "lead", lead || greeting, doc));
+  head.append(el("p", "lead", lead || greeting, doc));
   if (lead) head.append(el("p", "sub", greeting, doc));
   section.prepend(head);
   if (!session) return;
-  const strip = el("ul", "session-strip", undefined, doc);
+  const strip = el("ul", `session-strip${session.length ? "" : " empty"}`, undefined, doc);
   strip.setAttribute("aria-label", "This session's outcomes, from the recorded events");
+  if (!session.length) strip.append(el("li", "", "No plan approved yet this session. Outcomes appear here as you decide.", doc));
   for (const [value, label] of session) {
     const item = el("li", "", undefined, doc);
     item.append(el("strong", "", value, doc), el("span", "", label, doc));
@@ -126,7 +127,7 @@ export function renderIncident(section, { snapshot, plan, summary, route }, doc 
   const head = el("div", "incident-head", undefined, doc);
   const title = el("h2", "", undefined, doc);
   title.append(el("span", "incident-id", facts.id, doc), " ", el("span", "status-chip", facts.status, doc));
-  head.append(el("p", "label", summary?.kind_label || "Incident", doc), title, el("p", "incident-title", facts.title, doc),
+  head.append(title, el("p", "incident-title", summary?.kind_label ? `${summary.kind_label} · ${facts.title}` : facts.title, doc),
     el("p", "incident-route", `${facts.route} · ${facts.units} units of ${facts.sku} · ${facts.orders === 1 ? "1 order" : `${facts.orders} orders`}`, doc));
   const chips = el("div", "device-chips", undefined, doc);
   if (summary?.critical_units_at_risk > 0) chips.append(el("span", "device-chip chip-risk", `${summary.critical_units_at_risk} critical units at risk`, doc));
@@ -179,8 +180,7 @@ export function renderPlanList(container, { plans, selectedId, recommendedId, pr
 export function renderConfirm(section, payload, { onYes, onNo }, doc = globalThis.document) {
   const details = confirmDetails(payload);
   const card = el("div", `confirm-card ${details.kind}`, undefined, doc);
-  card.append(el("p", "label", details.kind === "purchase" ? "Purchase · nothing charged yet" : "Approval · you decide", doc),
-    el("h2", "", details.title, doc), el("p", "lead", details.lead, doc));
+  card.append(el("h2", "", details.title, doc), el("p", "lead", details.lead, doc));
   const figure = el("p", "confirm-figure", undefined, doc);
   figure.append(el("strong", "", details.figure[0], doc), " ", el("span", "", details.figure[1], doc));
   card.append(figure);
@@ -201,7 +201,7 @@ export function renderConfirm(section, payload, { onYes, onNo }, doc = globalThi
 
 export function renderReceipt(section, { booking, onOpen }, doc = globalThis.document) {
   const card = el("div", "receipt-card", undefined, doc);
-  card.append(el("p", "label", "Receipt · simulated payment", doc), el("h2", "", `Booked ${booking.number}`, doc),
+  card.append(el("h2", "", `Booked ${booking.number}`, doc), el("p", "status-line", "Receipt · simulated payment", doc),
     el("p", "receipt-total", dollars(booking.total_usd), doc), el("p", "lead", booking.plan_label, doc));
   const rows = el("dl", "rows", undefined, doc);
   for (const [term, value] of bookingRows(booking)) rows.append(el("dt", "", term, doc), el("dd", "", value, doc));
@@ -213,15 +213,16 @@ export function renderReceipt(section, { booking, onOpen }, doc = globalThis.doc
 export function renderAlert(section, alert, doc = globalThis.document) {
   const details = alertDetails(alert);
   const card = el("div", "alert-card", undefined, doc);
-  card.append(el("p", "label", details.invalidated ? "Proactive alert · approval invalidated" : "Proactive alert · nothing approved", doc),
-    el("h2", "", details.title, doc), el("p", "lead", details.text, doc));
+  card.append(el("h2", "", details.title, doc),
+    el("p", "status-line warn", details.invalidated ? "Proactive alert · approval invalidated" : "Proactive alert · nothing approved", doc),
+    el("p", "lead", details.text, doc));
   if (details.plan) card.append(el("p", "new-plan", details.plan, doc));
   section.replaceChildren(card);
 }
 
 export function renderResult(section, { snapshot, execution, plan, booking, times = [] }, doc = globalThis.document) {
   const card = el("div", "result-card", undefined, doc);
-  card.append(el("p", "label", "Executed · operationally verified", doc), el("h2", "", plan?.label || execution.plan_id, doc),
+  card.append(el("h2", "", plan?.label || execution.plan_id, doc), el("p", "status-line ok", "Executed · operationally verified", doc),
     el("p", "lead", `${snapshot.state.incident_id} · ${snapshot.state.title}`, doc));
   const figures = el("div", "figures", undefined, doc);
   for (const item of resultFigures(snapshot, execution)) {

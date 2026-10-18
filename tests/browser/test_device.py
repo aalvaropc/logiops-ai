@@ -34,6 +34,20 @@ def card_lead(page) -> str:
     raise AssertionError("the MCP App card did not render")
 
 
+def card_text(page, selector: str) -> str:
+    """The text of the first element matching selector in the MCP App's inner frame, once the card has rendered again."""
+    for _ in range(50):
+        outer = next((frame for frame in page.frames if "/mcp-app/sandbox.html" in frame.url), None)
+        inner = outer.child_frames[0] if outer and outer.child_frames else None
+        try:
+            if inner and inner.evaluate("Boolean(document.querySelector('.plan'))"):
+                return inner.evaluate("(selector) => document.querySelector(selector)?.textContent || ''", selector)
+        except Exception:
+            pass
+        page.wait_for_timeout(200)
+    raise AssertionError("the MCP App card did not render")
+
+
 @pytest.mark.parametrize("width", WIDTHS)
 def test_device_walkthrough(page, replay_server, page_errors, reset_demo, width):
     page.set_viewport_size({"width": width, "height": 1000})
@@ -82,7 +96,9 @@ def test_device_walkthrough(page, replay_server, page_errors, reset_demo, width)
     page.click("#confirm-yes")
     expect(page.locator("#device-spoken")).to_contain_text("Approved")
     expect(plans).to_be_visible()
-    expect(page.locator("#plans-state")).to_contain_text("Approved by demo-operator")
+    expect(page.locator("#plans-state")).to_contain_text("Approved by you")
+    assert card_lead(page).startswith("pick: Fly the hospital order")
+    assert card_text(page, ".done-tag") == "Approved" and card_text(page, "button") == ""
 
     assert "executed" in say_on_device(page, "execute it")
     result = page.locator('[data-surface="result"]')

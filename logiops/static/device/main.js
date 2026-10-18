@@ -212,6 +212,10 @@ const mcpHost = createMcpAppHost({
   onHide: () => { $("mcp-app").hidden = true; $("plans").hidden = false; },
 });
 
+function decisionOf(snapshot) {
+  return { approved: visibleApproval(snapshot)?.plan_id || null, executed: Boolean(snapshot?.executions.length) };
+}
+
 async function showMcpApp(run) {
   const step = run.tool_trace?.find((item) => item.tool === "investigate_incident" && !item.is_error);
   if (!step) return;
@@ -220,12 +224,16 @@ async function showMcpApp(run) {
       + "Open the demo on 127.0.0.1 or localhost, or on the deployed hostname. The plans are listed below.");
     return;
   }
-  const wanted = { incidentId: state.incidentId, version: step.output.source_version };
+  const decision = decisionOf(state.snapshot);
+  const wanted = { incidentId: state.incidentId, version: step.output.source_version, run, ...decision };
   const resource = await mcpHost.show({
     toolName: "investigate_incident", input: step.input,
     result: {
       content: [{ type: "text", text: JSON.stringify(step.output) }], structuredContent: step.output,
-      _meta: { "logiops/recommended_plan_id": recommendedPlan(state.snapshot)?.id || null },
+      _meta: {
+        "logiops/recommended_plan_id": recommendedPlan(state.snapshot)?.id || null,
+        "logiops/approved_plan_id": decision.approved, "logiops/executed": decision.executed,
+      },
     },
     stillWanted: () => Boolean(state.snapshot) && String(step.input?.shipment_id || "").trim().toUpperCase() === state.incidentId
       && wanted.version === visibleVersion(state.snapshot),
@@ -320,7 +328,8 @@ function renderPlansSurface() {
   if (approval) state.selectedPlanId = approval.plan_id;
   else if (!plans.some((plan) => plan.id === state.selectedPlanId)) state.selectedPlanId = recommended?.id || plans[0]?.id || null;
   $("plans-title").textContent = plans.length ? `${plans.length} plans for ${snapshot.state.incident_id}` : `No plans yet for ${snapshot.state.incident_id}`;
-  $("plans-state").textContent = executed ? "Executed and verified" : approval ? `Approved by ${approval.approved_by} · say “execute it”`
+  const approver = approval?.approved_by === state.approver ? "you" : approval?.approved_by;
+  $("plans-state").textContent = executed ? "Executed and verified" : approval ? `Approved by ${approver} · say “execute it”`
     : plans.length ? "Only you approve. Selecting a plan does not approve it." : "Ask what's happening to calculate them";
   renderPlanList($("plans"), {
     plans: recommended ? [recommended, ...plans.filter((plan) => plan.id !== recommended.id)] : plans, selectedId: state.selectedPlanId, recommendedId: recommended?.id, preferredId: snapshot.preference?.preferred_plan_id,
@@ -328,7 +337,11 @@ function renderPlansSurface() {
   });
 }
 
+let paintedSurface = null;
+
 function paintSurface(shown = surfaces.current()) {
+  const lostFocus = !document.activeElement || document.activeElement === document.body || !document.activeElement.isConnected
+    || Boolean(document.activeElement.closest?.("[data-surface], #chips"));
   for (const [name, section] of Object.entries(sections)) section.hidden = name !== shown.name;
   const section = sections[shown.name];
   const snapshot = state.snapshot;
@@ -355,6 +368,12 @@ function paintSurface(shown = surfaces.current()) {
   }
   renderChips(shown.name);
   $("surface").scrollTop = 0;
+  const heading = section.querySelector("h2");
+  if (shown.name !== paintedSurface && lostFocus && heading && $("sheet").hidden) {
+    heading.tabIndex = -1;
+    heading.focus({ preventScroll: true });
+  }
+  paintedSurface = shown.name;
 }
 
 function renderChips(surface) {
@@ -396,6 +415,10 @@ function render(snapshot) {
   $("connection").className = "connection ready";
   document.title = `LogiOps AI · ${snapshot.state.incident_id}`;
   $("console-link").href = `/console#${encodeURIComponent(state.incidentId)}`;
+  const decision = decisionOf(snapshot);
+  if (state.app && (state.app.approved !== decision.approved || state.app.executed !== decision.executed)) {
+    showMcpApp(state.app.run).catch(() => {});
+  }
   const agentEvent = latestAgentEvent(snapshot);
   if (!state.conversation.length && agentEvent) {
     state.conversation.push({ role: "assistant", text: agentEvent.data.display_answer || agentEvent.data.answer, meta: traceSummary(agentEvent.data), check: checkBadge(agentEvent.data) });
@@ -573,6 +596,7 @@ const commands = createCommands({
 });
 
 function handleUtterance(raw) {
+  if (!state.busy) message("");
   return commands.handle(raw);
 }
 
