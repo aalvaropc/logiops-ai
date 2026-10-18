@@ -283,9 +283,7 @@ export function renderAlert(section, alert, doc = globalThis.document) {
 
 export function renderResult(section, { snapshot, execution, plan, booking, times = [] }, doc = globalThis.document) {
   const card = el("div", "result-card", undefined, doc);
-  const heading = el("h2", "", undefined, doc);
-  const labels = snapshot.plans.filter((item) => item.source_version === plan?.source_version).map((item) => item.label);
-  heading.append(...(plan ? labelNodes(plan.label, labels, doc) : [execution.plan_id]));
+  const heading = el("h2", "", plan ? plan.label : execution.plan_id, doc);
   const lead = el("p", "lead", undefined, doc);
   lead.append(el("span", "incident-id", snapshot.state.incident_id, doc), ` · ${snapshot.state.title}`);
   let figure = null;
