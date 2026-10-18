@@ -38,8 +38,11 @@ from .tools import inventory_hint, inventory_view, order_view, orders_hint, ship
 UI_MIME_TYPE = "text/html;profile=mcp-app"
 UI_FONT_TOKEN = "logiops-card-font.woff2"
 UI_FONT = Path(__file__).resolve().parent / "static" / "fonts" / "overpass-latin.woff2"
+UI_FIELD_TOKEN = "LOGIOPS_CARD_FIELD"
+UI_FIELD = Path(__file__).resolve().parent / "static" / "field.js"
 UI_HTML = (Path(__file__).resolve().parent / "static" / "resolution_options.html").read_text(encoding="utf-8").replace(
-    UI_FONT_TOKEN, "data:font/woff2;base64," + base64.b64encode(UI_FONT.read_bytes()).decode("ascii"))
+    UI_FONT_TOKEN, "data:font/woff2;base64," + base64.b64encode(UI_FONT.read_bytes()).decode("ascii")).replace(
+    UI_FIELD_TOKEN, UI_FIELD.read_text(encoding="utf-8").strip())
 UI_URI = f"ui://logiops/resolution-options.{hashlib.sha256(UI_HTML.encode()).hexdigest()[:8]}.html"
 UI_INVOKING = "Calculating every feasible plan…"
 UI_INVOKED = "Plans ready to compare"

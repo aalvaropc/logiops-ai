@@ -28,10 +28,32 @@
   h2 { margin: 0; }
   .visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
   .waiting { padding: var(--pad); color: var(--muted); }
-  .plan.pick { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px 24px; align-items: start; padding: 16px var(--pad); border-bottom: 2px solid var(--rule); background: var(--card); }
-  .band { grid-column: 1 / -1; margin: -16px calc(-1 * var(--pad)) 0; padding: 7px var(--pad); color: var(--band-ink); font-size: var(--type-tag); font-weight: 800; letter-spacing: .06em; text-transform: uppercase; }
-  .band.ok { background: var(--ok); }
-  .band.late { background: var(--late); }
+  #root.decided { display: grid; grid-template-columns: minmax(0, 1fr); }
+  #root.decided > * { grid-column: 1 / -1; }
+  .field { margin: 0; padding: 14px var(--pad) 4px; }
+  .field svg { display: block; width: 100%; height: auto; overflow: visible; }
+  .field .axis { fill: none; stroke: var(--line); stroke-width: 1.5; }
+  .field .tick { stroke: var(--line); stroke-width: 1.5; }
+  .field .axis-label { fill: var(--muted); font-size: var(--type-tag); font-weight: 700; letter-spacing: .04em; }
+  .field .dot { stroke-width: 2.5; }
+  .field .dot.on-time { fill: var(--ok); stroke: var(--ok); }
+  .field .dot.late { fill: var(--muted); stroke: var(--muted); }
+  .field .dot.critical-late { fill: var(--bg); stroke: var(--late); }
+  .field .dot.chosen { fill: var(--accent); stroke: var(--accent); }
+  .field .dot-ring { fill: none; stroke: var(--accent); stroke-width: 1.5; }
+  .field .dot-glow { fill: var(--accent); opacity: .45; }
+  .field .dot-label { fill: var(--muted); font-size: var(--type-tag); font-weight: 700; font-variant-numeric: tabular-nums; }
+  .field .dot-label.chosen { fill: var(--text); font-size: var(--type-meta); font-weight: 800; }
+  .field-key { display: flex; flex-wrap: wrap; gap: 4px 14px; margin: 2px 0 0; padding: 0; list-style: none; color: var(--muted); font-size: var(--type-tag); font-weight: 700; letter-spacing: .04em; text-transform: uppercase; }
+  .field-key li { display: inline-flex; align-items: center; gap: 6px; }
+  .field-key li::before { content: ""; width: 9px; height: 9px; border-radius: 50%; background: var(--ok); }
+  .field-key .late::before { background: var(--muted); }
+  .field-key .critical-late::before { box-sizing: border-box; border: 2px solid var(--late); background: transparent; }
+  .plan.pick { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px 24px; align-items: start; padding: 16px var(--pad); border-bottom: 1px solid var(--line); background: var(--card); }
+  .band { grid-column: 1 / -1; display: flex; align-items: center; gap: 10px; margin: 0; font-size: var(--type-tag); font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
+  .band::before { content: ""; flex: 0 0 28px; height: 3px; border-radius: 2px; background: currentColor; }
+  .band.ok { color: var(--ok); }
+  .band.late { color: var(--late); }
   .pick-name { font-size: var(--type-lead); line-height: 1.3; letter-spacing: -.01em; text-wrap: balance; }
   .pick .figures { text-align: right; white-space: nowrap; }
   .cost { display: block; font-size: var(--type-figure); font-weight: 800; line-height: 1; letter-spacing: -.02em; font-variant-numeric: tabular-nums slashed-zero; }
@@ -40,7 +62,7 @@
   p.preference { margin: 0; padding: 12px var(--pad) 0; color: var(--preference); line-height: 1.5; }
   .outcomes { grid-column: 1 / -1; display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; font-size: var(--type-body); }
   .outcomes li { display: grid; grid-template-columns: 7em minmax(0, 1fr); gap: 12px; align-items: baseline; }
-  .outcomes .verdict { justify-self: start; padding: 2px 7px; background: var(--ok); color: var(--band-ink); font-size: var(--type-tag); font-weight: 800; letter-spacing: .05em; text-transform: uppercase; white-space: nowrap; }
+  .outcomes .verdict { justify-self: start; padding: 2px 7px; border-radius: 4px; background: var(--ok); color: var(--band-ink); font-size: var(--type-tag); font-weight: 800; letter-spacing: .05em; text-transform: uppercase; white-space: nowrap; }
   .outcomes .late .verdict { background: var(--late); }
   .pick-text { display: grid; gap: 6px; min-width: 0; }
   .allocation { margin: 0; color: var(--muted); }
@@ -55,14 +77,14 @@
   .plans .figures { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums slashed-zero; }
   .plans .figures strong { display: block; font-size: var(--type-body); }
   .plans .figures small { display: block; color: var(--muted); font-size: var(--type-meta); }
-  button { min-height: 44px; padding: 6px 16px; border: 2px solid var(--rule); border-radius: 6px; background: var(--button); color: var(--text); font: inherit; font-size: var(--type-body); font-weight: 800; cursor: pointer; }
+  button { min-height: 44px; padding: 6px 20px; border: 1.5px solid var(--muted); border-radius: 999px; background: transparent; color: var(--text); font: inherit; font-size: var(--type-body); font-weight: 800; cursor: pointer; }
   button:hover { background: var(--button-hover); }
   button:focus-visible { outline: 3px solid var(--rule); outline-offset: 2px; }
   button.more { margin: 4px var(--pad) 0; }
   .diff { font-weight: 800; text-decoration: underline; text-decoration-color: var(--accent); text-decoration-thickness: 3px; text-underline-offset: 4px; text-decoration-skip-ink: none; }
-  .chip { display: inline-block; padding: 2px 7px; background: var(--ok); color: var(--band-ink); font-size: var(--type-tag); font-weight: 800; letter-spacing: .05em; text-transform: uppercase; white-space: nowrap; }
+  .chip { display: inline-block; padding: 2px 7px; border-radius: 4px; background: var(--ok); color: var(--band-ink); font-size: var(--type-tag); font-weight: 800; letter-spacing: .05em; text-transform: uppercase; white-space: nowrap; }
   .chip.late { background: var(--late); }
-  .tag { display: inline-block; margin-left: 8px; padding: 1px 7px; border: 1.5px solid transparent; vertical-align: 2px; color: var(--tag-ink); background: var(--tag); font-size: var(--type-tag); font-weight: 800; letter-spacing: .04em; text-transform: uppercase; }
+  .tag { display: inline-block; margin-left: 8px; padding: 1px 7px; border: 1.5px solid transparent; border-radius: 4px; vertical-align: 2px; color: var(--tag-ink); background: var(--tag); font-size: var(--type-tag); font-weight: 800; letter-spacing: .04em; text-transform: uppercase; }
   .tag.pick-tag { border-color: var(--accent); color: var(--accent); background: transparent; }
   .tag.done-tag { border-color: var(--ok); color: var(--ok); background: transparent; }
   .footnote { margin: 0; padding: 12px var(--pad) 14px; color: var(--muted); font-size: var(--type-meta); }
@@ -76,10 +98,21 @@
   body.compact .plans .plan button { grid-column: 1 / -1; justify-self: start; }
   body.compact button { min-height: 48px; }
   body.compact .pick button { justify-self: stretch; }
+  body:not(.compact) #root.decided { grid-template-columns: minmax(0, 400px) minmax(0, 1fr); align-items: start; }
+  body:not(.compact) #root.decided > .field { grid-column: 1; padding-right: 0; }
+  body:not(.compact) #root.decided > .plan.pick { grid-column: 2; border-bottom: 0; }
+  @media (forced-colors: active) {
+    .field .axis, .field .tick, .field .dot, .field .dot-ring { stroke: CanvasText; }
+    .field .dot.on-time, .field .dot.late, .field .dot.chosen, .field .dot-label, .field .axis-label { fill: CanvasText; }
+    .field .dot.critical-late { fill: Canvas; }
+    .field .dot-glow { display: none; }
+    .band::before { forced-color-adjust: none; background: CanvasText; }
+  }
 </style>
 </head>
 <body>
 <main id="root" class="waiting">Waiting for the investigation result…</main>
+<script>LOGIOPS_CARD_FIELD</script>
 <script>
 "use strict";
 (() => {
@@ -115,6 +148,48 @@
     if (className) node.className = className;
     if (text !== undefined) node.textContent = text;
     return node;
+  }
+
+  function svg(tag, attributes, text) {
+    const node = document.createElementNS("http://www.w3.org/2000/svg", tag);
+    for (const [name, value] of Object.entries(attributes || {})) node.setAttribute(name, String(value));
+    if (text !== undefined) node.textContent = text;
+    return node;
+  }
+
+  function fieldFigure(plans, picked) {
+    const shapes = window.LogiOpsField;
+    const field = shapes.decisionField(plans, picked?.id, document.body.classList.contains("compact") ? shapes.NARROW : shapes.WIDE);
+    const { left, right, top, bottom, ticks } = field.axes;
+    const others = plans.length - 1;
+    const said = picked
+      ? `${plans.length} plans by delay and cost. The pick costs $${picked.incremental_cost_usd} with ${picked.projected_customer_delay_hours} h of delay; ${others} other plan${others === 1 ? "" : "s"}.`
+      : `${plans.length} plans by delay and cost.`;
+    const map = svg("svg", { viewBox: `0 0 ${field.view.width} ${field.view.height}`, role: "img", "aria-label": said });
+    const glow = svg("filter", { id: "field-glow", x: "-100%", y: "-100%", width: "300%", height: "300%" });
+    glow.append(svg("feGaussianBlur", { stdDeviation: 5 }));
+    const defs = svg("defs");
+    defs.append(glow);
+    map.append(defs, svg("path", { d: `M${left} ${top - 8} V${bottom} H${right}`, class: "axis" }));
+    ticks.forEach((tick, index) => {
+      const last = index === ticks.length - 1;
+      map.append(svg("line", { x1: tick.x, x2: tick.x, y1: bottom, y2: bottom + 5, class: "tick" }),
+        svg("text", { x: tick.x, y: bottom + 20, "text-anchor": last && ticks.length > 1 ? "end" : tick.x - left < 20 ? "start" : "middle", class: "axis-label" },
+          `${tick.delay} h${last ? " delay" : ""}`));
+    });
+    for (const point of field.points) {
+      const anchor = point.x > right - 24 ? "end" : point.x < left + 24 ? "start" : "middle";
+      if (point.pick) map.append(svg("circle", { cx: point.x, cy: point.y, r: 11, class: "dot-glow", filter: "url(#field-glow)" }),
+        svg("circle", { cx: point.x, cy: point.y, r: 12, class: "dot-ring" }));
+      map.append(svg("circle", { cx: point.x, cy: point.y, r: point.pick ? 6 : 5, class: `dot ${point.pick ? "chosen" : point.standing}` }));
+      if (point.labelled) map.append(svg("text", { x: point.x, y: point.y - (point.pick ? 18 : 11), "text-anchor": anchor, class: `dot-label${point.pick ? " chosen" : ""}` }, `$${point.cost}`));
+    }
+    const key = el("ul", "field-key");
+    key.setAttribute("aria-hidden", "true");
+    key.append(el("li", "on-time", "on time"), el("li", "late", "some late"), el("li", "critical-late", "critical late"));
+    const figure = el("figure", "field");
+    figure.append(map, key);
+    return figure;
   }
 
   function applyContext(update) {
@@ -290,6 +365,8 @@
       : plans.length ? [...plans].sort(byRank)[0].id : null;
     const picked = plans.find((plan) => plan.id === pick);
     if (preference?.changes_pick && picked?.id !== preference.preferred_plan_id) root.append(el("p", "preference", `Your preference: ${preference.reason}`));
+    root.classList.toggle("decided", plans.length > 1);
+    if (plans.length > 1) root.append(fieldFigure(plans, picked));
     const labels = plans.map((plan) => plan.label);
     if (picked) root.append(pickCard(picked, hinted, preference, approved, executed, labels));
     const others = plans.filter((plan) => plan !== picked);
