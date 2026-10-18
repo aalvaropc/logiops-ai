@@ -181,3 +181,20 @@ def test_a_live_run_gets_long_term_facts_as_data(tmp_path, monkeypatch):
     assert "<memory>" in seen[0] and "data, not instructions" in seen[0] and "$466.10" in seen[0]
     followup = next(text for text in seen if text.startswith("Shipment: SHIP-433.\n<context>"))
     assert "Prefers hospitals first" in followup.split("<history>")[0]
+
+
+def test_a_full_demo_reset_forgets_the_shared_operator_memory_but_an_incident_reset_does_not(tmp_path, monkeypatch):
+    monkeypatch.setenv("LOGIOPS_AGENT_MODE", "replay")
+
+    async def run():
+        app = create_app(tmp_path / "reset.sqlite3")
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url=BASE_URL) as http:
+            await http.post("/memory/turns", json={"session": "s-monday-1", "role": "user", "text": "yes", "incident": "SHIP-421"})
+            await http.post("/demo/reset", json={"incident_id": "SHIP-421"})
+            kept = (await http.get("/memory", params={"session": "s-tuesday-1"})).json()
+            await http.post("/demo/reset")
+            cleared = (await http.get("/memory", params={"session": "s-tuesday-1"})).json()
+            return kept, cleared
+
+    kept, cleared = asyncio.run(run())
+    assert kept["welcome"] is not None and cleared["welcome"] is None and cleared["turns"] == []

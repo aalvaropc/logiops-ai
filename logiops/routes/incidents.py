@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
+import asyncio
 from typing import Any
 
 from fastapi import APIRouter, Request
 
-from ..identity import actor_of, profile_of
+from ..identity import OPERATOR, actor_of, profile_of
 from ..metrics import incident_metrics, session_metrics
 from ..preferences import preference_for
 from ..presentation import customer_text
@@ -16,15 +17,17 @@ from .models import ApprovalRequest, ExecutionRequest, InventoryChange, ResetReq
 
 
 def router(ctx: Context) -> APIRouter:
-    service, preferences, bookings, alerts = ctx.service, ctx.preferences, ctx.bookings, ctx.alerts
+    service, preferences, bookings, alerts, memory = ctx.service, ctx.preferences, ctx.bookings, ctx.alerts, ctx.memory
     routes = APIRouter()
 
     @routes.post("/demo/reset")
     async def reset(request: ResetRequest | None = None) -> dict[str, Any]:
-        """Restore every synthetic incident and forget the preferences and bookings, or reset only the incident named."""
+        """Restore every synthetic incident and forget the preferences, bookings and the shared demo operator's
+        memory, or reset only the incident named."""
         incident_id = request.incident_id if request else None
         if incident_id is None:
             preferences.clear_all()
+            await asyncio.to_thread(memory.forget, OPERATOR)
         snapshot = service.reset(incident_id)
         bookings.clear(incident_id)
         alerts.clear(incident_id)
