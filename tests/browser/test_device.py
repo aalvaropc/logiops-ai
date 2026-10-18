@@ -94,6 +94,7 @@ def test_device_walkthrough(page, replay_server, page_errors, reset_demo, width)
     expect(page.locator("#mcp-app")).to_be_visible()
     assert card_lead(page).startswith("pick: Fly the hospital order; rebook the store order on ground")
     assert card_text(page, ".pick .diff") == "rebook"
+    assert card_text(page, ".field .dot-label.chosen") == "$390"
     expect(page.locator("#plans-state")).to_contain_text("Only you approve")
     page.locator("#chips .chip", has_text="Show the incident").click()
     expect(incident).to_be_visible()
