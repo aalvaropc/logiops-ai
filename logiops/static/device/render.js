@@ -269,8 +269,10 @@ export function renderResult(section, { snapshot, execution, plan, booking, time
   const heading = el("h2", "", undefined, doc);
   const labels = snapshot.plans.filter((item) => item.source_version === plan?.source_version).map((item) => item.label);
   heading.append(...(plan ? labelNodes(plan.label, labels, doc) : [execution.plan_id]));
+  const lead = el("p", "lead", undefined, doc);
+  lead.append(el("span", "incident-id", snapshot.state.incident_id, doc), ` · ${snapshot.state.title}`);
   card.append(el("p", "band ok", "Executed · operationally verified", doc), heading,
-    el("p", "lead", `${snapshot.state.incident_id} · ${snapshot.state.title}`, doc));
+    lead);
   if (plan) {
     const outcome = resultOutcome(plan);
     const figure = el("p", "result-figure", undefined, doc);

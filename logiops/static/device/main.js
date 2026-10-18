@@ -11,7 +11,7 @@ import { createAlerts, bellText } from "../app/alerts.js";
 import { createCommands, approvalReadback } from "../app/commands.js";
 import { createStore } from "../app/store.js";
 import {
-  visibleVersion, visibleApproval, visiblePlans, latestAgentEvent, namedPlanKinds,
+  visibleVersion, visibleApproval, visiblePlans, latestAgentEvent, namedPlanKinds, plural,
   recommendedPlan as pickRecommended, planFromUtterance as pickFromUtterance, TIME_ZONE,
 } from "../app/selectors.js";
 import { homeHeading, HOME_LINE } from "../app/greeting.js";
@@ -334,7 +334,7 @@ function renderPlansSurface() {
   const recommended = recommendedPlan(snapshot);
   if (approval) state.selectedPlanId = approval.plan_id;
   else if (!plans.some((plan) => plan.id === state.selectedPlanId)) state.selectedPlanId = recommended?.id || plans[0]?.id || null;
-  $("plans-title").textContent = plans.length ? `${plans.length} plans for ${snapshot.state.incident_id}` : `No plans yet for ${snapshot.state.incident_id}`;
+  $("plans-title").textContent = plans.length ? `${plans.length} ${plural(plans.length, "plan")} for ${snapshot.state.incident_id}` : `No plans yet for ${snapshot.state.incident_id}`;
   const approver = approval?.approved_by === state.approver ? "you" : approval?.approved_by;
   const approvedPlan = approval && plans.find((plan) => plan.id === approval.plan_id);
   $("plans-state").textContent = executed ? "Executed and verified"

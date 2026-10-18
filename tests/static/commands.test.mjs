@@ -164,7 +164,7 @@ test("a mentioned incident is opened first, a briefing reads the inbox and remem
   await h.commands.handle("any delays today?");
   assert.equal(h.store.state.briefingPick, "SHIP-433");
   assert.ok(h.events.includes("inbox"));
-  assert.match(h.last().meta, /^briefing · 1 MCP calls/);
+  assert.match(h.last().meta, /^briefing · 1 MCP call · /);
   await h.commands.handle("remember my spend cap is $250");
   assert.ok(h.events.includes('save:{"max_cost_usd":250}'));
   assert.equal(h.last().text, "Saved for every incident: described 250. effect. Preferences never approve anything; you still approve the plan.");

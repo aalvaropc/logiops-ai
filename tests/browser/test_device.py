@@ -207,6 +207,19 @@ def test_the_sheet_opens_at_the_latest_turn_and_keeps_focus_inside_and_enter_kee
     assert page_errors == []
 
 
+@pytest.mark.parametrize("width", (320, 360))
+def test_the_lifecycle_strip_reads_whole_on_narrow_phones(page, replay_server, page_errors, reset_demo, width):
+    page.set_viewport_size({"width": width, "height": 740})
+    page.goto(f"{replay_server}/demo#SHIP-433")
+    expect(page.locator("#lifecycle")).to_be_visible()
+    clipped = page.evaluate("""[...document.querySelectorAll("#lifecycle li")]
+        .filter((item) => item.scrollWidth > item.clientWidth).map((item) => item.textContent)""")
+    assert clipped == [], clipped
+    assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
+    expect(page.locator('[data-surface="incident"] .incident-id')).to_have_css("white-space", "nowrap")
+    assert page_errors == []
+
+
 def test_the_device_fits_a_small_phone(page, replay_server, page_errors, reset_demo):
     page.set_viewport_size({"width": 360, "height": 740})
     page.goto(f"{replay_server}/demo")

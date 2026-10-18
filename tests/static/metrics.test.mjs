@@ -14,6 +14,7 @@ test("durations read as seconds or minutes, and the session strip names each fig
     ["0", "units late after execution"], ["43 s", "median time to decision"],
   ]);
   assert.deepEqual(sessionFigures({ ...totals, median_time_to_decision_s: null })[5], ["—", "median time to decision"]);
+  assert.deepEqual(sessionFigures({ ...totals, decided: 1, incidents: 1, executed: 1 }).slice(0, 2), [["1 of 1", "incident executed"], ["1", "plan approved"]]);
   assert.deepEqual(sessionFigures({ ...totals, decided: 0, executed: 0, booked_usd: 0 }), []);
   assert.deepEqual(incidentTimes({ time_to_decision_s: 10, time_to_execution_s: null }), [["Decided in", "10 s"]]);
   assert.deepEqual(incidentTimes(undefined), []);

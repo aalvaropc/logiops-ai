@@ -19,7 +19,7 @@ test("badges and notes follow the grounding check and the budget fallback", () =
 test("summaries count calls, tokens and units", () => {
   assert.equal(traceSummary({ tool_trace: [1, 2, 3], mode: "replay", usage: { inputTokens: 0, outputTokens: 0 } }), "3 MCP calls · replay mode · 0 tokens");
   assert.equal(traceSummary({ tool_trace: [1], mode: "bedrock", fallback: "daily_budget", usage: { inputTokens: 10, outputTokens: 5 }, truncated: true }),
-    "1 MCP calls · bedrock mode · daily live budget used · 15 tokens · truncated");
+    "1 MCP call · bedrock mode · daily live budget used · 15 tokens · truncated");
   const snapshot = { state: { shipment: { units_on_delayed_route: 8 } } };
   const execution = { fulfillments: [{ units: 12 }], incremental_cost_usd: 120, notifications: [1, 2], projected_customer_delay_hours: 0 };
   assert.equal(executionSummary(snapshot, execution), "Verified: 20 units accounted for · $120 extra · 2 simulated notifications. Customer delay: 0h (projected).");

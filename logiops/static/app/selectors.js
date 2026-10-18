@@ -28,6 +28,10 @@ export const PLAN_KEYWORDS = [
 export const TIME_ZONE = "America/Lima";
 const DATE = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit", timeZone: TIME_ZONE });
 
+export function plural(count, one, many = `${one}s`) {
+  return count === 1 ? one : many;
+}
+
 export function formatDate(iso) {
   return DATE.format(new Date(iso));
 }
