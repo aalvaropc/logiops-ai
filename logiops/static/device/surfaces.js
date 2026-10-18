@@ -197,21 +197,22 @@ export function chipsFor(surface, { snapshot, incidentId, inbox = [], plan = nul
   const next = nextOpen(inbox, incidentId);
   const openNext = next ? [[`Open ${next.incident_id}`, `Open ${next.incident_id}`]] : [];
   const result = [["See the result", "Show the result"]];
+  const back = ["Back to queue", "Back to the queue"];
   switch (surface) {
     case "home": return [["Any delays today?", briefing], ask(lead)];
     case "incident":
-      if (!investigated) return [ask(incidentId), ["Any delays today?", briefing]];
-      if (executed) return [...result, ["Show the plans", "Show the plans"], ...openNext];
-      return [...(approved ? [] : [approve]), ["Show the plans", "Show the plans"]];
+      if (!investigated) return [ask(incidentId), back];
+      if (executed) return [...result, ...openNext, back];
+      return [...(approved ? [] : [approve]), ["Show the plans", "Show the plans"], back];
     case "plans":
-      if (executed) return [...pay, ["Any delays today?", briefing]];
-      if (approved) return [execute, ...pay, ["Why this plan?", "Why is that the recommended plan?"]];
-      return [approve, ["Why this plan?", "Why is that the recommended plan?"], ["Show the incident", "Show the incident"], ...pay];
+      if (executed) return [...pay, back];
+      if (approved) return [execute, ...pay, ["Why this plan?", "Why is that the recommended plan?"], back];
+      return [approve, ["Why this plan?", "Why is that the recommended plan?"], ["Show the incident", "Show the incident"], ...pay, back];
     case "receipt":
-      if (executed) return [...result, ...openNext, ["Any delays today?", briefing]];
-      return approved ? [execute, ["Any delays today?", briefing]] : [["Any delays today?", briefing]];
+      if (executed) return [...result, ...openNext, back];
+      return approved ? [execute, back] : [back];
     case "alert": return [["Approve the new pick", "Approve the recommended plan", "act"], ["Why did it change?", "Why did the recommended plan change?"]];
-    case "result": return [...pay, ...openNext, ["Any delays today?", briefing]];
+    case "result": return [...pay, ...openNext, back];
     default: return [];
   }
 }

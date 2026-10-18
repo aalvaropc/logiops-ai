@@ -288,3 +288,15 @@ test("a standing approval blocks a second one, and withdrawing it is read back, 
   await none.commands.handle("undo the approval");
   assert.equal(none.last().text, "Nothing is approved for SHIP-421, so there's nothing to withdraw.");
 });
+
+test("going home is a closed command that keeps the conversation and calls nothing", async () => {
+  const h = harness();
+  await h.commands.handle("approve the recommended plan");
+  for (const line of ["home", "go back", "back to the queue", "show me the inbox"]) {
+    await h.commands.handle(line);
+    assert.equal(h.last().text, "Here's your queue: 2 open incidents.", line);
+  }
+  assert.ok(h.events.filter((event) => event === "surface:home").length === 4);
+  assert.ok(!h.events.includes("hideMcpApp"), "going home clears nothing");
+  assert.equal(h.calls.length, 0);
+});

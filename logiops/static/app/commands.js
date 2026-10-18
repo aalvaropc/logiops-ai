@@ -122,6 +122,12 @@ export function createCommands({
       }
       command = null;
     }
+    if (command === "show_home") {
+      const open = state.inbox.filter((item) => item.status !== "verified").length;
+      say("assistant", open ? `Here's your queue: ${open} open incident${open === 1 ? "" : "s"}.` : "Here's your queue. Every incident is resolved.");
+      onSurface("home");
+      return;
+    }
     if (command === "show_result") {
       if (state.snapshot?.executions.length) {
         say("assistant", `Here's the result for ${state.incidentId}.`);
