@@ -1,6 +1,7 @@
 import { dollars, bookingRows } from "../app/purchase.js";
 import { formatDate, allocationSummary, TIME_ZONE } from "../app/selectors.js";
 import { incidentFacts, confirmDetails, resultFigures, alertDetails } from "./surfaces.js";
+import { EMPTY_SESSION } from "../app/metrics.js";
 
 const SVG = "http://www.w3.org/2000/svg";
 const WHEN = new Intl.DateTimeFormat("en-US", { timeZone: TIME_ZONE, month: "short", day: "numeric", hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
@@ -45,7 +46,7 @@ export function renderHome(section, { greeting, lead, session }, doc = globalThi
   if (!session) return;
   const strip = el("ul", `session-strip${session.length ? "" : " empty"}`, undefined, doc);
   strip.setAttribute("aria-label", "This session's outcomes, from the recorded events");
-  if (!session.length) strip.append(el("li", "", "No plan approved yet this session. Outcomes appear here as you decide.", doc));
+  if (!session.length) strip.append(el("li", "", EMPTY_SESSION, doc));
   for (const [value, label] of session) {
     const item = el("li", "", undefined, doc);
     item.append(el("strong", "", value, doc), el("span", "", label, doc));

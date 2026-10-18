@@ -7,6 +7,7 @@
 .metrics-strip li { display: grid; gap: 2px; min-width: 120px; padding: 10px 14px; border: 1px solid #294249; border-radius: 10px; background: #142329; }
 .metrics-strip strong { font-size: 18px; letter-spacing: -.02em; }
 .metrics-strip span { color: #8fa4a9; font-size: 11px; }
+.metrics-strip.empty li { min-width: 0; padding: 0; border: 0; background: none; color: #8fa4a9; font-size: 13px; }
 .page-link { color: #9ff0dc; text-decoration: none; }
 .page-link:hover { text-decoration: underline; }
 .developer { margin-top: 18px; padding: 16px 20px; border: 1px dashed #4f7f76; border-radius: 14px; background: #0f1d22; }

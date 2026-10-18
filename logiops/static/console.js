@@ -15,7 +15,7 @@ import {
 import { welcomeText as greeting } from "./app/greeting.js";
 import { checkBadge, checkNote, fallbackNote, traceSummary, executionSummary } from "./app/run-badges.js";
 import { renderMarkdown } from "./app/markdown-dom.js";
-import { sessionFigures } from "./app/metrics.js";
+import { sessionFigures, EMPTY_SESSION } from "./app/metrics.js";
 
 const $ = (id) => document.getElementById(id);
 const DEFAULT_INCIDENT = "SHIP-421";
@@ -456,8 +456,15 @@ async function refresh() {
 async function loadMetrics() {
   const metrics = await request("/metrics");
   const box = $("metrics");
+  const figures = sessionFigures(metrics.session);
   box.replaceChildren();
-  for (const [value, label] of sessionFigures(metrics.session)) {
+  box.classList.toggle("empty", !figures.length);
+  if (!figures.length) {
+    const item = document.createElement("li");
+    item.textContent = EMPTY_SESSION;
+    box.append(item);
+  }
+  for (const [value, label] of figures) {
     const item = document.createElement("li");
     const figure = document.createElement("strong");
     figure.textContent = value;
