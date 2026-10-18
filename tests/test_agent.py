@@ -1,6 +1,7 @@
 """Bedrock receives real MCP tool results but cannot approve or execute."""
 
 import asyncio
+import json
 from copy import deepcopy
 
 import httpx
@@ -289,3 +290,61 @@ def test_replies_carry_a_short_line_to_read_aloud(tmp_path, monkeypatch):
                 assert ask["spoken"] and "Spoken:" not in ask["answer"]
 
     asyncio.run(run())
+
+
+def sse_events(text):
+    events = []
+    for block in text.strip().split("\n\n"):
+        lines = dict(line.split(": ", 1) for line in block.split("\n"))
+        events.append((lines["event"], json.loads(lines["data"])))
+    return events
+
+
+def test_the_investigation_streams_each_tool_call_then_the_same_result(tmp_path, monkeypatch):
+    monkeypatch.setenv("LOGIOPS_AGENT_MODE", "replay")
+
+    async def run():
+        app = create_app(tmp_path / "stream.sqlite3")
+        async with app.router.lifespan_context(app):
+            async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url=BASE_URL) as http:
+                async with http.stream("POST", "/incidents/SHIP-421/agent/investigate/stream", json={}) as response:
+                    headers = response.headers
+                    text = "".join([chunk async for chunk in response.aiter_text()])
+                plain = (await http.post("/incidents/SHIP-421/agent/investigate", json={})).json()
+                missing = await http.post("/incidents/SHIP-999/agent/investigate/stream", json={})
+        return headers, sse_events(text), plain, missing
+
+    headers, events, plain, missing = asyncio.run(run())
+    assert headers["content-type"].startswith("text/event-stream") and headers["cache-control"] == "no-store, no-transform"
+    assert [kind for kind, _ in events] == ["step"] * 5 + ["done"]
+    done = events[-1][1]
+    assert [data for kind, data in events if kind == "step"] == done["tool_trace"]
+    assert set(done) == set(plain) and done["mode"] == plain["mode"] == "replay"
+    assert [step["tool"] for step in done["tool_trace"]] == [step["tool"] for step in plain["tool_trace"]]
+    assert done["answer"] == plain["answer"] and done["recommended_plan_id"] == plain["recommended_plan_id"]
+    assert missing.status_code == 404
+
+
+def test_a_stream_pings_while_the_model_thinks_and_ends_with_the_error(tmp_path, monkeypatch):
+    from logiops.bedrock import BedrockError
+    import logiops.routes.agent as routes
+
+    class SlowThenDown:
+        async def converse(self, messages, system, tools, skill=None):
+            await asyncio.sleep(0.25)
+            raise BedrockError("Bedrock is unavailable")
+
+    monkeypatch.setattr(routes, "PING_SECONDS", 0.05)
+
+    async def run():
+        app = create_app(tmp_path / "down.sqlite3", bedrock_client=SlowThenDown())
+        async with app.router.lifespan_context(app):
+            async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url=BASE_URL) as http:
+                async with http.stream("POST", "/incidents/SHIP-421/agent/investigate/stream", json={}) as response:
+                    return response.status_code, sse_events("".join([chunk async for chunk in response.aiter_text()]))
+
+    status, events = asyncio.run(run())
+    assert status == 200
+    kinds = [kind for kind, _ in events]
+    assert kinds.count("ping") >= 2 and set(kinds[:-1]) == {"ping"}
+    assert events[-1] == ("error", {"status": 502, "detail": "Bedrock is unavailable"})

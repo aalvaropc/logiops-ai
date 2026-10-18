@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import os
 import re
@@ -10,11 +11,14 @@ from contextlib import asynccontextmanager
 from typing import Any, AsyncIterator
 
 from fastapi import APIRouter, Request
+from fastapi.encoders import jsonable_encoder
+from fastapi.responses import StreamingResponse
 
 from ..agent import (
     BRIEFING_TURNS, FOLLOWUP_TURNS, INVESTIGATE_TURNS, ConverseClient, ask_with_bedrock, brief_with_bedrock,
     investigate_with_bedrock, merged_facts,
 )
+from ..strands_runtime import OnStep
 from ..bedrock import BedrockError
 from ..budget import FALLBACK, BudgetedConverse
 from ..evaluator import figures_in
@@ -28,6 +32,7 @@ from .context import Context
 from .models import PLAN_FIELDS, AgentAskRequest, AgentBriefingRequest, AgentInvestigationRequest
 
 logger = logging.getLogger(__name__)
+PING_SECONDS = 10
 START_WITH = re.compile(r"start with[*_`]*\s*[:：]\s*[*_`]*\s*(SHIP-\d+)", re.I)
 
 
@@ -81,18 +86,17 @@ def router(ctx: Context) -> APIRouter:
     def labelled(run: dict[str, Any], mode: str, fallback: str | None) -> dict[str, Any]:
         return {**run, "mode": mode, **({"fallback": fallback} if fallback else {})}
 
-    @routes.post("/incidents/{incident_id}/agent/investigate")
-    async def agent_investigate(incident_id: str, request: AgentInvestigationRequest, http_request: Request) -> dict[str, Any]:
+    async def investigation(incident_id: str, question: str, http_request: Request, on_step: OnStep | None = None) -> dict[str, Any]:
         snapshot = service.get(incident_id)
         source_version = snapshot["source_version"]
         facts = with_preference_figures(known_figures(snapshot["state"]), preferences.get(profile_of(actor_of(http_request))))
         async with agent_client(bedrock_client, INVESTIGATE_TURNS, http_request) as (client, run_mode, fallback):
-            recalled = await remembered(http_request, request.question, run_mode)
+            recalled = await remembered(http_request, question, run_mode)
             facts = merged_facts(facts, figures_in(" ".join(recalled))) if recalled else facts
             try:
                 run = await investigate_with_bedrock(
-                    app, client, incident_id, request.question + memory.block({"facts": recalled}),
-                    access_token=agent_token(http_request), internal_key=internal_key, facts=facts,
+                    app, client, incident_id, question + memory.block({"facts": recalled}),
+                    access_token=agent_token(http_request), internal_key=internal_key, facts=facts, on_step=on_step,
                 )
             except BedrockError as exc:
                 service.record_agent_event(
@@ -103,6 +107,50 @@ def router(ctx: Context) -> APIRouter:
         recorded = service.record_agent_run(incident_id, source_version, run)
         picked = run["evaluations"][-1].get("recommended_plan_id") if run.get("evaluations") else None
         return {**shown_run(run, recorded["plans"]), **recorded, "recommended_plan_id": picked}
+
+    @routes.post("/incidents/{incident_id}/agent/investigate")
+    async def agent_investigate(incident_id: str, request: AgentInvestigationRequest, http_request: Request) -> dict[str, Any]:
+        return await investigation(incident_id, request.question, http_request)
+
+    @routes.post("/incidents/{incident_id}/agent/investigate/stream")
+    async def agent_investigate_stream(incident_id: str, request: AgentInvestigationRequest, http_request: Request) -> StreamingResponse:
+        """The same investigation as server-sent events: a `step` for each MCP tool call as it returns, a
+        `ping` every PING_SECONDS while the model thinks, then `done` with exactly what the plain route
+        returns, or `error` with its status and detail. The steps are tool calls, not model tokens."""
+        service.get(incident_id)
+        events: asyncio.Queue[tuple[str, Any]] = asyncio.Queue()
+
+        async def on_step(step: dict[str, Any]) -> None:
+            await events.put(("step", step))
+
+        async def run() -> None:
+            try:
+                await events.put(("done", await investigation(incident_id, request.question, http_request, on_step)))
+            except WorkflowError as exc:
+                await events.put(("error", {"status": exc.status_code, "detail": str(exc)}))
+            except BedrockError as exc:
+                await events.put(("error", {"status": 502, "detail": str(exc)}))
+            except Exception:
+                logger.exception("streamed investigation of %s failed", incident_id)
+                await events.put(("error", {"status": 500, "detail": "The investigation failed"}))
+
+        async def stream() -> AsyncIterator[str]:
+            task = asyncio.create_task(run())
+            try:
+                while True:
+                    try:
+                        kind, data = await asyncio.wait_for(events.get(), PING_SECONDS)
+                    except asyncio.TimeoutError:
+                        yield "event: ping\ndata: {}\n\n"
+                        continue
+                    yield f"event: {kind}\ndata: {json.dumps(jsonable_encoder(data))}\n\n"
+                    if kind != "step":
+                        return
+            finally:
+                if not task.done():
+                    task.cancel()
+
+        return StreamingResponse(stream(), media_type="text/event-stream", headers={"Cache-Control": "no-store, no-transform", "X-Accel-Buffering": "no"})
 
     @routes.post("/incidents/{incident_id}/agent/ask")
     async def agent_ask(incident_id: str, request: AgentAskRequest, http_request: Request) -> dict[str, Any]:

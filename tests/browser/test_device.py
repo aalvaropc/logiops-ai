@@ -443,7 +443,7 @@ def test_an_alert_elsewhere_opens_as_a_card(page, replay_server, page_errors, re
     assert page_errors == []
 
 
-def test_the_agent_stage_replays_the_recorded_trace_then_gives_way(page, replay_server, page_errors, reset_demo):
+def test_the_agent_stage_lights_the_tool_calls_live_then_gives_way(page, replay_server, page_errors, reset_demo):
     page.goto(f"{replay_server}/demo#SHIP-433")
     expect(page.locator("#connection")).to_have_text("Connected")
     say_on_device(page, "What's happening with SHIP-433, and which plan should we choose?")
@@ -453,7 +453,7 @@ def test_the_agent_stage_replays_the_recorded_trace_then_gives_way(page, replay_
     expect(stations).to_have_count(6)
     expect(stations.first).to_have_text("Shipment · SHIP-433")
     expect(stations.last).to_have_text("Checked against the data")
-    expect(stage.locator(".agent-meta")).to_contain_text("Replayed from the recorded tool trace · 5 MCP calls · answered in")
+    expect(stage.locator(".agent-meta")).to_contain_text("Live from the MCP tool calls · 5 MCP calls · answered in")
     expect(stage.locator(".agent-meta")).to_contain_text("scripted replay")
     expect(stage).to_be_hidden(timeout=6000)
     expect(page.locator("#plans-agent")).to_have_text("5 MCP calls by the agent · Checked against the data · scripted replay")

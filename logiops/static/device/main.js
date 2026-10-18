@@ -110,7 +110,7 @@ function device(method, ...args) {
     $("more").hidden = false;
     setVoice("reply", speaking);
   }
-  else if (method === "trace") stage.replay(args[0], checkBadge(args[0]), stageCaption(args[0], orb.answered));
+  else if (method === "trace") stage.replay(args[0], checkBadge(args[0]), (live) => stageCaption(args[0], orb.answered, live));
 }
 
 function setBusy(busy) {
@@ -147,7 +147,7 @@ const api = createApi({
     }
   },
 });
-const { request, storedToken, storeToken, readSession, keepSession, signOut, randomText } = api;
+const { request, streamed, storedToken, storeToken, readSession, keepSession, signOut, randomText } = api;
 
 function showSurface(name, payload) {
   paintSurface(surfaces.show(name, payload));
@@ -681,6 +681,7 @@ const commands = createCommands({
   },
   onSurface: (name, payload) => showSurface(name, payload),
   approvePlan, executeApproved, savePreferences: (update) => request("/operator/preferences", "PUT", mergedPreferences(state.snapshot?.operator_preferences, update)),
+  investigate: (path, body) => streamed(`${path}/stream`, body, (step) => stage.step(step)),
   linkAccount, signOut,
 });
 

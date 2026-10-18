@@ -12,9 +12,9 @@ export function stageLine(path) {
   return ["Asking the agent", ""];
 }
 
-export function stageCaption(run, seconds) {
+export function stageCaption(run, seconds, live = false) {
   const calls = run.tool_trace?.length || 0;
-  return ["Replayed from the recorded tool trace", `${calls} MCP ${plural(calls, "call")}`,
+  return [live ? "Live from the MCP tool calls" : "Replayed from the recorded tool trace", `${calls} MCP ${plural(calls, "call")}`,
     Number.isFinite(seconds) ? `answered in ${seconds.toFixed(1)} s` : "", run.mode === "replay" ? "scripted replay" : ""].filter(Boolean).join(" · ");
 }
 

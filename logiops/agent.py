@@ -17,7 +17,7 @@ from .bedrock import BedrockError
 from .evaluator import check_facts, check_recommendation
 from .scenario import incident_ids
 from .skill import SKILL_NAME, SKILL_URI
-from .strands_runtime import run_agent
+from .strands_runtime import OnStep, run_agent
 
 
 BASE_URL = "http://127.0.0.1:8000"
@@ -108,7 +108,7 @@ async def _converse_loop(
     app: Any, client: ConverseClient, shipments: frozenset[str], first_message: str, *,
     system: str, required_tool: str | None, tools: frozenset[str] | set[str] = READ_TOOLS,
     access_token: str | None = None, internal_key: str | None = None, max_turns: int = 8,
-    evaluate: Evaluate | None = None, revise_until: float | None = None, closing: str = "",
+    evaluate: Evaluate | None = None, revise_until: float | None = None, closing: str = "", on_step: OnStep | None = None,
 ) -> dict[str, Any]:
     """The tool-use loop, run on Strands Agents (strands_runtime). The Agent Skill is read from the MCP
     server and sent with the system prompt. With `evaluate`, the final answer (its spoken line included)
@@ -133,7 +133,7 @@ async def _converse_loop(
                     client=client, session=session, tools=offered, allowed=tools,
                     shipments=shipments, skill=skill, skill_info=loaded, system=system, first_message=first_message,
                     required_tool=required_tool, max_turns=max_turns, evaluate=evaluate, revise_until=revise_until, closing=closing,
-                    trace_attributes={
+                    on_step=on_step, trace_attributes={
                         "logiops.required_tool": required_tool or "", "logiops.shipments": ",".join(sorted(shipments)),
                         "logiops.client": type(client).__name__,
                     },
@@ -221,7 +221,7 @@ async def _with_deadline(coroutine: Any, deadline_seconds: float) -> dict[str, A
 async def investigate_with_bedrock(
     app: Any, client: ConverseClient, shipment_id: str, question: str, *,
     access_token: str | None = None, internal_key: str | None = None, max_turns: int = INVESTIGATE_TURNS,
-    deadline_seconds: float = DEFAULT_DEADLINE_SECONDS, facts: dict[str, Any] | None = None,
+    deadline_seconds: float = DEFAULT_DEADLINE_SECONDS, facts: dict[str, Any] | None = None, on_step: OnStep | None = None,
 ) -> dict[str, Any]:
     """Investigate with read tools. With `facts` (see scenario.known_figures), the answer must pass the
     grounding check, ending with its Recommended plan line; a failed check gets one revision when at
@@ -235,7 +235,7 @@ async def investigate_with_bedrock(
         system=SYSTEM_PROMPT, required_tool="investigate_incident",
         access_token=access_token, internal_key=internal_key, max_turns=max_turns, evaluate=evaluate,
         revise_until=asyncio.get_running_loop().time() + deadline_seconds - REVISION_MIN_SECONDS,
-        closing="End with the same two lines (Spoken: and Recommended plan:).",
+        closing="End with the same two lines (Spoken: and Recommended plan:).", on_step=on_step,
     ), deadline_seconds)
 
 

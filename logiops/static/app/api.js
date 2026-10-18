@@ -1,3 +1,5 @@
+import { parseSse } from "./sse.js";
+
 export const TOKEN_KEY = "logiops-access-token";
 export const SESSION_KEY = "logiops-session";
 export const OAUTH_KEY = "logiops-oauth";
@@ -201,5 +203,54 @@ export function createApi({ fetch: doFetch, storage, crypto: webCrypto, origin, 
     return response.json();
   }
 
-  return { request, tokenGrant, loadAuth, beginSignIn, finishSignIn, refreshSession, signOut, readSession, keepSession, storedToken, storeToken, randomText };
+  async function streamed(path, body, onStep) {
+    const plain = path.replace(/\/stream$/, "");
+    const { token, session, auth } = current();
+    const headers = { "Content-Type": "application/json", Accept: "text/event-stream" };
+    if (token) headers.Authorization = `Bearer ${token}`;
+    let response;
+    try {
+      response = await fetcher(path, { method: "POST", headers, body: JSON.stringify(body), cache: "no-store" });
+    } catch (_) {
+      return request(plain, "POST", body);
+    }
+    if (!response.ok || !response.body || !/text\/event-stream/.test(response.headers.get("content-type") || "")) return request(plain, "POST", body);
+    agentCall("request", plain);
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+    let seen = false;
+    try {
+      for (;;) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const parsed = parseSse(buffer);
+        buffer = parsed.rest;
+        for (const [kind, data] of parsed.events) {
+          seen = true;
+          if (kind === "step") onStep(data);
+          if (kind === "done") {
+            agentCall("done");
+            return data;
+          }
+          if (kind === "error") {
+            const error = new Error(explainError(data.status, data.detail, { authEnabled: auth.enabled, signedIn: Boolean(session), hasToken: Boolean(token) }));
+            error.status = data.status;
+            error.detail = data.detail;
+            throw error;
+          }
+        }
+      }
+    } catch (error) {
+      agentCall("error");
+      if (seen || error.status) throw error;
+      return request(plain, "POST", body);
+    }
+    agentCall("error");
+    if (!seen) return request(plain, "POST", body);
+    throw new Error("The investigation stream ended before its result");
+  }
+
+  return { request, streamed, tokenGrant, loadAuth, beginSignIn, finishSignIn, refreshSession, signOut, readSession, keepSession, storedToken, storeToken, randomText };
 }
