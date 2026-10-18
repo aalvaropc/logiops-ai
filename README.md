@@ -396,7 +396,7 @@ navigates away. The host checks the proxy's origin on every message, sends
 no separate sandbox origin is available. Its MCP client runs `initialize` once
 and then sends `MCP-Protocol-Version: 2025-11-25` on every request. It passes a
 full `hostContext` (theme, display mode, container size, locale, time
-zone, device capabilities, safe-area insets), and its "Dark plans card"
+zone, device capabilities, safe-area insets), and its "Light plans card"
 toggle, under the simulated device on a desktop screen, sends
 `ui/notifications/host-context-changed`.
 
@@ -648,5 +648,5 @@ if the skill resource is missing.
 
 MIT — see [LICENSE](LICENSE).
 
-The pages use the Atkinson Hyperlegible Next typeface (latin subset), under the
+The pages use the Overpass typeface (latin subset, variable weight), under the
 SIL Open Font License 1.1: see [logiops/static/fonts/OFL.txt](logiops/static/fonts/OFL.txt).

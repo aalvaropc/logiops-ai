@@ -43,7 +43,7 @@ const SANDBOX_ORIGIN = (() => {
 const store = createStore({
   token: "", snapshot: null, selectedPlanId: null, busy: false, conversation: [], app: null,
   awaitingExecute: false, pendingApproval: null, incidentId: hashIncident(), inbox: [], conversations: {}, selections: {},
-  briefingPick: null, cardTheme: "light", voice: { engine: "browser", voice: null, fillers: [] }, auth: { enabled: false }, session: null,
+  briefingPick: null, cardTheme: "dark", voice: { engine: "browser", voice: null, fillers: [] }, auth: { enabled: false }, session: null,
   memoryIncident: null, approver: "demo-operator", metrics: null,
 });
 const state = store.state;
@@ -273,7 +273,7 @@ function showMcpAppNote(text) {
 
 $("mcp-app-theme").addEventListener("click", () => {
   state.cardTheme = state.cardTheme === "dark" ? "light" : "dark";
-  $("mcp-app-theme").setAttribute("aria-pressed", String(state.cardTheme === "dark"));
+  $("mcp-app-theme").setAttribute("aria-pressed", String(state.cardTheme === "light"));
   mcpHost.notifyContext();
 });
 let contextTimer = 0;
