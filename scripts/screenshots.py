@@ -80,6 +80,11 @@ def capture(base: str, out: Path) -> list[Path]:
 
     with sync_playwright() as playwright:
         browser = playwright.chromium.launch()
+        phone = browser.new_page(viewport=PHONE)
+        phone.request.post(f"{base}/demo/reset")
+        phone.goto(f"{base}/demo#SHIP-433")
+        phone.wait_for_function("document.querySelector('#connection').textContent === 'Connected'")
+        shot(phone, "device-phone")
         page = browser.new_page(viewport=DESKTOP)
         page.request.post(f"{base}/demo/reset")
         page.goto(f"{base}/demo")
@@ -104,10 +109,6 @@ def capture(base: str, out: Path) -> list[Path]:
         page.wait_for_function("document.querySelector('#connection').textContent === 'Connected'")
         page.wait_for_selector("#metrics:not([hidden])")
         shot(page, "console", clip={"x": 0, "y": 0, "width": DESKTOP["width"], "height": 900})
-        phone = browser.new_page(viewport=PHONE)
-        phone.goto(f"{base}/demo#SHIP-433")
-        phone.wait_for_function("document.querySelector('#connection').textContent === 'Connected'")
-        shot(phone, "device-phone")
         page.request.post(f"{base}/demo/reset")
         browser.close()
     return shots
