@@ -296,10 +296,10 @@ input::placeholder { color: var(--ink-3); }
 .device-steps li.error::after { background: var(--late); }
 .device-steps li.skill { color: var(--ink); font-weight: 700; }
 .device-steps li.skill::after { border: 2px solid var(--ink); background: var(--sunken); }
-@keyframes step-in { from { opacity: 0; transform: translateY(3px); } to { opacity: 1; transform: none; } }
-.agent-stage { position: absolute; left: 0; right: 0; z-index: 3; display: grid; align-content: center; gap: 18px; padding: 18px calc(var(--gutter) + env(safe-area-inset-right)) 18px calc(var(--gutter) + env(safe-area-inset-left)); background: var(--ground); pointer-events: none; transition: opacity .36s cubic-bezier(.16, 1, .3, 1); }
+@keyframes step-in { from { clip-path: inset(0 100% 0 -30px); } to { clip-path: inset(0 -10px 0 -30px); } }
+.agent-stage { position: absolute; left: 0; right: 0; z-index: 3; display: grid; align-content: center; gap: 18px; padding: 18px calc(var(--gutter) + env(safe-area-inset-right)) 18px calc(var(--gutter) + env(safe-area-inset-left)); background: var(--ground); pointer-events: none; clip-path: inset(0 0 0 0); transition: clip-path .36s cubic-bezier(.16, 1, .3, 1); }
 .agent-stage[hidden] { display: none; }
-.agent-stage.leaving { opacity: 0; }
+.agent-stage.leaving { clip-path: inset(0 0 100% 0); }
 .agent-stage > * { width: 100%; max-width: 640px; margin: 0 auto; }
 .agent-ask { margin: 0 auto; color: var(--ink-2); font-size: var(--type-title); font-weight: 700; line-height: 1.15; letter-spacing: -.01em; }
 .agent-ask strong { color: var(--ink); font-weight: 800; white-space: nowrap; }
@@ -321,7 +321,7 @@ input::placeholder { color: var(--ink-3); }
 .agent-meta { margin: 0 auto; color: var(--ink-3); font-size: var(--type-meta); font-variant-numeric: tabular-nums; }
 .agent-stage[data-phase="asking"] .agent-meta { color: var(--ink); font-size: var(--type-figure); font-weight: 800; }
 .agent-stage[data-phase="replay"] .agent-meta { animation: station-in .32s cubic-bezier(.16, 1, .3, 1) backwards; animation-delay: calc(var(--step, 0) * 120ms); }
-@keyframes station-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+@keyframes station-in { from { clip-path: inset(0 100% 0 -40px); } to { clip-path: inset(0 -10px 0 -40px); } }
 .agent-line { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin: 8px 0 0; color: var(--ink-3); font-size: var(--type-meta); }
 .agent-line[hidden] { display: none; }
 .agent-dots { position: relative; display: inline-flex; align-items: center; gap: 7px; flex: 0 0 auto; }
