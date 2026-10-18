@@ -94,6 +94,8 @@ def test_navigation_is_a_closed_command_and_noise_is_not_sent_to_the_agent():
         "show the incident": "show_incident", "go back to the incident": "show_incident", "show the map": "show_incident",
         "show SHIP-433": "open", "Open SHIP-421": "open", "show the plans?": None, "show the plans for SHIP-433": None, "show the cheapest plan": None,
         "show the result": "show_result", "see the results": "show_result", "show the result of SHIP-433": None,
+        "withdraw the approval": "withdraw", "Cancel the approval.": "withdraw", "undo my approval": "withdraw", "cancel it": "decline",
+        "withdraw the approval and approve the wait plan": None,
     }
     got = json.loads(_intent(f"console.log(JSON.stringify({json.dumps(list(cases))}.map(m.parseCommand)))"))
     assert dict(zip(cases, got)) == cases
@@ -127,7 +129,7 @@ def test_a_purchase_is_read_back_and_paid_once():
     commands = _static("app", "commands.js")
     assert 'command === "confirm" && pendingPurchase' in commands and "await purchase.confirm(pendingPurchase);" in commands
     assert "Say “yes” to approve and pay, or “no”." in purchase and "Say “yes” to pay, or “no”." in purchase
-    assert "${quote.tax_label} ${dollars(quote.tax_usd)}, total ${dollars(quote.total_usd)}" in purchase
+    assert "${taxWords(quote.tax_label)} ${dollars(quote.tax_usd)}, total ${dollars(quote.total_usd)}" in purchase
     assert "confirmed_total_usd: purchase.quote.total_usd, idempotency_key: purchase.key" in purchase
     assert "keep({ ...purchase, approve: false });" in purchase
     assert "Say “yes” to try again; it never charges twice." in purchase

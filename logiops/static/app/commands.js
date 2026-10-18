@@ -7,6 +7,11 @@ export function approvalReadback(plan) {
   return `Approve “${plan.label}” for $${plan.incremental_cost_usd} extra, ${delay}${warning}?`;
 }
 
+export function withdrawReadback(plan, incidentId) {
+  return `Withdraw the approval of “${plan.label}”? An approval is recorded with its data, so withdrawing resets ${incidentId} to its original data: `
+    + "the plans and the approval are cleared, and you investigate it again. Say “yes” to withdraw it, or “no” to keep it.";
+}
+
 export function startOverLines(snapshot, approval) {
   const execution = snapshot?.executions[0];
   const decided = snapshot?.plans.find((plan) => plan.id === (execution?.plan_id || approval?.plan_id));
@@ -67,6 +72,8 @@ export function createCommands({
     }
     const pending = state.pendingApproval;
     state.pendingApproval = null;
+    const pendingWithdraw = state.pendingWithdraw?.incidentId === state.incidentId ? state.pendingWithdraw : null;
+    state.pendingWithdraw = null;
     const pendingPurchase = purchase.take();
     const preference = intent.parsePreference(text);
     if (preference) {
@@ -106,7 +113,9 @@ export function createCommands({
       const id = command === "open" ? mentioned : state.incidentId;
       if (id) {
         const item = state.inbox.find((entry) => entry.incident_id === id);
-        const next = investigated() ? "Say “show the plans” or “approve the recommended plan”." : "Ask me what's happening, or say “investigate”.";
+        const next = state.snapshot?.executions.length ? "Say “show the result” to see what ran."
+          : selectors.visibleApproval(state.snapshot) ? "Press Execute or say “execute it” when you're ready."
+          : investigated() ? "Say “show the plans” or “approve the recommended plan”." : "Ask me what's happening, or say “investigate”.";
         say("assistant", `${command === "open" ? "Opened" : "Here's"} ${id}: ${item?.title || "incident"}. ${next}`);
         onSurface("incident");
         return;
@@ -148,12 +157,41 @@ export function createCommands({
         await purchase.start(lower);
       } else if (command === "confirm" && pendingPurchase) {
         await purchase.confirm(pendingPurchase);
+      } else if (command === "withdraw") {
+        const id = state.incidentId;
+        const approval = selectors.visibleApproval(state.snapshot);
+        const plan = approval && state.snapshot.plans.find((item) => item.id === approval.plan_id);
+        if (state.snapshot?.executions.length) {
+          say("assistant", `${id} was already executed, so its approval stays on the record. Say “show the result” to see what ran.`);
+        } else if (!plan) {
+          say("assistant", `Nothing is approved for ${id}, so there's nothing to withdraw.`);
+        } else if ((state.snapshot.bookings || []).some((booking) => booking.plan_id === plan.id)) {
+          say("assistant", `“${plan.label}” is already booked and paid, so its approval stays.`);
+        } else {
+          state.pendingWithdraw = { incidentId: id, planId: plan.id, label: plan.label };
+          say("assistant", withdrawReadback(plan, id), undefined, `Withdraw the approval of ${plan.label}? That resets ${id}, and you investigate it again. Say yes or no.`);
+          onSurface("confirm", { kind: "withdraw", plan });
+        }
+      } else if (command === "confirm" && pendingWithdraw) {
+        const id = pendingWithdraw.incidentId;
+        if (selectors.visibleApproval(state.snapshot)?.plan_id !== pendingWithdraw.planId) {
+          say("assistant", "The approval changed after I read it back, so nothing was reset.");
+          onSurface("dismiss");
+          return;
+        }
+        purchase.forget();
+        await act(() => request("/demo/reset", "POST", { incident_id: id }), "");
+        state.selectedPlanId = null;
+        hideMcpApp();
+        say("assistant", `Done. The approval of “${pendingWithdraw.label}” is withdrawn and ${id} is back to its original data. Ask me what's happening with ${id} to calculate the plans again.`);
+        onSurface("incident");
       } else if (command === "decline") {
         if (pendingPurchase || purchase.stored()) {
           purchase.forget();
           say("assistant", "Okay, nothing was booked or charged.");
         } else {
-          say("assistant", pending ? "Okay, nothing was approved." : "Okay. Ask me anything else about the queue or this incident.");
+          say("assistant", pending ? "Okay, nothing was approved."
+            : pendingWithdraw ? `Okay, the approval of “${pendingWithdraw.label}” stays.` : "Okay. Ask me anything else about the queue or this incident.");
         }
         onSurface("dismiss");
       } else if (command === "forget_me") {
@@ -191,11 +229,22 @@ export function createCommands({
       } else if (command === "resume") {
         await purchase.resume(selectIncident);
       } else if (command === "approve") {
+        if (state.snapshot?.executions.length) {
+          say("assistant", `${state.incidentId} was already executed. Say “show the result” to see what ran.`);
+          return;
+        }
         if (!selectors.visiblePlans(state.snapshot).length) {
           say("assistant", "There are no plans for the current data yet. Ask me to investigate first.");
           return;
         }
         const plan = selectors.planFromUtterance(lower);
+        const standing = selectors.visibleApproval(state.snapshot);
+        if (standing) {
+          const approvedLabel = state.snapshot.plans.find((item) => item.id === standing.plan_id)?.label || standing.plan_id;
+          say("assistant", plan?.id === standing.plan_id ? `“${approvedLabel}” is already approved. Press Execute or say “execute it” when you're ready.`
+            : `“${approvedLabel}” is already approved for this data, so I can't approve another plan. Say “withdraw the approval” first if you want to choose again.`);
+          return;
+        }
         if (!plan) {
           const options = selectors.visiblePlans(state.snapshot).map((item) => `“${item.label}” ($${item.incremental_cost_usd})`).join(", ");
           say("assistant", `That plan isn't available for the current data. The options are ${options}.`);
@@ -214,7 +263,8 @@ export function createCommands({
         try {
           await act(() => approvePlan(plan), "");
         } catch (error) {
-          state.pendingApproval = pending;
+          if (error.status === 409) onSurface("dismiss");
+          else state.pendingApproval = pending;
           throw error;
         }
         say("assistant", `Approved “${plan.label}” on the current data. Nothing has run yet: say “execute it” or press Execute when you're ready.`);

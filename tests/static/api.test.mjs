@@ -68,7 +68,7 @@ test("requests carry the bearer token and explain failures with the status attac
   assert.equal(calls[0].init.cache, "no-store");
   await assert.rejects(api.request("/incidents/SHIP-421/approvals", "POST", { plan_id: "x" }), (error) => {
     assert.equal(error.status, 409);
-    assert.equal(error.message, "A different plan is already approved for this version");
+    assert.equal(error.message, "Another plan is already approved for this data. Say “withdraw the approval” to choose again.");
     return true;
   });
   assert.equal(calls[1].init.headers["Content-Type"], "application/json");

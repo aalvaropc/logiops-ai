@@ -261,3 +261,30 @@ test("execute before any approval says what to do next and calls nothing", async
   assert.equal(fresh.last().text, "Nothing is approved for SHIP-421 yet, so nothing ran. Ask me what's happening with SHIP-421 first, then approve a plan.");
   assert.equal(h.calls.length + fresh.calls.length, 0);
 });
+
+test("a standing approval blocks a second one, and withdrawing it is read back, then resets the incident", async () => {
+  const approval = { plan_id: "SHIP-421:r:split-express:v1", source_version: 1, is_current: true };
+  const h = harness({ snapshot: { ...investigated(), approvals: [approval] }, responses: { "/demo/reset": {}, "/incidents": { incidents: [] } } });
+  await h.commands.handle("approve the wait plan");
+  assert.equal(h.last().text, "“Fulfill local stock and send the rest express” is already approved for this data, so I can't approve another plan. "
+    + "Say “withdraw the approval” first if you want to choose again.");
+  await h.commands.handle("approve the recommended plan");
+  assert.match(h.last().text, /is already approved\. Press Execute or say “execute it”/);
+  assert.equal(h.calls.length, 0);
+  await h.commands.handle("withdraw the approval");
+  assert.match(h.last().text, /^Withdraw the approval of “Fulfill local stock and send the rest express”\? .* resets SHIP-421 to its original data/);
+  assert.ok(h.events.includes("surface:confirm"));
+  await h.commands.handle("no");
+  assert.equal(h.last().text, "Okay, the approval of “Fulfill local stock and send the rest express” stays.");
+  assert.equal(h.calls.length, 0);
+  await h.commands.handle("cancel the approval");
+  await h.commands.handle("yes");
+  assert.deepEqual(h.calls.map((call) => [call.path, call.body?.incident_id]), [["/demo/reset", "SHIP-421"]]);
+  assert.match(h.last().text, /^Done\. The approval of “Fulfill local stock and send the rest express” is withdrawn/);
+  const booked = harness({ snapshot: { ...investigated(), approvals: [approval], bookings: [{ plan_id: approval.plan_id }] } });
+  await booked.commands.handle("withdraw the approval");
+  assert.equal(booked.last().text, "“Fulfill local stock and send the rest express” is already booked and paid, so its approval stays.");
+  const none = harness();
+  await none.commands.handle("undo the approval");
+  assert.equal(none.last().text, "Nothing is approved for SHIP-421, so there's nothing to withdraw.");
+});

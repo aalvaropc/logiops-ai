@@ -123,11 +123,20 @@ export function confirmDetails(payload) {
       figure: [dollars(quote.total_usd), "total, charged once"],
       rows: [["Carriers and services", dollars(quote.base_usd)], ["Service fee", dollars(quote.service_fee_usd)],
         [quote.tax_label, dollars(quote.tax_usd)], ["Total", dollars(quote.total_usd)]],
-      note: `Charged once to the ${card}. Nothing is charged until you say yes.`, warning: lateWarning(payload.plan),
+      note: `Charged once to the ${card} (simulated payment). Nothing is charged until you say yes.`, warning: lateWarning(payload.plan),
       yes: payload.purchase.approve ? "Yes, approve and pay" : "Yes, pay", no: "No",
     };
   }
   const plan = payload.plan;
+  if (payload.kind === "withdraw") {
+    return {
+      kind: "withdraw", title: "Withdraw this approval?", lead: plan.label,
+      figure: [`$${plan.incremental_cost_usd}`, "approved extra cost"],
+      rows: [["Plans and approval", "cleared"], ["Incident data", "back to the original"], ["Next step", "investigate again"]],
+      note: "An approval is recorded with its data, so withdrawing it resets the incident. Nothing has run yet.", warning: null,
+      yes: "Yes, withdraw", no: "Keep it",
+    };
+  }
   return {
     kind: "approval", title: "Approve this plan?", lead: plan.label,
     figure: [`$${plan.incremental_cost_usd}`, "extra cost"],

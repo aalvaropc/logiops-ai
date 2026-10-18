@@ -13,11 +13,13 @@ export function newPurchaseKey(webCrypto = globalThis.crypto) {
   return `buy-${random}`;
 }
 
+const taxWords = (label) => String(label).replace(/^Tax\b/, "tax");
+
 export function purchaseReadback(purchase, plan) {
   const quote = purchase.quote;
   const card = String(quote.payment_method).replace(/\s*\(simulated\)$/i, "").toLowerCase();
   const breakdown = `carriers and services ${dollars(quote.base_usd)}, service fee ${dollars(quote.service_fee_usd)}, `
-    + `${quote.tax_label} ${dollars(quote.tax_usd)}, total ${dollars(quote.total_usd)}, charged to the ${card}`;
+    + `${taxWords(quote.tax_label)} ${dollars(quote.tax_usd)}, total ${dollars(quote.total_usd)}, charged to the ${card} (simulated)`;
   if (!purchase.approve) {
     const text = `To book “${quote.plan_label}”: ${breakdown}. Say “yes” to pay, or “no”.`;
     return { text, spoken: text };
