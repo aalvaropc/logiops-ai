@@ -37,8 +37,8 @@
   p.preference { margin: 0; padding: 12px var(--pad) 0; color: var(--preference); line-height: 1.5; }
   .outcomes { grid-column: 1 / -1; display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; font-size: 15px; }
   .outcomes li { display: grid; grid-template-columns: 7em minmax(0, 1fr); gap: 12px; align-items: baseline; }
-  .outcomes .verdict { color: var(--ok); font-weight: 700; font-variant-numeric: tabular-nums; }
-  .outcomes .late .verdict { color: var(--late); }
+  .outcomes .verdict { justify-self: start; padding: 2px 7px; background: var(--ok); color: var(--band-ink); font-size: 12px; font-weight: 800; letter-spacing: .05em; text-transform: uppercase; white-space: nowrap; }
+  .outcomes .late .verdict { background: var(--late); }
   .pick-text { display: grid; gap: 6px; min-width: 0; }
   .allocation { margin: 0; color: var(--muted); }
   .pick button { grid-column: 1 / -1; justify-self: start; border-color: var(--accent); background: var(--accent); color: var(--accent-ink); }
@@ -48,8 +48,7 @@
   .plans .plan { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 6px 16px; align-items: center; padding: 10px var(--pad); }
   .plans .plan + .plan { border-top: 1px solid var(--line); }
   .plan-name { font-size: 15px; }
-  .orders { display: block; margin-top: 2px; color: var(--muted); }
-  .orders .late { color: var(--late); }
+  .orders { display: flex; flex-wrap: wrap; gap: 4px 14px; margin-top: 4px; color: var(--muted); }
   .plans .figures { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
   .plans .figures strong { display: block; font-size: 16px; }
   .plans .figures small { display: block; color: var(--muted); font-size: 14px; }
@@ -57,8 +56,10 @@
   button:hover { background: var(--button-hover); }
   button:focus-visible { outline: 3px solid var(--rule); outline-offset: 2px; }
   button.more { margin: 4px var(--pad) 0; }
-  .diff { font-weight: 800; text-decoration: underline; text-decoration-color: var(--accent); text-decoration-thickness: 3px; text-underline-offset: 4px; }
-  .tag { display: inline-block; margin-left: 8px; padding: 1px 7px; border: 1.5px solid transparent; border-radius: 3px; vertical-align: 2px; color: var(--tag-ink); background: var(--tag); font-size: 12px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; }
+  .diff { font-weight: 800; text-decoration: underline; text-decoration-color: var(--accent); text-decoration-thickness: 3px; text-underline-offset: 4px; text-decoration-skip-ink: none; }
+  .chip { display: inline-block; padding: 2px 7px; background: var(--ok); color: var(--band-ink); font-size: 12px; font-weight: 800; letter-spacing: .05em; text-transform: uppercase; white-space: nowrap; }
+  .chip.late { background: var(--late); }
+  .tag { display: inline-block; margin-left: 8px; padding: 1px 7px; border: 1.5px solid transparent; vertical-align: 2px; color: var(--tag-ink); background: var(--tag); font-size: 12px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; }
   .tag.pick-tag { border-color: var(--accent); color: var(--accent); background: transparent; }
   .tag.done-tag { border-color: var(--ok); color: var(--ok); background: transparent; }
   .footnote { margin: 0; padding: 12px var(--pad) 14px; color: var(--muted); font-size: 13px; }
@@ -137,24 +138,46 @@
 
   function distinguishing(label, labels) {
     const words = String(label).split(" ");
-    let best = { before: 0, after: 0 };
+    let best = null;
     for (const other of labels) {
       if (other === label) continue;
       const theirs = String(other).split(" ");
-      let before = 0;
-      while (before < words.length && before < theirs.length && words[before] === theirs[before]) before += 1;
-      let after = 0;
-      while (after < words.length - before && after < theirs.length - before && words[words.length - 1 - after] === theirs[theirs.length - 1 - after]) after += 1;
-      if (before + after > best.before + best.after) best = { before, after };
+      const table = Array.from({ length: words.length + 1 }, () => new Array(theirs.length + 1).fill(0));
+      for (let i = words.length - 1; i >= 0; i -= 1) {
+        for (let j = theirs.length - 1; j >= 0; j -= 1) {
+          table[i][j] = words[i] === theirs[j] ? table[i + 1][j + 1] + 1 : Math.max(table[i + 1][j], table[i][j + 1]);
+        }
+      }
+      if (!best || table[0][0] > best.table[0][0]) best = { table, theirs };
     }
-    if (best.before + best.after < 2 || best.before + best.after >= words.length) return [String(label)];
-    return [words.slice(0, best.before).join(" "), words.slice(best.before, words.length - best.after).join(" "), words.slice(words.length - best.after).join(" ")];
+    const common = best ? best.table[0][0] : 0;
+    if (common < 2 || common * 2 < words.length || common === words.length) return [[String(label), false]];
+    const shared = new Array(words.length).fill(false);
+    for (let i = 0, j = 0; i < words.length && j < best.theirs.length;) {
+      if (words[i] === best.theirs[j]) {
+        shared[i] = true;
+        i += 1;
+        j += 1;
+      } else if (best.table[i + 1][j] >= best.table[i][j + 1]) {
+        i += 1;
+      } else {
+        j += 1;
+      }
+    }
+    const segments = [];
+    words.forEach((word, index) => {
+      const last = segments[segments.length - 1];
+      if (last && last[1] === !shared[index]) last[0] += ` ${word}`;
+      else segments.push([word, !shared[index]]);
+    });
+    return segments;
   }
 
   function labelNodes(label, labels) {
-    const [before, diff, after] = distinguishing(label, labels);
-    if (diff === undefined) return [before];
-    return [before && `${before} `, el("span", "diff", diff), after && ` ${after}`].filter(Boolean);
+    return distinguishing(label, labels).flatMap(([text, marked], index) => {
+      const space = index ? " " : "";
+      return marked ? [space, el("span", "diff", text)] : [`${space}${text}`];
+    }).filter(Boolean);
   }
 
   function namer(orders) {
@@ -226,10 +249,11 @@
     text.append(name);
     if ((plan.orders || []).length > 1) {
       const orders = el("span", "orders");
-      plan.orders.forEach((order, index) => {
-        if (index) orders.append(" · ");
-        orders.append(el("span", order.delay_hours ? "late" : "", `${nameOf(order)} ${verdict(order)}`));
-      });
+      for (const order of plan.orders) {
+        const line = el("span", "", `${nameOf(order)} `);
+        line.append(el("span", `chip${order.delay_hours ? " late" : ""}`, verdict(order)));
+        orders.append(line);
+      }
       text.append(orders);
     }
     const figures = el("div", "figures");

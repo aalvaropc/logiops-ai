@@ -77,18 +77,39 @@ export function allocationSummary(plan) {
 
 export function distinguishing(label, labels) {
   const words = String(label).split(" ");
-  let best = { before: 0, after: 0 };
+  let best = null;
   for (const other of labels) {
     if (other === label) continue;
     const theirs = String(other).split(" ");
-    let before = 0;
-    while (before < words.length && before < theirs.length && words[before] === theirs[before]) before += 1;
-    let after = 0;
-    while (after < words.length - before && after < theirs.length - before && words[words.length - 1 - after] === theirs[theirs.length - 1 - after]) after += 1;
-    if (before + after > best.before + best.after) best = { before, after };
+    const table = Array.from({ length: words.length + 1 }, () => new Array(theirs.length + 1).fill(0));
+    for (let i = words.length - 1; i >= 0; i -= 1) {
+      for (let j = theirs.length - 1; j >= 0; j -= 1) {
+        table[i][j] = words[i] === theirs[j] ? table[i + 1][j + 1] + 1 : Math.max(table[i + 1][j], table[i][j + 1]);
+      }
+    }
+    if (!best || table[0][0] > best.table[0][0]) best = { table, theirs };
   }
-  if (best.before + best.after < 2 || best.before + best.after >= words.length) return [String(label)];
-  return [words.slice(0, best.before).join(" "), words.slice(best.before, words.length - best.after).join(" "), words.slice(words.length - best.after).join(" ")];
+  const common = best ? best.table[0][0] : 0;
+  if (common < 2 || common * 2 < words.length || common === words.length) return [[String(label), false]];
+  const shared = new Array(words.length).fill(false);
+  for (let i = 0, j = 0; i < words.length && j < best.theirs.length;) {
+    if (words[i] === best.theirs[j]) {
+      shared[i] = true;
+      i += 1;
+      j += 1;
+    } else if (best.table[i + 1][j] >= best.table[i][j + 1]) {
+      i += 1;
+    } else {
+      j += 1;
+    }
+  }
+  const segments = [];
+  words.forEach((word, index) => {
+    const last = segments[segments.length - 1];
+    if (last && last[1] === !shared[index]) last[0] += ` ${word}`;
+    else segments.push([word, !shared[index]]);
+  });
+  return segments;
 }
 
 export function localWarehouse(snapshot) {

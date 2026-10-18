@@ -21,7 +21,7 @@
   --warn-tint: #FFF3D1;
   --bezel: #1A1D21;
   --focus: #111418;
-  --radius-label: 4px;
+  --radius-label: 0;
   --radius-control: 6px;
   --font-sans: "Atkinson Hyperlegible Next", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   color-scheme: light;

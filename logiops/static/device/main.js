@@ -88,7 +88,10 @@ function setVoice(event, speaking = false) {
 
 function device(method, ...args) {
   if (method === "voice") setVoice(...args);
-  else if (method === "heard") $("device-heard").textContent = args[0];
+  else if (method === "heard") {
+    $("heard-label").hidden = false;
+    $("device-heard").textContent = args[0];
+  }
   else if (method === "reply") {
     const [text, spoken, speaking] = args;
     $("device-spoken").textContent = shortSpoken(text, spoken, markdown.plainText);
@@ -409,6 +412,7 @@ function renderChips(surface) {
 function paintTalk() {
   const heard = [...state.conversation].reverse().find((turn) => turn.role === "user");
   const reply = [...state.conversation].reverse().find((turn) => turn.role === "assistant");
+  $("heard-label").hidden = !heard;
   $("device-heard").textContent = heard ? heard.text : "Try “any delays today?”";
   $("device-spoken").textContent = reply ? shortSpoken(reply.text, null, markdown.plainText) : "Ask about the queue, an incident, or a plan.";
   $("more").hidden = !state.conversation.length;
