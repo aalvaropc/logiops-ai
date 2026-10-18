@@ -48,6 +48,16 @@ function rowList(rows, doc = globalThis.document) {
   return list;
 }
 
+function columns(main, side, doc = globalThis.document) {
+  const split = el("div", "label-split", undefined, doc);
+  const left = el("div", "label-main", undefined, doc);
+  const right = el("div", "label-side", undefined, doc);
+  left.append(...main.filter(Boolean));
+  right.append(...side.filter(Boolean));
+  split.append(left, right);
+  return split;
+}
+
 function button(text, className, onClick, doc = globalThis.document) {
   const node = el("button", className, text, doc);
   node.type = "button";
@@ -124,11 +134,18 @@ export function drawMap(map, caption, snapshot, plan, route, doc = globalThis.do
   caption.append(list);
 }
 
-export function drawBars(list, plan, route, doc = globalThis.document) {
+export function drawBars(list, plan, route, doc = globalThis.document, orders = []) {
   list.replaceChildren();
   const bars = route.promiseBars(plan);
   if (!bars.length) {
-    list.append(el("li", "muted", "No plan yet. Ask what's happening with this incident.", doc));
+    for (const order of orders) {
+      const item = el("li", "promise pending", undefined, doc);
+      const who = el("span", "who", `${order.customer} · ${order.quantity} units`, doc);
+      if (order.priority === "critical") who.append(" ", el("span", "critical-tag", "critical order", doc));
+      item.append(who, el("span", "verdict", `Promised ${when(order.due_eta)} · no plan yet`, doc));
+      list.append(item);
+    }
+    list.append(el("li", "muted", "Ask what's happening to project each order against its promise.", doc));
     return;
   }
   for (const bar of bars) {
@@ -182,7 +199,7 @@ export function renderIncident(section, { snapshot, plan, summary, route }, doc 
   bars.id = "device-bars";
   bars.setAttribute("aria-label", "Each order's promise against the projection");
   promise.append(bars);
-  drawBars(bars, plan, route, doc);
+  drawBars(bars, plan, route, doc, snapshot.state.orders);
   const grid = el("div", "incident-grid", undefined, doc);
   grid.append(figure, promise);
   section.replaceChildren(head, facts3, grid);
@@ -216,11 +233,9 @@ export function renderConfirm(section, payload, { onYes, onNo, labels = [] }, do
   if (details.warning) card.append(el("p", "band late", details.warning, doc));
   const lead = el("p", "lead", undefined, doc);
   lead.append(...labelNodes(details.lead, labels, doc));
-  card.append(el("h2", "", details.title, doc), lead);
   const figure = el("p", "confirm-figure", undefined, doc);
   figure.append(el("strong", "", details.figure[0], doc), " ", el("span", "", details.figure[1], doc));
-  card.append(figure, rowList(details.rows, doc));
-  card.append(el("p", "note", details.note, doc));
+  card.append(columns([el("h2", "", details.title, doc), lead, figure], [rowList(details.rows, doc), el("p", "note", details.note, doc)], doc));
   const actions = el("div", "confirm-actions", undefined, doc);
   const yes = button(details.yes, "primary", onYes, doc);
   yes.id = "confirm-yes";
@@ -233,9 +248,10 @@ export function renderConfirm(section, payload, { onYes, onNo, labels = [] }, do
 
 export function renderReceipt(section, { booking, onOpen, onExecute = null }, doc = globalThis.document) {
   const card = el("div", "receipt-card", undefined, doc);
-  card.append(el("p", "band ok", "Receipt · simulated payment", doc), el("h2", "", `Booked ${booking.number}`, doc),
-    el("p", "receipt-total", dollars(booking.total_usd), doc), el("p", "lead", booking.plan_label, doc));
-  card.append(rowList(bookingRows(booking), doc), el("p", "note", `${String(booking.payment?.method || "").replace(/\s*\(simulated\)$/i, "")} · charged once · delivery is projected, not confirmed`, doc));
+  card.append(el("p", "band ok", "Receipt · simulated payment", doc), columns([
+    el("h2", "", `Booked ${booking.number}`, doc), el("p", "receipt-total", dollars(booking.total_usd), doc), el("p", "lead", booking.plan_label, doc),
+    el("p", "note", `${String(booking.payment?.method || "").replace(/\s*\(simulated\)$/i, "")} · charged once · delivery is projected, not confirmed`, doc),
+  ], [rowList(bookingRows(booking), doc)], doc));
   const actions = el("div", "receipt-actions", undefined, doc);
   if (onExecute) {
     const execute = button("Execute approved plan", "primary", onExecute, doc);
@@ -255,12 +271,13 @@ function planLine(className, prefix, plan, labels, doc) {
 
 export function renderAlert(section, alert, doc = globalThis.document) {
   const details = alertDetails(alert);
+  const labels = [details.was?.label, details.plan?.label].filter(Boolean);
   const card = el("div", "alert-card", undefined, doc);
   card.append(el("p", `band ${details.invalidated ? "late" : "warn"}`, details.invalidated ? "Proactive alert · approval invalidated" : "Proactive alert · nothing approved", doc),
-    el("h2", "", details.title, doc), el("p", "lead", details.text, doc));
-  const labels = [details.was?.label, details.plan?.label].filter(Boolean);
-  if (details.was) card.append(planLine("was-plan", details.invalidated ? "Was approved:" : "Was", details.was, labels, doc));
-  if (details.plan) card.append(planLine(`new-plan${details.plan.late ? " late" : ""}`, "Now", details.plan, labels, doc));
+    columns([el("h2", "", details.title, doc), el("p", "lead", details.text, doc)], [
+      details.was ? planLine("was-plan", details.invalidated ? "Was approved:" : "Was", details.was, labels, doc) : null,
+      details.plan ? planLine(`new-plan${details.plan.late ? " late" : ""}`, "Now", details.plan, labels, doc) : null,
+    ], doc));
   section.replaceChildren(card);
 }
 
@@ -271,13 +288,11 @@ export function renderResult(section, { snapshot, execution, plan, booking, time
   heading.append(...(plan ? labelNodes(plan.label, labels, doc) : [execution.plan_id]));
   const lead = el("p", "lead", undefined, doc);
   lead.append(el("span", "incident-id", snapshot.state.incident_id, doc), ` · ${snapshot.state.title}`);
-  card.append(el("p", "band ok", "Executed · operationally verified", doc), heading,
-    lead);
+  let figure = null;
   if (plan) {
     const outcome = resultOutcome(plan);
-    const figure = el("p", "result-figure", undefined, doc);
+    figure = el("p", "result-figure", undefined, doc);
     figure.append(el("strong", "", outcome.value, doc), " ", el("span", "", outcome.label, doc), " ", el("small", "", outcome.note, doc));
-    card.append(figure, rowList(orderRows(plan), doc));
   }
   const figures = el("div", "figures", undefined, doc);
   for (const item of resultFigures(snapshot, execution)) {
@@ -286,10 +301,12 @@ export function renderResult(section, { snapshot, execution, plan, booking, time
     if (item.note) box.append(el("small", "", item.note, doc));
     figures.append(box);
   }
-  card.append(figures);
-  if (times.length) card.append(el("p", "times", times.map(([label, value]) => `${label} ${value}`).join(" · "), doc));
-  if (booking) card.append(el("p", "note", `Booked ${booking.number} · ${dollars(booking.total_usd)} charged once.`, doc));
-  card.append(el("p", "note", "Delivery is projected from synthetic quotes, not physically confirmed.", doc));
+  card.append(el("p", "band ok", "Executed · operationally verified", doc), columns([
+    heading, lead, figure,
+    times.length ? el("p", "times", times.map(([label, value]) => `${label} ${value}`).join(" · "), doc) : null,
+    booking ? el("p", "note", `Booked ${booking.number} · ${dollars(booking.total_usd)} charged once.`, doc) : null,
+    el("p", "note", "Delivery is projected from synthetic quotes, not physically confirmed.", doc),
+  ], [plan ? rowList(orderRows(plan), doc) : null, figures], doc));
   section.replaceChildren(card);
 }
 

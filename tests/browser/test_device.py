@@ -277,6 +277,26 @@ def test_the_phone_dock_expands_its_reply_toggles_the_voice_and_keeps_the_shell_
     assert page_errors == []
 
 
+def test_the_echo_show_reads_each_decision_without_scrolling(page, replay_server, page_errors, reset_demo):
+    page.set_viewport_size({"width": 1280, "height": 800})
+    page.goto(f"{replay_server}/demo#SHIP-433")
+    expect(page.locator("#connection")).to_have_text("Connected")
+    expect(page.locator("#device-bars")).to_contain_text("Cusco regional hospital · 12 units")
+    expect(page.locator("#device-bars")).to_contain_text("no plan yet")
+    scrolls = "(() => { const s = document.querySelector('#surface'); return s.scrollHeight > s.clientHeight + 1; })()"
+    say_on_device(page, "What's happening with SHIP-433, and which plan should we choose?")
+    say_on_device(page, "approve the recommended plan")
+    assert not page.evaluate(scrolls), "the confirmation fits"
+    page.click("#confirm-yes")
+    expect(page.locator("#plans-state")).to_contain_text("Approved by you")
+    say_on_device(page, "execute it")
+    expect(page.locator(".result-card .times")).to_be_visible()
+    columns = page.evaluate("getComputedStyle(document.querySelector('.result-card .label-split')).gridTemplateColumns.split(' ').length")
+    assert columns == 2 and not page.evaluate(scrolls), "the result is a two-column label that fits"
+    assert_accessible(page)
+    assert page_errors == []
+
+
 def test_the_device_fits_a_small_phone(page, replay_server, page_errors, reset_demo):
     page.set_viewport_size({"width": 360, "height": 740})
     page.goto(f"{replay_server}/demo")
