@@ -5,6 +5,7 @@ import { moduleUrl } from "./helpers.mjs";
 const {
   SURFACES, shortSpoken, homeCards, incidentFacts, displayPlan, confirmDetails, resultFigures, alertDetails, chipsFor, createSurfaces,
 } = await import(moduleUrl("device/surfaces.js"));
+const { cardTags } = await import(moduleUrl("device/carousel.js"));
 
 const plans = [
   { id: "p-wait", kind: "wait", label: "Keep the delayed shipment", incremental_cost_usd: 0, projected_customer_delay_hours: 12, late_units: 20,
@@ -54,9 +55,10 @@ test("incident facts and the plan on screen follow the execution, the approval, 
 test("confirmation cards read back exactly what a yes would do", () => {
   const approval = confirmDetails({ kind: "approval", plan: plans[0] });
   assert.equal(approval.title, "Approve this plan?");
-  assert.deepEqual(approval.rows, [["Extra cost", "$0"], ["store", "+12 h late", "late"], ["Allocation", "20 via delayed shipment"]]);
-  assert.deepEqual(confirmDetails({ kind: "approval", plan: plans[1] }).rows[1], ["store · critical", "On time", "on-time"]);
-  assert.deepEqual(confirmDetails({ kind: "approval", plan: { ...plans[0], orders: [] } }).rows[1], ["Customer delay", "12 h"]);
+  assert.deepEqual(approval.figure, ["$0", "extra cost"]);
+  assert.deepEqual(approval.rows, [["store", "+12 h late", "late"], ["Allocation", "20 via delayed shipment"]]);
+  assert.deepEqual(confirmDetails({ kind: "approval", plan: plans[1] }).rows[0], ["store · critical", "On time", "on-time"]);
+  assert.deepEqual(confirmDetails({ kind: "approval", plan: { ...plans[0], orders: [] } }).rows[0], ["Customer delay", "12 h"]);
   assert.equal(approval.warning, null);
   assert.equal(approval.yes, "Yes, approve");
   const late = confirmDetails({ kind: "approval", plan: { ...plans[0], orders: [{ ...plans[0].orders[0], priority: "critical" }] } });
@@ -64,6 +66,7 @@ test("confirmation cards read back exactly what a yes would do", () => {
   const quote = { plan_label: plans[1].label, base_usd: 120, service_fee_usd: 5, tax_label: "Tax 18%", tax_usd: 22.5, total_usd: 147.5, payment_method: "Corporate card ending 4242 (simulated)" };
   const pay = confirmDetails({ kind: "purchase", purchase: { approve: true, quote }, plan: plans[1] });
   assert.equal(pay.title, "Approve and pay?");
+  assert.deepEqual(pay.figure, ["$147.50", "total, charged once"]);
   assert.deepEqual(pay.rows.at(-1), ["Total", "$147.50"]);
   assert.equal(pay.note, "Charged once to the corporate card ending 4242. Nothing is charged until you say yes.");
   assert.equal(pay.yes, "Yes, approve and pay");
@@ -91,6 +94,14 @@ test("the result card, the alert card and the chips come from the data", () => {
   assert.deepEqual(chipsFor("confirm", context), []);
   assert.deepEqual(chipsFor("plans", { ...context, snapshot: null }), []);
   for (const [, utterance] of chipsFor("plans", context)) assert.equal(typeof utterance, "string");
+});
+
+test("an inbox card carries at most two tags: start here, then risk or a critical order, then a state past detected", () => {
+  const card = { startHere: true, critical_units_at_risk: 12, priority: "critical", status: "investigated" };
+  assert.deepEqual(cardTags(card), [["start-here", "Start here"], ["at-risk", "12 critical units at risk"]]);
+  assert.deepEqual(cardTags({ ...card, startHere: false }), [["at-risk", "12 critical units at risk"], ["state", "investigated"]]);
+  assert.deepEqual(cardTags({ ...card, startHere: false, critical_units_at_risk: 0, status: "detected" }), [["critical", "Critical order"]]);
+  assert.deepEqual(cardTags({ priority: "standard", critical_units_at_risk: 0, status: "detected" }), []);
 });
 
 test("a confirmation or an alert is dismissed back to the card underneath", () => {

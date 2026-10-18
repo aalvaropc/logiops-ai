@@ -304,7 +304,7 @@ def test_the_inbox_and_the_greeting_name_the_critical_units_at_risk():
     root = Path(__file__).resolve().parents[1] / "logiops" / "static"
     script, style = (root / "console.js").read_text(), (root / "demo.css").read_text()
     assert 'tag("at-risk", `${item.critical_units_at_risk} critical units at risk`)' in script
-    assert 'tag("at-risk", `${card.critical_units_at_risk} critical units at risk`)' in (root / "device" / "carousel.js").read_text()
+    assert 'tags.push(["at-risk", `${card.critical_units_at_risk} critical units at risk`]);' in (root / "device" / "carousel.js").read_text()
     assert "critical units nothing on hand delivers in time" in (root / "app" / "greeting.js").read_text()
     assert ".incident-card .at-risk {" in style and ".incident-top .at-risk {" in (root / "device.css").read_text()
 
@@ -353,7 +353,7 @@ def test_the_demo_shows_preferences_briefings_and_speaks_the_short_line():
     commands = _static("app", "commands.js")
     assert commands.index("intent.parsePreference(text)") < commands.index("intent.parseCommand(text)")
     assert 'request("/agent/briefing", "POST"' in commands and 'tag("start-here", "Start here")' in script
-    assert 'tag("start-here", "Start here")' in (root / "device" / "carousel.js").read_text()
+    assert 'tags.push(["start-here", "Start here"]);' in (root / "device" / "carousel.js").read_text()
     assert '"Your preference", "badge preference"' in script and "never approve" in script
     assert '"badge preference", "Your preference"' in (root / "device" / "render.js").read_text()
     assert "if (speechOn()) speak(spoken || window.LogiOpsMarkdown.plainText(text));" in script
@@ -389,9 +389,9 @@ def test_assets_come_from_one_allowlist_route(tmp_path):
     served, refused = asyncio.run(run())
     assert {"demo.css", "console.js", "device.css", "device/main.js", "device/render.js", "markdown.js", "intent.js", "route.js"} <= set(DEMO_ASSETS)
     assert "device.js" not in DEMO_ASSETS and "demo.js" not in DEMO_ASSETS
-    assert all(not name.startswith("/") and ".." not in name and name.rsplit(".", 1)[1] in ("css", "js", "svg", "png") for name in DEMO_ASSETS)
+    assert all(not name.startswith("/") and ".." not in name and name.rsplit(".", 1)[1] in ("css", "js", "svg", "png", "woff2") for name in DEMO_ASSETS)
     assert {name: (r.status_code, r.headers["content-type"].split(";")[0]) for name, r in served.items()} == {
-        name: (200, {"css": "text/css", "js": "text/javascript", "svg": "image/svg+xml", "png": "image/png"}[name.rsplit(".", 1)[1]])
+        name: (200, {"css": "text/css", "js": "text/javascript", "svg": "image/svg+xml", "png": "image/png", "woff2": "font/woff2"}[name.rsplit(".", 1)[1]])
         for name in DEMO_ASSETS}
     assert [response.status_code for response in refused] == [404] * 8
     page = (Path(__file__).resolve().parents[1] / "logiops" / "static" / "demo.html").read_text()
