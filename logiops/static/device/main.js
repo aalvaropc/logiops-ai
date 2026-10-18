@@ -384,6 +384,7 @@ function paintSurface(shown = surfaces.current()) {
   } else if (shown.name === "confirm") {
     renderConfirm(section, shown.payload, {
       onYes: () => handleUtterance("yes"), onNo: () => handleUtterance("no"), labels: snapshot ? visiblePlans(snapshot).map((plan) => plan.label) : [],
+      shipment: snapshot?.state.shipment || null, route, journey,
     });
   } else if (shown.name === "receipt") {
     const booking = shown.payload.booking;
@@ -398,7 +399,7 @@ function paintSurface(shown = surfaces.current()) {
     const execution = snapshot.executions[0];
     renderResult(section, {
       snapshot, execution, plan: snapshot.plans.find((plan) => plan.id === execution.plan_id), booking: (snapshot.bookings || []).at(-1) || null,
-      times: incidentTimes(state.metrics?.incidents.find((item) => item.incident_id === state.incidentId)),
+      times: incidentTimes(state.metrics?.incidents.find((item) => item.incident_id === state.incidentId)), route, journey,
     });
   }
   renderChips(shown.name);
