@@ -338,9 +338,12 @@ def test_after_execution_the_queue_moves_on_and_start_over_says_what_stays(page,
     expect(page.locator('[data-surface="incident"] .band')).to_have_text("Approved · 12 critical units projected on time once executed")
     say_on_device(page, "show the plans")
     expect(page.locator("#plans-state")).to_contain_text("Nothing has run yet")
-    expect(page.locator("#chips .chip.act")).to_have_text(["Book and pay"])
+    expect(page.locator("#chips .chip.act")).to_have_text(["Execute approved plan", "Book and pay"])
     page.click("#execute-plan")
     expect(page.locator('[data-surface="result"]')).to_be_visible()
+    expect(page.locator('[data-surface="result"] .times')).to_be_visible()
+    page.wait_for_timeout(300)
+    assert page.evaluate("Boolean(document.activeElement.closest('[data-surface=\"result\"]')) && document.activeElement.tagName === 'H2'"), "focus stays on the result"
     expect(page.locator("#execute-plan")).to_be_hidden()
     next_chip = page.locator("#chips .chip", has_text="Open SHIP-")
     expect(next_chip).to_have_count(1)

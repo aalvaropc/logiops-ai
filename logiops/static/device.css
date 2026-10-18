@@ -181,6 +181,7 @@ button:focus-visible, input:focus-visible, a:focus-visible, .conversation:focus-
 .plans-head .primary { margin-top: 10px; }
 .was-plan { margin: 12px 0 0; color: var(--ink-2); font-size: var(--type-body); }
 .new-plan { margin: 8px 0 0; padding: 10px 12px; border-radius: var(--radius-label); background: var(--ok-tint); color: var(--ok); font-size: var(--type-body); font-weight: 800; }
+.new-plan.late { background: var(--late-tint); color: var(--late); }
 .figures { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; margin-top: 14px; }
 .figure { display: grid; gap: 2px; align-content: start; padding: 8px 0 0; border-top: 1px solid var(--hairline); }
 .figure strong { font-size: var(--type-stat); line-height: 1.15; font-variant-numeric: tabular-nums; }

@@ -260,7 +260,7 @@ export function renderAlert(section, alert, doc = globalThis.document) {
     el("h2", "", details.title, doc), el("p", "lead", details.text, doc));
   const labels = [details.was?.label, details.plan?.label].filter(Boolean);
   if (details.was) card.append(planLine("was-plan", details.invalidated ? "Was approved:" : "Was", details.was, labels, doc));
-  if (details.plan) card.append(planLine("new-plan", "Now", details.plan, labels, doc));
+  if (details.plan) card.append(planLine(`new-plan${details.plan.late ? " late" : ""}`, "Now", details.plan, labels, doc));
   section.replaceChildren(card);
 }
 

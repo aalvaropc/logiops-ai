@@ -492,7 +492,15 @@ async function loadMetrics() {
   state.metrics = await request("/metrics");
   const shown = surfaces.current();
   if (shown.name === "home") renderSession(sections.home, sessionFigures(state.metrics.session));
-  else if (shown.name === "result") paintSurface();
+  else if (shown.name === "result") {
+    const focused = sections.result.contains(document.activeElement);
+    paintSurface();
+    const heading = sections.result.querySelector("h2");
+    if (focused && heading) {
+      heading.tabIndex = -1;
+      heading.focus({ preventScroll: true });
+    }
+  }
 }
 
 async function selectIncident(id) {
