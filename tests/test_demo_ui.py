@@ -96,6 +96,8 @@ def test_navigation_is_a_closed_command_and_noise_is_not_sent_to_the_agent():
         "show the result": "show_result", "see the results": "show_result", "show the result of SHIP-433": None,
         "withdraw the approval": "withdraw", "Cancel the approval.": "withdraw", "undo my approval": "withdraw", "cancel it": "decline",
         "withdraw the approval and approve the wait plan": None,
+        "home": "show_home", "Go back.": "show_home", "back to the queue": "show_home", "show me the inbox": "show_home",
+        "go back to the incident": "show_incident", "go back to the plans": "show_plans", "show the queue for SHIP-433": None,
     }
     got = json.loads(_intent(f"console.log(JSON.stringify({json.dumps(list(cases))}.map(m.parseCommand)))"))
     assert dict(zip(cases, got)) == cases

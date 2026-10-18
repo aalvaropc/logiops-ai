@@ -381,6 +381,10 @@ def test_after_execution_the_queue_moves_on_and_start_over_says_what_stays(page,
     expect(page.locator('[data-surface="result"]')).to_be_visible()
     page.locator("#chips .chip", has_text=f"Open {target}").click()
     expect(page.locator('[data-surface="incident"] .incident-id')).to_have_text(target)
+    page.locator("#chips .chip", has_text="Back to queue").click()
+    expect(home).to_be_visible()
+    expect(home.locator("h2#home-title")).to_contain_text("open incident")
+    assert "Here's your queue" in say_on_device(page, "go back")
     assert_accessible(page)
     assert page_errors == []
 

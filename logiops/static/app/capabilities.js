@@ -6,7 +6,7 @@ export const CAPABILITIES_TEXT = "I'm LogiOps, your operations desk for late or 
   + "- approve a plan after reading it back, then execute it: “approve the recommended plan”, “yes”, “execute it”;\n"
   + "- change your mind before it runs: “withdraw the approval” resets the incident so you can choose again;\n"
   + "- book and pay a plan's carriers after reading back the price with tax, with a receipt: “book it”, “yes”;\n"
-  + "- go back to a card: “show the incident”, “show the plans”;\n"
+  + "- go back to a card: “show the incident”, “show the plans”, or to your queue: “back to the queue”;\n"
   + "- start over at any time: “start over”.\n"
   + "Every answer is checked against the incident's data, and only you can approve.";
 
