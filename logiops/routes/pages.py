@@ -64,7 +64,7 @@ def router(ctx: Context, *, auth_enabled: bool) -> APIRouter:
             if host_origin is None:
                 return JSONResponse(status_code=404, content={"detail": "Not found"})
         policy = (
-            "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:; "
+            "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:; font-src data:; "
             f"connect-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors {host_origin}"
         )
         return HTMLResponse(ctx.sandbox_page, headers={

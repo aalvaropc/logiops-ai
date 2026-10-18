@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <title>Resolution options</title>
 <style>
+  @font-face { font-family: "Atkinson Hyperlegible Next"; font-style: normal; font-weight: 200 800; font-display: swap; src: url("logiops-card-font.woff2") format("woff2"); }
   :root, :root[data-theme="light"] {
     --bg: var(--color-background-primary, #FFFFFF); --card: var(--color-background-secondary, #FFFFFF);
     --text: var(--color-text-primary, #111418); --muted: var(--color-text-secondary, #454C55);
@@ -11,7 +12,9 @@
     --button: #FFFFFF; --button-hover: #F4F5F7; --late: #B8102A; --ok: #1D7A3C; --band-ink: #FFFFFF;
     --tag: #FFF3D1; --tag-ink: #664400; --preference: #664400; --pad: 16px;
     --inset-top: 0px; --inset-right: 0px; --inset-bottom: 0px; --inset-left: 0px;
-    color-scheme: light; font-family: var(--font-sans, ui-sans-serif, system-ui, sans-serif); color: var(--text); background: var(--bg);
+    --type-tag: 12px; --type-meta: 14px; --type-body: 15px; --type-lead: clamp(17px, 1.5vw, 20px); --type-figure: clamp(28px, 2.6vw, 34px);
+    color-scheme: light; font-family: var(--font-sans, "Atkinson Hyperlegible Next", ui-sans-serif, system-ui, sans-serif); font-synthesis: none;
+    color: var(--text); background: var(--bg);
   }
   :root[data-theme="dark"] {
     --bg: var(--color-background-primary, #111418); --card: var(--color-background-secondary, #1A1E24);
@@ -21,52 +24,52 @@
     --tag: #3D3214; --tag-ink: #FFE3A3; --preference: #FFE3A3;
     color-scheme: dark;
   }
-  body { margin: 0; padding: var(--inset-top) var(--inset-right) var(--inset-bottom) var(--inset-left); background: var(--bg); font-size: 14px; line-height: 1.4; }
+  body { margin: 0; padding: var(--inset-top) var(--inset-right) var(--inset-bottom) var(--inset-left); background: var(--bg); font-size: var(--type-meta); line-height: 1.4; }
   h2 { margin: 0; }
   .visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
   .waiting { padding: var(--pad); color: var(--muted); }
   .plan.pick { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px 24px; align-items: start; padding: 16px var(--pad); border-bottom: 2px solid var(--rule); background: var(--card); }
-  .band { grid-column: 1 / -1; margin: -16px calc(-1 * var(--pad)) 0; padding: 7px var(--pad); color: var(--band-ink); font-size: 12px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; }
+  .band { grid-column: 1 / -1; margin: -16px calc(-1 * var(--pad)) 0; padding: 7px var(--pad); color: var(--band-ink); font-size: var(--type-tag); font-weight: 800; letter-spacing: .06em; text-transform: uppercase; }
   .band.ok { background: var(--ok); }
   .band.late { background: var(--late); }
-  .pick-name { font-size: 18px; line-height: 1.3; letter-spacing: -.01em; text-wrap: balance; }
+  .pick-name { font-size: var(--type-lead); line-height: 1.3; letter-spacing: -.01em; text-wrap: balance; }
   .pick .figures { text-align: right; white-space: nowrap; }
-  .cost { display: block; font-size: 30px; font-weight: 800; line-height: 1; letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
+  .cost { display: block; font-size: var(--type-figure); font-weight: 800; line-height: 1; letter-spacing: -.02em; font-variant-numeric: tabular-nums slashed-zero; }
   .delay { display: block; margin-top: 6px; color: var(--muted); }
   .why { grid-column: 1 / -1; margin: 0; color: var(--preference); line-height: 1.5; }
   p.preference { margin: 0; padding: 12px var(--pad) 0; color: var(--preference); line-height: 1.5; }
-  .outcomes { grid-column: 1 / -1; display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; font-size: 15px; }
+  .outcomes { grid-column: 1 / -1; display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; font-size: var(--type-body); }
   .outcomes li { display: grid; grid-template-columns: 7em minmax(0, 1fr); gap: 12px; align-items: baseline; }
-  .outcomes .verdict { justify-self: start; padding: 2px 7px; background: var(--ok); color: var(--band-ink); font-size: 12px; font-weight: 800; letter-spacing: .05em; text-transform: uppercase; white-space: nowrap; }
+  .outcomes .verdict { justify-self: start; padding: 2px 7px; background: var(--ok); color: var(--band-ink); font-size: var(--type-tag); font-weight: 800; letter-spacing: .05em; text-transform: uppercase; white-space: nowrap; }
   .outcomes .late .verdict { background: var(--late); }
   .pick-text { display: grid; gap: 6px; min-width: 0; }
   .allocation { margin: 0; color: var(--muted); }
   .pick button { grid-column: 1 / -1; justify-self: start; border-color: var(--accent); background: var(--accent); color: var(--accent-ink); }
   .pick button:hover { background: var(--accent-hover); }
-  .others { padding: 14px var(--pad) 2px; color: var(--muted); font-size: 14px; font-weight: 600; }
+  .others { padding: 14px var(--pad) 2px; color: var(--muted); font-size: var(--type-meta); font-weight: 600; }
   .plans { margin: 0; padding: 0; list-style: none; }
   .plans .plan { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 6px 16px; align-items: center; padding: 10px var(--pad); }
   .plans .plan + .plan { border-top: 1px solid var(--line); }
-  .plan-name { font-size: 15px; }
+  .plan-name { font-size: var(--type-body); }
   .orders { display: flex; flex-wrap: wrap; gap: 4px 14px; margin-top: 4px; color: var(--muted); }
-  .plans .figures { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
-  .plans .figures strong { display: block; font-size: 16px; }
-  .plans .figures small { display: block; color: var(--muted); font-size: 14px; }
-  button { min-height: 44px; padding: 6px 16px; border: 2px solid var(--rule); border-radius: 6px; background: var(--button); color: var(--text); font: inherit; font-size: 15px; font-weight: 800; cursor: pointer; }
+  .plans .figures { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums slashed-zero; }
+  .plans .figures strong { display: block; font-size: var(--type-body); }
+  .plans .figures small { display: block; color: var(--muted); font-size: var(--type-meta); }
+  button { min-height: 44px; padding: 6px 16px; border: 2px solid var(--rule); border-radius: 6px; background: var(--button); color: var(--text); font: inherit; font-size: var(--type-body); font-weight: 800; cursor: pointer; }
   button:hover { background: var(--button-hover); }
   button:focus-visible { outline: 3px solid var(--rule); outline-offset: 2px; }
   button.more { margin: 4px var(--pad) 0; }
   .diff { font-weight: 800; text-decoration: underline; text-decoration-color: var(--accent); text-decoration-thickness: 3px; text-underline-offset: 4px; text-decoration-skip-ink: none; }
-  .chip { display: inline-block; padding: 2px 7px; background: var(--ok); color: var(--band-ink); font-size: 12px; font-weight: 800; letter-spacing: .05em; text-transform: uppercase; white-space: nowrap; }
+  .chip { display: inline-block; padding: 2px 7px; background: var(--ok); color: var(--band-ink); font-size: var(--type-tag); font-weight: 800; letter-spacing: .05em; text-transform: uppercase; white-space: nowrap; }
   .chip.late { background: var(--late); }
-  .tag { display: inline-block; margin-left: 8px; padding: 1px 7px; border: 1.5px solid transparent; vertical-align: 2px; color: var(--tag-ink); background: var(--tag); font-size: 12px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; }
+  .tag { display: inline-block; margin-left: 8px; padding: 1px 7px; border: 1.5px solid transparent; vertical-align: 2px; color: var(--tag-ink); background: var(--tag); font-size: var(--type-tag); font-weight: 800; letter-spacing: .04em; text-transform: uppercase; }
   .tag.pick-tag { border-color: var(--accent); color: var(--accent); background: transparent; }
   .tag.done-tag { border-color: var(--ok); color: var(--ok); background: transparent; }
-  .footnote { margin: 0; padding: 12px var(--pad) 14px; color: var(--muted); font-size: 13px; }
-  body.compact { --pad: 12px; }
+  .footnote { margin: 0; padding: 12px var(--pad) 14px; color: var(--muted); font-size: var(--type-meta); }
+  body.compact { --pad: 12px; --type-meta: 15px; --type-body: 16px; }
   body.compact .plan.pick { grid-template-columns: minmax(0, 1fr); gap: 10px; }
   body.compact .pick .figures { text-align: left; }
-  body.compact .cost { display: inline; font-size: 26px; }
+  body.compact .cost { display: inline; }
   body.compact .delay { display: inline; margin: 0 0 0 8px; }
   body.compact .outcomes li { grid-template-columns: 6em minmax(0, 1fr); }
   body.compact .plans .plan { grid-template-columns: minmax(0, 1fr) auto; }
@@ -126,7 +129,10 @@
     const inset = context.safeAreaInsets || {};
     for (const side of ["top", "right", "bottom", "left"]) root.style.setProperty(`--inset-${side}`, `${Math.max(0, Number(inset[side]) || 0)}px`);
     const width = Number(context.containerDimensions?.width ?? context.containerDimensions?.maxWidth);
-    document.body.classList.toggle("compact", context.deviceClass === "compact" || (Number.isFinite(width) && width < 480));
+    const compact = context.deviceClass === "compact" || (Number.isFinite(width) && width < 480);
+    if (compact === document.body.classList.contains("compact")) return;
+    document.body.classList.toggle("compact", compact);
+    if (lastResult) render(lastResult);
   }
 
   function pageOf(plans, limit) {
@@ -136,7 +142,7 @@
 
   const verdict = (order) => (order.delay_hours ? `+${order.delay_hours} h` : "on time");
 
-  function distinguishing(label, labels) {
+  function nearestOf(label, labels) {
     const words = String(label).split(" ");
     let best = null;
     for (const other of labels) {
@@ -148,8 +154,14 @@
           table[i][j] = words[i] === theirs[j] ? table[i + 1][j + 1] + 1 : Math.max(table[i + 1][j], table[i][j + 1]);
         }
       }
-      if (!best || table[0][0] > best.table[0][0]) best = { table, theirs };
+      if (!best || table[0][0] > best.table[0][0]) best = { table, theirs, label: other };
     }
+    return best;
+  }
+
+  function distinguishing(label, labels) {
+    const words = String(label).split(" ");
+    const best = nearestOf(label, labels);
     const common = best ? best.table[0][0] : 0;
     if (common < 2 || common * 2 < words.length || common === words.length) return [[String(label), false]];
     const shared = new Array(words.length).fill(false);
@@ -281,7 +293,12 @@
     const labels = plans.map((plan) => plan.label);
     if (picked) root.append(pickCard(picked, hinted, preference, approved, executed, labels));
     const others = plans.filter((plan) => plan !== picked);
-    const { shown, hidden } = pageOf(others, picked ? PAGE - 1 : PAGE);
+    const compact = document.body.classList.contains("compact");
+    if (picked) {
+      const nearest = nearestOf(picked.label, labels)?.label;
+      others.sort((a, b) => Number(b.label === nearest) - Number(a.label === nearest));
+    }
+    const { shown, hidden } = pageOf(others, picked ? (compact ? 1 : PAGE - 1) : PAGE);
     if (shown.length) {
       const title = el("h2", "others", picked ? `Other plan${others.length === 1 ? "" : "s"}` : `${plans.length} calculated plans`);
       title.id = "others-title";

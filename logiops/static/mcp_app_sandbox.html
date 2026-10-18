@@ -39,7 +39,7 @@
       ["script-src 'unsafe-inline'", ...resources].join(" "),
       ["style-src 'unsafe-inline'", ...resources].join(" "),
       ["img-src data:", ...resources].join(" "),
-      `font-src ${list(resources, "'none'")}`,
+      ["font-src data:", ...resources].join(" "),
       `media-src ${list(resources, "'none'")}`,
       `connect-src ${list(connect, "'none'")}`,
       `frame-src ${list(frames, "'none'")}`,

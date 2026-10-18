@@ -76,7 +76,7 @@ def test_local_demo_uses_the_other_loopback_name_as_sandbox_origin(tmp_path):
     proxy = get(app, "/mcp-app/sandbox.html", "localhost:8000")
     assert proxy.status_code == 200
     policy = proxy.headers["content-security-policy"]
-    assert "frame-ancestors http://127.0.0.1:8000" in policy and "connect-src 'none'" in policy
+    assert "frame-ancestors http://127.0.0.1:8000" in policy and "connect-src 'none'" in policy and "font-src data:;" in policy
     assert get(app, "/mcp-app/sandbox.html", "10.0.0.5:8000").status_code == 404
 
 
@@ -125,6 +125,7 @@ def test_proxy_and_host_follow_the_sandbox_contract(tmp_path):
     assert "allow-same-origin" not in grantable and "allow-top-navigation" not in grantable
     assert 'const SANDBOX_PREFIX = "ui/notifications/sandbox-"' in proxy and "isProxyMethod(message)" in proxy
     assert "event.origin === hostOrigin" in proxy and "connect-src ${list(connect, \"'none'\")}" in proxy
+    assert '["font-src data:", ...resources].join(" ")' in proxy
     assert 'element.setAttribute("sandbox", "allow-scripts allow-same-origin")' in host
     assert "event.origin !== sandboxOrigin" in host and "srcdoc" not in host and "srcdoc" not in script
     assert "ui/resource-teardown" in host and "hostCapabilities: {}" in host
@@ -159,6 +160,7 @@ def test_the_card_highlights_the_same_pick_as_the_panel():
 def test_the_view_uri_changes_with_its_content_and_the_status_lines_are_short():
     digest = hashlib.sha256(UI_HTML.encode()).hexdigest()[:8]
     assert UI_URI == f"ui://logiops/resolution-options.{digest}.html"
+    assert 'src: url("data:font/woff2;base64,d09GMg' in UI_HTML and "logiops-card-font" not in UI_HTML and "/assets/" not in UI_HTML
     assert 0 < len(UI_INVOKING) <= 64 and 0 < len(UI_INVOKED) <= 64
 
 
@@ -170,6 +172,8 @@ def test_the_view_follows_the_host_context():
     assert "var(--color-background-primary" in card and "HOST_STYLE.test(name)" in card
     assert "safeAreaInsets" in card and 'classList.toggle("compact"' in card
     assert "const PAGE = 5;" in card and "See ${hidden} more plan" in card
+    assert "pageOf(others, picked ? (compact ? 1 : PAGE - 1) : PAGE)" in card and "nearestOf(picked.label, labels)" in card
+    assert "if (lastResult) render(lastResult);" in card
 
 
 def test_the_demo_host_negotiates_mcp_and_sends_its_context(tmp_path):
