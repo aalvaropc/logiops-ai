@@ -92,7 +92,8 @@ def test_navigation_is_a_closed_command_and_noise_is_not_sent_to_the_agent():
     cases = {
         "show the plans": "show_plans", "Show me all the plans": "show_plans", "back to the options": "show_plans",
         "show the incident": "show_incident", "go back to the incident": "show_incident", "show the map": "show_incident",
-        "show SHIP-433": "open", "show the plans?": None, "show the plans for SHIP-433": None, "show the cheapest plan": None,
+        "show SHIP-433": "open", "Open SHIP-421": "open", "show the plans?": None, "show the plans for SHIP-433": None, "show the cheapest plan": None,
+        "show the result": "show_result", "see the results": "show_result", "show the result of SHIP-433": None,
     }
     got = json.loads(_intent(f"console.log(JSON.stringify({json.dumps(list(cases))}.map(m.parseCommand)))"))
     assert dict(zip(cases, got)) == cases
@@ -304,7 +305,7 @@ def test_the_inbox_and_the_greeting_name_the_critical_units_at_risk():
     root = Path(__file__).resolve().parents[1] / "logiops" / "static"
     script, style = (root / "console.js").read_text(), (root / "demo.css").read_text()
     assert 'tag("at-risk", `${item.critical_units_at_risk} critical units at risk`)' in script
-    assert 'tags.push(["at-risk", `${card.critical_units_at_risk} critical units at risk`]);' in (root / "device" / "carousel.js").read_text()
+    assert 'tags.push(["at-risk", `${card.critical_units_at_risk} critical units at risk`]);' in (root / "device" / "surfaces.js").read_text()
     assert "critical units nothing on hand delivers in time" in (root / "app" / "greeting.js").read_text()
     assert ".incident-card .at-risk {" in style and ".incident-top .at-risk {" in (root / "device.css").read_text()
 
@@ -353,7 +354,7 @@ def test_the_demo_shows_preferences_briefings_and_speaks_the_short_line():
     commands = _static("app", "commands.js")
     assert commands.index("intent.parsePreference(text)") < commands.index("intent.parseCommand(text)")
     assert 'request("/agent/briefing", "POST"' in commands and 'tag("start-here", "Start here")' in script
-    assert 'tags.push(["start-here", "Start here"]);' in (root / "device" / "carousel.js").read_text()
+    assert 'tags.push(["start-here", "Start here"]);' in (root / "device" / "surfaces.js").read_text()
     assert '"Your preference", "badge preference"' in script and "never approve" in script
     assert '"badge preference", "Your preference"' in (root / "device" / "render.js").read_text()
     assert "if (speechOn()) speak(spoken || window.LogiOpsMarkdown.plainText(text));" in script

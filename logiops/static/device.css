@@ -76,11 +76,12 @@ button:focus-visible, input:focus-visible, a:focus-visible, .carousel-track:focu
 .incident-card:hover { background: var(--shell-tint); }
 .incident-top { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
 .incident-top .incident-id { font-size: 18px; font-weight: 800; }
-.incident-top .critical, .incident-top .at-risk, .incident-top .state, .incident-top .start-here { padding: 3px 7px; font-size: var(--type-tag); font-weight: 800; letter-spacing: .05em; text-transform: uppercase; }
+.incident-top .critical, .incident-top .at-risk, .incident-top .state, .incident-top .executed, .incident-top .start-here { padding: 3px 7px; font-size: var(--type-tag); font-weight: 800; letter-spacing: .05em; text-transform: uppercase; }
 .incident-top .start-here { background: var(--shell); color: var(--shell-ink); }
 .incident-top .at-risk { background: var(--late); color: var(--shell-ink); }
 .incident-top .critical { background: var(--warn); color: var(--ink); }
 .incident-top .state { border: 1.5px solid var(--ink-3); color: var(--ink-2); }
+.incident-top .executed { border: 1.5px solid var(--ok); color: var(--ok); }
 .incident-card .incident-text { font-size: var(--type-body); line-height: 1.4; }
 .incident-card small { color: var(--ink-3); font-size: var(--type-meta); line-height: 1.45; }
 .session-strip { list-style: none; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin: 18px 0 0; padding: 0; }

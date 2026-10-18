@@ -7,6 +7,18 @@ export function approvalReadback(plan) {
   return `Approve “${plan.label}” for $${plan.incremental_cost_usd} extra, ${delay}${warning}?`;
 }
 
+export function startOverLines(snapshot, approval) {
+  const execution = snapshot?.executions[0];
+  const decided = snapshot?.plans.find((plan) => plan.id === (execution?.plan_id || approval?.plan_id));
+  if (execution && decided) {
+    const booking = (snapshot.bookings || []).find((item) => item.plan_id === decided.id);
+    const paid = booking ? `, and booking ${booking.number} stays paid (simulated)` : "";
+    return [`Okay, starting over. I cleared our conversation; “${decided.label}” stays executed${paid}.`, "Okay, starting over. The executed plan stays as it is."];
+  }
+  if (decided) return [`Okay, starting over. I cleared our conversation; your approval of “${decided.label}” still stands.`, "Okay, starting over. Your approval still stands."];
+  return ["Okay, starting over. Nothing was changed or approved.", "Okay, starting over. Nothing was changed."];
+}
+
 export function createCommands({
   store, intent, request, purchase, selectors, badges, preferences, say, act, device = () => {}, stopSpeaking = () => {},
   selectIncident, hideMcpApp = () => {}, showMcpApp = async () => {}, showMcpAppNote = () => {}, onInbox = () => {},
@@ -39,8 +51,8 @@ export function createCommands({
       store.set({ pendingApproval: null, awaitingExecute: false, selectedPlanId: null, conversation: state.conversation.slice(-1) });
       state.selections[state.incidentId] = null;
       hideMcpApp();
-      say("assistant", "Okay, starting over. Nothing was changed or approved. Ask about your queue, or about an incident.",
-        undefined, "Okay, starting over. Nothing was changed.");
+      const [line, spoken] = startOverLines(state.snapshot, selectors.visibleApproval(state.snapshot));
+      say("assistant", `${line} Ask about your queue, or about an incident.`, undefined, spoken);
       onSurface("home");
       return;
     }
@@ -100,6 +112,15 @@ export function createCommands({
         return;
       }
       command = null;
+    }
+    if (command === "show_result") {
+      if (state.snapshot?.executions.length) {
+        say("assistant", `Here's the result for ${state.incidentId}.`);
+        onSurface("result");
+      } else {
+        say("assistant", `Nothing has been executed for ${state.incidentId} yet, so there's no result to show.`);
+      }
+      return;
     }
     if (command === "show_plans") {
       const count = selectors.visiblePlans(state.snapshot).length;

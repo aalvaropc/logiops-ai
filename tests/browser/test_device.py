@@ -174,6 +174,41 @@ def test_a_briefing_reorders_the_carousel_and_a_no_dismisses_a_confirmation(page
     assert page_errors == []
 
 
+def test_after_execution_the_queue_moves_on_and_start_over_says_what_stays(page, replay_server, page_errors, reset_demo):
+    page.set_viewport_size({"width": 390, "height": 844})
+    page.goto(f"{replay_server}/demo")
+    expect(page.locator("#connection")).to_have_text("Connected")
+    say_on_device(page, "Any delays today?")
+    home = page.locator('[data-surface="home"]')
+    expect(home.locator('.incident-card[data-incident="SHIP-433"] .start-here')).to_have_text("Start here")
+    say_on_device(page, "What's happening with SHIP-433, and which plan should we choose?")
+    say_on_device(page, "approve the recommended plan")
+    page.click("#confirm-yes")
+    expect(page.locator("#plans-state")).to_contain_text("Approved by you")
+    say_on_device(page, "show the incident")
+    expect(page.locator('[data-surface="incident"] .band')).to_have_text("Approved · 12 critical units projected on time once executed")
+    say_on_device(page, "execute it")
+    expect(page.locator('[data-surface="result"]')).to_be_visible()
+    next_chip = page.locator("#chips .chip", has_text="Open SHIP-")
+    expect(next_chip).to_have_count(1)
+    target = next_chip.inner_text().removeprefix("Open ")
+    assert target != "SHIP-433"
+
+    assert "executed plan stays" in say_on_device(page, "start over")
+    expect(home).to_be_visible()
+    done = home.locator('.incident-card[data-incident="SHIP-433"]')
+    expect(done.locator(".executed")).to_have_text("Executed")
+    expect(done.locator(".start-here")).to_have_count(0)
+    expect(page.locator("#chips .chip").nth(1)).not_to_contain_text("SHIP-433")
+
+    say_on_device(page, "show the result")
+    expect(page.locator('[data-surface="result"]')).to_be_visible()
+    page.locator("#chips .chip", has_text=f"Open {target}").click()
+    expect(page.locator('[data-surface="incident"] .incident-id')).to_have_text(target)
+    assert_accessible(page)
+    assert page_errors == []
+
+
 def test_an_alert_elsewhere_opens_as_a_card(page, replay_server, page_errors, reset_demo):
     page.set_viewport_size({"width": 1440, "height": 1000})
     page.goto(f"{replay_server}/demo#SHIP-421")

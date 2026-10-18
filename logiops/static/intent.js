@@ -20,7 +20,7 @@
     + "open approve execute run go ahead reset start book pay resume continue cancel confirm forget remember delete "
     + "link connect sign log unlink disconnect switch back "
     + "delay delays late eta status incident incidents shipment shipments customer customers cost costs price "
-    + "risk critical inventory queue inbox route truck alert alerts receipt"
+    + "risk critical inventory queue inbox route truck alert alerts receipt result results"
   ).split(" "));
   const GRAMMAR = [
     ["reset", /^(?:reset(?: (?:this|the) incident| it| this)?|start (?:this|the) incident over)$/],
@@ -29,6 +29,7 @@
     ["open", /^(?:open|show|switch to|go to) ship-\d+$/],
     ["show_plans", /^(?:show|open|see|go back to|back to)(?: me)?(?: the| all(?: the)?)? (?:plans|options)$/],
     ["show_incident", /^(?:show|open|see|go back to|back to)(?: me)? (?:the|this) (?:incident|map)$/],
+    ["show_result", /^(?:show|open|see|go back to|back to)(?: me)? the results?$/],
     ["book", /^(?:book(?: and pay(?: for)?)?|pay for)(?: (?<rest>.+))?$/],
     ["confirm", /^(?:yes|yeah|yep|confirm(?:ed)?)(?:[,\s]+(?:please|do it|go ahead|confirm|approve it|execute it|book it|pay(?: for it)?|approve and pay))?$/],
     ["decline", /^(?:(?:no|nope)(?:[,\s]+(?:thanks|thank you))?|(?:no[,\s]+)?(?:cancel(?: it)?|never mind|don'?t (?:book|pay for) it|don'?t))$/],

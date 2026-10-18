@@ -1,15 +1,7 @@
 import { formatDate } from "../app/selectors.js";
+import { cardTags } from "./surfaces.js";
 
 const SVG = "http://www.w3.org/2000/svg";
-
-export function cardTags(card) {
-  const tags = [];
-  if (card.startHere) tags.push(["start-here", "Start here"]);
-  if (card.critical_units_at_risk > 0) tags.push(["at-risk", `${card.critical_units_at_risk} critical units at risk`]);
-  else if (card.priority === "critical") tags.push(["critical", "Critical order"]);
-  if (card.status !== "detected") tags.push(["state", card.status]);
-  return tags.slice(0, 2);
-}
 
 export function createCarousel({ root, document: doc = globalThis.document, onOpen, label = "Incident inbox", reducedMotion = () => false }) {
   root.classList.add("carousel");

@@ -18,7 +18,7 @@ import { welcomeText as greeting } from "../app/greeting.js";
 import { checkBadge, checkNote, fallbackNote, traceSummary, executionSummary } from "../app/run-badges.js";
 import { renderMarkdown } from "../app/markdown-dom.js";
 import { sessionFigures, incidentTimes } from "../app/metrics.js";
-import { SURFACES, createSurfaces, shortSpoken, homeCards, displayPlan, chipsFor, lifecycleStep } from "./surfaces.js";
+import { SURFACES, createSurfaces, shortSpoken, homeCards, livePick, displayPlan, chipsFor, lifecycleStep } from "./surfaces.js";
 import { createCarousel } from "./carousel.js";
 import {
   el, renderHome, renderIncident, renderPlanList, renderConfirm, renderReceipt, renderAlert, renderResult, renderTrace, renderTranscript,
@@ -350,7 +350,7 @@ function paintSurface(shown = surfaces.current()) {
   const snapshot = state.snapshot;
   if (shown.name === "home") {
     renderHome(section, { greeting: welcomeText(), lead: shown.payload.lead, session: state.metrics ? sessionFigures(state.metrics.session) : null });
-    updateCarousel(homeCards(state.inbox, shown.payload.pick ?? state.briefingPick));
+    updateCarousel(homeCards(state.inbox, livePick(state.inbox, shown.payload.pick ?? state.briefingPick)));
   } else if (shown.name === "incident" && snapshot) {
     renderIncident(section, { snapshot, plan: currentPlan(), summary: summaryOf(), route });
   } else if (shown.name === "plans") {
@@ -414,7 +414,7 @@ function paintTalk() {
   const reply = [...state.conversation].reverse().find((turn) => turn.role === "assistant");
   $("heard-label").hidden = !heard;
   $("device-heard").textContent = heard ? heard.text : "Try “any delays today?”";
-  $("device-spoken").textContent = reply ? shortSpoken(reply.text, null, markdown.plainText) : "Ask about the queue, an incident, or a plan.";
+  $("device-spoken").textContent = reply ? shortSpoken(reply.text, reply.spoken, markdown.plainText) : "Ask about the queue, an incident, or a plan.";
   $("more").hidden = !state.conversation.length;
 }
 
@@ -441,7 +441,7 @@ function render(snapshot) {
   }
   const agentEvent = latestAgentEvent(snapshot);
   if (!state.conversation.length && agentEvent) {
-    state.conversation.push({ role: "assistant", text: agentEvent.data.display_answer || agentEvent.data.answer, meta: traceSummary(agentEvent.data), check: checkBadge(agentEvent.data) });
+    state.conversation.push({ role: "assistant", text: agentEvent.data.display_answer || agentEvent.data.answer, meta: traceSummary(agentEvent.data), check: checkBadge(agentEvent.data), spoken: agentEvent.data.spoken });
   }
   paintTalk();
   paintSurface();
@@ -564,7 +564,7 @@ async function recallMemory() {
 }
 
 function say(role, text, meta, spoken, check) {
-  state.conversation.push({ role, text, meta, check });
+  state.conversation.push({ role, text, meta, check, spoken });
   if (!state.forgetting && !String(meta || "").startsWith("welcome back")) remember(role, role === "assistant" ? (spoken || markdown.plainText(text)) : text);
   if (!$("sheet").hidden) renderTranscript($("conversation"), state.conversation, (source) => renderMarkdown(source, { markdown }));
   if (role !== "assistant") {
