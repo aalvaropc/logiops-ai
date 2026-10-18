@@ -167,7 +167,7 @@ def test_the_plans_card_fits_a_phone_with_its_look_alike_and_its_font(page, repl
     })""")
     assert card["compact"] and card["others"] == 1 and card["lookAlike"], card
     assert card["more"].startswith("See ") and not card["scrolls"], card
-    loaded = frame.evaluate("""() => document.fonts.load('800 16px "Atkinson Hyperlegible Next"')
+    loaded = frame.evaluate("""() => document.fonts.load('800 16px "Overpass"')
         .then((faces) => faces.length > 0 && faces.every((face) => face.status === "loaded")).catch(() => false)""")
     assert loaded, "the card must render in its own embedded font"
     assert page_errors == []

@@ -18,7 +18,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, summary:focus-v
 .connection::before { content: ""; width: 9px; height: 9px; border-radius: 50%; background: var(--warn); }
 .connection.ready::before { background: var(--ok); }
 .connection.error::before { background: var(--late); }
-.alerts-bell { min-height: 40px; padding: 0 12px; border: 0; border-radius: var(--radius-control); background: var(--warn); color: var(--ink); font-size: 14px; font-weight: 800; white-space: nowrap; }
+.alerts-bell { min-height: 40px; padding: 0 12px; border: 0; border-radius: var(--radius-control); background: var(--warn); color: var(--shell-ink); font-size: 14px; font-weight: 800; white-space: nowrap; }
 .alerts-bell[hidden] { display: none; }
 h1 { margin: 10px 0 10px; font-size: clamp(32px, 3.4vw, 44px); line-height: 1.1; letter-spacing: -.02em; font-weight: 800; }
 .panel > p { margin: 0 0 10px; color: var(--ink-2); font-size: 15px; line-height: 1.6; }
@@ -47,7 +47,7 @@ input::placeholder { color: var(--ink-3); }
 .incident-card .incident-id { font-size: 17px; font-weight: 800; }
 .incident-card .kind, .incident-card .critical, .incident-card .at-risk, .incident-card .state, .incident-card .start-here { padding: 3px 7px; font-size: 12px; font-weight: 800; letter-spacing: .05em; text-transform: uppercase; }
 .incident-card .kind, .incident-card .state { border: 1.5px solid var(--ink-3); color: var(--ink-2); }
-.incident-card .critical { background: var(--warn); color: var(--ink); }
+.incident-card .critical { background: var(--warn); color: var(--shell-ink); }
 .incident-card .at-risk { background: var(--late); color: var(--shell-ink); }
 .incident-card .start-here { background: var(--shell); color: var(--shell-ink); }
 .incident-card .incident-text { font-size: 15px; line-height: 1.4; }
