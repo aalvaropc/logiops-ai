@@ -113,7 +113,7 @@ class AlertWatcher:
         alert = {
             "id": f"{incident_id}-v{version}", "incident_id": incident_id, "source_version": version,
             "kind": "data_changed", "change": change, "approval_invalidated": bool(approval),
-            "previous_plan": {"plan_id": before["id"], "label": before["label"]},
+            "previous_plan": {"plan_id": before["id"], "label": before["label"], "incremental_cost_usd": before["incremental_cost_usd"]},
             "new_plan": None if pick is None else {
                 "plan_id": pick["id"], "label": pick["label"], "incremental_cost_usd": pick["incremental_cost_usd"],
                 "projected_customer_delay_hours": pick["projected_customer_delay_hours"],

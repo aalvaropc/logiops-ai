@@ -38,6 +38,7 @@ def test_a_stock_drop_under_an_approved_plan_proposes_a_new_pick_and_approves_no
     [alert] = alerts.scan()
     assert alert["id"] == "SHIP-421-v2" and alert["change"] == "Arequipa stock is now 3 units"
     assert alert["approval_invalidated"] is True and alert["previous_plan"]["label"] == approved["label"]
+    assert alert["previous_plan"]["incremental_cost_usd"] == approved["incremental_cost_usd"]
     assert alert["new_plan"]["label"] == "Move the full order to an alternative carrier" and alert["new_plan"]["incremental_cost_usd"] == 80
     assert f"your approved plan “{approved['label']}” no longer applies" in alert["message"]
     assert "The new pick is “Move the full order to an alternative carrier”: $80, 3 h late." in alert["message"]

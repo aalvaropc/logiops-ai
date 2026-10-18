@@ -101,7 +101,7 @@ test("an approval is read back and only an explicit yes approves; execute refuse
   assert.deepEqual(h.store.state.pendingApproval, { planId: plans[2].id, sourceVersion: 1 });
   await h.commands.handle("yes");
   assert.ok(h.events.includes("approve:split-express"));
-  assert.equal(h.last().text, "Approved “Fulfill local stock and send the rest express” on the current data. Nothing has run yet: say “execute it” when you're ready.");
+  assert.equal(h.last().text, "Approved “Fulfill local stock and send the rest express” on the current data. Nothing has run yet: say “execute it” or press Execute when you're ready.");
   assert.equal(h.store.state.awaitingExecute, true);
   await h.commands.handle("execute the wait plan");
   assert.match(h.last().text, /The approved plan is “Fulfill local stock and send the rest express”, so nothing was executed\. Approve “Keep the delayed shipment” first/);
@@ -250,4 +250,14 @@ test("approval read-backs name the cost, the delay and a critical order left lat
   assert.equal(approvalReadback(plans[1]), "Approve “Move the full order to an alternative carrier” for $80 extra, 3 hours of delay?");
   assert.equal(approvalReadback({ ...plans[1], orders: [{ priority: "critical", delay_hours: 3, customer: "the hospital" }] }),
     "Approve “Move the full order to an alternative carrier” for $80 extra, 3 hours of delay, and it leaves the critical order for the hospital late?");
+});
+
+test("execute before any approval says what to do next and calls nothing", async () => {
+  const h = harness();
+  await h.commands.handle("execute it");
+  assert.equal(h.last().text, "Nothing is approved for SHIP-421 yet, so nothing ran. Say “approve the recommended plan” first, and I'll read it back.");
+  const fresh = harness({ snapshot: { ...investigated(), plans: [] } });
+  await fresh.commands.handle("execute it");
+  assert.equal(fresh.last().text, "Nothing is approved for SHIP-421 yet, so nothing ran. Ask me what's happening with SHIP-421 first, then approve a plan.");
+  assert.equal(h.calls.length + fresh.calls.length, 0);
 });

@@ -242,7 +242,7 @@
     for (const order of plan.orders || []) {
       const row = el("li", order.delay_hours ? "late" : "on-time");
       row.append(el("span", "verdict", order.delay_hours ? `+${order.delay_hours} h late` : "On time"),
-        el("span", "who", `${order.customer} · ${order.quantity} units${order.priority === "critical" ? " · critical" : ""}`));
+        el("span", "who", `${order.customer} · ${order.quantity} units${order.priority === "critical" ? " · critical order" : ""}`));
       outcomes.append(row);
     }
     item.append(outcomes);

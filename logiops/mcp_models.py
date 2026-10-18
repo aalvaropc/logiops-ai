@@ -227,6 +227,7 @@ class Booking(Output):
 class AlertPlan(Output):
     plan_id: str
     label: str
+    incremental_cost_usd: float | None = None
 
 
 class Alert(Output):
