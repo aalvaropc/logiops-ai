@@ -36,16 +36,22 @@ function when(iso) {
   return Number.isNaN(time) ? "—" : WHEN.format(new Date(time));
 }
 
-function rowList(rows, doc = globalThis.document) {
-  const list = el("dl", "rows", undefined, doc);
-  for (const [term, value, kind] of rows) {
+function rowList(rows, doc = globalThis.document, tracks = []) {
+  const list = el("dl", `rows${tracks.length ? " timeline" : ""}`, undefined, doc);
+  rows.forEach(([term, value, kind], index) => {
     const chip = kind && kind !== "line";
     const line = kind === "line" ? "line" : "";
     const cell = el("dd", line, chip ? undefined : value, doc);
     if (chip) cell.append(el("span", `outcome ${kind}`, value, doc));
-    list.append(el("dt", line, term, doc), cell);
-  }
+    const label = el("dt", line, term, doc);
+    if (tracks[index]) label.append(track(tracks[index], doc));
+    list.append(label, cell);
+  });
   return list;
+}
+
+function planTracks(plan, shipment, { route, journey } = {}) {
+  return plan && shipment && journey ? journey.promiseTracks(shipment, route.promiseBars(plan)).rows : [];
 }
 
 function columns(main, side, doc = globalThis.document) {
@@ -147,8 +153,8 @@ function drawPlace(layer, place, doc) {
   );
 }
 
-export function drawMap(map, caption, snapshot, plan, { route, journey }, doc = globalThis.document) {
-  map.replaceChildren(svg("title", { id: "device-map-title" }, "Plan route diagram", doc));
+export function drawMap(map, caption, snapshot, plan, { route, journey, id = "device-map" }, doc = globalThis.document) {
+  map.replaceChildren(svg("title", { id: `${id}-title` }, "Plan route diagram", doc));
   caption.replaceChildren();
   if (plan) {
     const line = el("p", "plan-line", undefined, doc);
@@ -163,7 +169,7 @@ export function drawMap(map, caption, snapshot, plan, { route, journey }, doc = 
   const labels = svg("g", { class: "trail-labels" }, undefined, doc);
   if (!view.legs.some((leg) => leg.type === "delayed")) trails.append(svg("path", { d: view.booked.d, class: view.legs.length ? "trail ghost" : "trail late" }, undefined, doc));
   for (const leg of view.legs) {
-    if (!leg.late) trails.append(svg("path", { d: leg.d, class: "trail-glow", filter: "url(#trail-glow)" }, undefined, doc));
+    if (!leg.late) trails.append(svg("path", { d: leg.d, class: "trail-glow", filter: `url(#${id}-glow)` }, undefined, doc));
     trails.append(svg("path", { d: leg.d, class: `trail leg-${leg.type}${leg.late ? " late" : ""}` }, undefined, doc));
     const text = `${leg.label} · ${leg.units}`;
     const spot = journey.labelSpot(leg, text.length * 8.4);
@@ -171,7 +177,7 @@ export function drawMap(map, caption, snapshot, plan, { route, journey }, doc = 
   }
   const places = svg("g", { class: "places" }, undefined, doc);
   for (const place of view.places) drawPlace(places, { ...place, name: route.shortName(place.name, 14) }, doc);
-  map.append(glow("trail-glow", doc), trails, places, labels);
+  map.append(glow(`${id}-glow`, doc), trails, places, labels);
   if (!view.legs.length) {
     caption.append(el("span", "muted", "Investigate to see a plan's legs.", doc));
     return;
@@ -185,7 +191,7 @@ export function drawMap(map, caption, snapshot, plan, { route, journey }, doc = 
 }
 
 function track(position, doc) {
-  const line = el("span", "track", undefined, doc);
+  const line = el("span", `track${position.end === null ? " pending" : position.late ? " late" : ""}`, undefined, doc);
   line.setAttribute("aria-hidden", "true");
   const reach = position.end === null ? position.promise : Math.min(position.end, position.promise);
   const lit = el("span", "lit", undefined, doc);
@@ -278,15 +284,16 @@ export function renderPlanList(container, { plans, selectedId, recommendedId, pr
   }
 }
 
-export function renderConfirm(section, payload, { onYes, onNo, labels = [] }, doc = globalThis.document) {
+export function renderConfirm(section, payload, { onYes, onNo, labels = [], shipment = null, route, journey }, doc = globalThis.document) {
   const details = confirmDetails(payload);
+  const tracks = details.kind === "approval" ? planTracks(payload.plan, shipment, { route, journey }) : [];
   const card = el("div", `confirm-card ${details.kind}`, undefined, doc);
   if (details.warning) card.append(el("p", "band late", details.warning, doc));
   const lead = el("p", "lead", undefined, doc);
   lead.append(...labelNodes(details.lead, labels, doc));
   const figure = el("p", "confirm-figure", undefined, doc);
   figure.append(el("strong", "", details.figure[0], doc), " ", el("span", "", details.figure[1], doc));
-  card.append(columns([el("h2", "", details.title, doc), lead, figure], [rowList(details.rows, doc), el("p", "note", details.note, doc)], doc));
+  card.append(columns([el("h2", "", details.title, doc), lead, figure], [rowList(details.rows, doc, tracks), el("p", "note", details.note, doc)], doc));
   const actions = el("div", "confirm-actions", undefined, doc);
   const yes = button(details.yes, "primary", onYes, doc);
   yes.id = "confirm-yes";
@@ -332,8 +339,16 @@ export function renderAlert(section, alert, doc = globalThis.document) {
   section.replaceChildren(card);
 }
 
-export function renderResult(section, { snapshot, execution, plan, booking, times = [] }, doc = globalThis.document) {
+export function renderResult(section, { snapshot, execution, plan, booking, times = [], route, journey }, doc = globalThis.document) {
   const card = el("div", "result-card", undefined, doc);
+  let map = null;
+  if (plan && journey) {
+    map = el("figure", "device-map result-map", undefined, doc);
+    settle(section, map, `${snapshot.state.incident_id}:${execution.plan_id}`);
+    const drawing = svg("svg", { viewBox: `0 0 ${journey.WIDE.width} ${journey.WIDE.height}`, role: "img", "aria-labelledby": "result-map-title" }, undefined, doc);
+    map.append(drawing);
+    drawMap(drawing, el("figcaption", "", undefined, doc), snapshot, plan, { route, journey, id: "result-map" }, doc);
+  }
   const heading = el("h2", "", plan ? plan.label : execution.plan_id, doc);
   const lead = el("p", "lead", undefined, doc);
   lead.append(el("span", "incident-id", snapshot.state.incident_id, doc), ` · ${snapshot.state.title}`);
@@ -350,12 +365,12 @@ export function renderResult(section, { snapshot, execution, plan, booking, time
     if (item.note) box.append(el("small", "", item.note, doc));
     figures.append(box);
   }
-  card.append(el("p", "band ok", "Executed · operationally verified", doc), columns([
-    heading, lead, figure,
+  card.append(columns([
+    el("p", "band ok", "Executed · operationally verified", doc), heading, lead, figure,
     times.length ? el("p", "times", times.map(([label, value]) => `${label} ${value}`).join(" · "), doc) : null,
     booking ? el("p", "note", `Booked ${booking.number} · ${dollars(booking.total_usd)} charged once.`, doc) : null,
     el("p", "note", "Delivery is projected from synthetic quotes, not physically confirmed.", doc),
-  ], [plan ? rowList(orderRows(plan), doc) : null, figures], doc));
+  ], [map, plan ? rowList(orderRows(plan), doc) : null, figures], doc));
   section.replaceChildren(card);
 }
 
