@@ -56,6 +56,7 @@
   button.more { margin: 4px var(--pad) 0; }
   .tag { display: inline-block; margin-left: 8px; padding: 1px 7px; border: 1px solid transparent; border-radius: 99px; vertical-align: 2px; color: var(--tag-ink); background: var(--tag); font-size: 12px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; }
   .tag.pick-tag { border-color: var(--accent); color: var(--accent); background: transparent; }
+  .tag.done-tag { border-color: var(--ok); color: var(--ok); background: transparent; }
   .footnote { margin: 0; padding: 12px var(--pad) 14px; color: var(--muted); font-size: 13px; }
   body.compact { --pad: 12px; }
   body.compact .plan.pick { grid-template-columns: minmax(0, 1fr); gap: 10px; }
@@ -148,12 +149,17 @@
     return select;
   }
 
-  function pickCard(plan, hinted, preference) {
+  function doneTag(plan, approved, executed) {
+    return plan.id === approved ? el("span", "tag done-tag", executed ? "Executed" : "Approved") : null;
+  }
+
+  function pickCard(plan, hinted, preference, approved, executed) {
     const item = el("section", "plan pick");
     const heading = el("h2", "pick-name");
     const name = el("strong", "", plan.label);
-    name.append(el("span", "tag pick-tag", hinted === plan.id ? "Agent pick" : "Default pick"));
-    if (plan.id === preference?.preferred_plan_id) name.append(el("span", "tag", "Your preference"));
+    const tags = [el("span", "tag pick-tag", hinted === plan.id ? "Agent pick" : "Default pick"), doneTag(plan, approved, executed),
+      plan.id === preference?.preferred_plan_id ? el("span", "tag", "Your preference") : null];
+    name.append(...tags.filter(Boolean).slice(0, 2));
     heading.append(name);
     const text = el("div", "pick-text");
     text.append(heading, el("p", "allocation", summary(plan)));
@@ -170,15 +176,18 @@
         el("span", "who", `${order.customer} · ${order.quantity} units${order.priority === "critical" ? " · critical" : ""}`));
       outcomes.append(row);
     }
-    item.append(outcomes, selectButton(plan, "Select for approval"));
+    item.append(outcomes);
+    if (!approved) item.append(selectButton(plan, "Select for approval"));
     return item;
   }
 
-  function planRow(plan, preference, nameOf) {
+  function planRow(plan, preference, nameOf, approved, executed) {
     const item = el("li", "plan");
     const text = el("div");
     const name = el("strong", "plan-name", plan.label);
     if (plan.id === preference?.preferred_plan_id) name.append(el("span", "tag", "Your preference"));
+    const done = doneTag(plan, approved, executed);
+    if (done) name.append(done);
     text.append(name);
     if ((plan.orders || []).length > 1) {
       const orders = el("span", "orders");
@@ -190,7 +199,8 @@
     }
     const figures = el("div", "figures");
     figures.append(el("strong", "", `$${plan.incremental_cost_usd}`), el("small", "", `${plan.projected_customer_delay_hours} h delay`));
-    item.append(text, figures, selectButton(plan, "Select"));
+    item.append(text, figures);
+    if (!approved) item.append(selectButton(plan, "Select"));
     return item;
   }
 
@@ -202,12 +212,14 @@
     root.replaceChildren(el("h1", "visually-hidden", incident ? `Resolution options · ${incident}` : "Resolution options"));
     const preference = result?.structuredContent?.operator_preferences;
     const hinted = result?._meta?.["logiops/recommended_plan_id"];
+    const approved = plans.some((plan) => plan.id === result?._meta?.["logiops/approved_plan_id"]) ? result._meta["logiops/approved_plan_id"] : null;
+    const executed = Boolean(approved && result?._meta?.["logiops/executed"]);
     const pick = plans.some((plan) => plan.id === hinted) ? hinted
       : plans.some((plan) => plan.id === preference?.preferred_plan_id) ? preference.preferred_plan_id
       : plans.length ? [...plans].sort(byRank)[0].id : null;
     const picked = plans.find((plan) => plan.id === pick);
     if (preference?.changes_pick && picked?.id !== preference.preferred_plan_id) root.append(el("p", "preference", `Your preference: ${preference.reason}`));
-    if (picked) root.append(pickCard(picked, hinted, preference));
+    if (picked) root.append(pickCard(picked, hinted, preference, approved, executed));
     const others = plans.filter((plan) => plan !== picked);
     const { shown, hidden } = pageOf(others, picked ? PAGE - 1 : PAGE);
     if (shown.length) {
@@ -216,7 +228,7 @@
       const list = el("ul", "plans");
       list.setAttribute("aria-labelledby", "others-title");
       const nameOf = namer(plans[0]?.orders || []);
-      for (const plan of shown) list.append(planRow(plan, preference, nameOf));
+      for (const plan of shown) list.append(planRow(plan, preference, nameOf, approved, executed));
       root.append(title, list);
     }
     if (hidden) {
@@ -229,7 +241,8 @@
       root.append(more);
     }
     if (!plans.length) root.append(el("p", "waiting", "No feasible plan for this incident's current data."));
-    root.append(el("p", "footnote", `${incident ? `${incident} · ` : ""}Projections from synthetic carrier quotes. Selecting a plan does not approve it.`));
+    const status = executed ? "The approved plan was executed." : approved ? "A plan is approved; selection is closed." : "Selecting a plan does not approve it.";
+    root.append(el("p", "footnote", `${incident ? `${incident} · ` : ""}Projections from synthetic carrier quotes. ${status}`));
   }
 
   window.addEventListener("message", (event) => {

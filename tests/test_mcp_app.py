@@ -145,10 +145,12 @@ def test_the_card_highlights_the_same_pick_as_the_panel():
 
     static = Path(__file__).resolve().parents[1] / "logiops" / "static"
     card, script = (static / "resolution_options.html").read_text(), (static / "device" / "main.js").read_text()
-    assert '_meta: { "logiops/recommended_plan_id": recommendedPlan(state.snapshot)?.id || null }' in script
+    assert '"logiops/recommended_plan_id": recommendedPlan(state.snapshot)?.id || null,' in script
+    assert '"logiops/approved_plan_id": decision.approved, "logiops/executed": decision.executed,' in script
+    assert 'result?._meta?.["logiops/approved_plan_id"]' in card and "if (!approved) item.append(selectButton(" in card
     assert 'const hinted = result?._meta?.["logiops/recommended_plan_id"];' in card
     assert 'hinted === plan.id ? "Agent pick" : "Default pick"' in card and ".plan.pick {" in card
-    assert "if (picked) root.append(pickCard(picked, hinted, preference));" in card
+    assert "if (picked) root.append(pickCard(picked, hinted, preference, approved, executed));" in card
     assert "const others = plans.filter((plan) => plan !== picked);" in card
     assert "preference?.preferred_plan_id" in card and ".plan.best" not in card
 

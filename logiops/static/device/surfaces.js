@@ -91,7 +91,8 @@ export function resultFigures(snapshot, execution) {
 export function alertDetails(alert) {
   const plan = alert.new_plan;
   return {
-    title: `Heads up on ${alert.incident_id}`, text: alert.message, invalidated: Boolean(alert.approval_invalidated),
+    title: `Heads up on ${alert.incident_id}`, text: String(alert.message).replace(`Heads up on ${alert.incident_id}: `, ""),
+    invalidated: Boolean(alert.approval_invalidated),
     plan: plan ? `${plan.label} · $${plan.incremental_cost_usd} · ${plan.projected_customer_delay_hours} h delay` : null,
   };
 }

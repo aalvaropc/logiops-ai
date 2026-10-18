@@ -79,6 +79,7 @@ test("the result card, the alert card and the chips come from the data", () => {
     [["Units accounted for", "20"], ["Extra cost", "$120"], ["Notifications simulated", "2"], ["Customer delay", "0 h"]]);
   const alert = alertDetails({ incident_id: "SHIP-421", message: "Heads up.", approval_invalidated: true, new_plan: { label: "Reroute", incremental_cost_usd: 80, projected_customer_delay_hours: 3 } });
   assert.deepEqual(alert, { title: "Heads up on SHIP-421", text: "Heads up.", invalidated: true, plan: "Reroute · $80 · 3 h delay" });
+  assert.equal(alertDetails({ incident_id: "SHIP-421", message: "Heads up on SHIP-421: Arequipa stock is now 20 units." }).text, "Arequipa stock is now 20 units.");
   const context = { snapshot, incidentId: "SHIP-421", inbox, plan: plans[1] };
   assert.deepEqual(chipsFor("home", context).map(([text]) => text), ["Any delays today?", "What's happening with SHIP-421?"]);
   assert.deepEqual(chipsFor("home", { ...context, pick: "SHIP-433" }).map(([text]) => text), ["Any delays today?", "What's happening with SHIP-433?"]);

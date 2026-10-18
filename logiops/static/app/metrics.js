@@ -7,6 +7,7 @@ export function seconds(value) {
 }
 
 export function sessionFigures(totals) {
+  if (!totals.decided && !totals.executed && !totals.booked_usd) return [];
   return [
     [`${totals.executed} of ${totals.incidents}`, "incidents executed"],
     [String(totals.decided), "plans approved"],
