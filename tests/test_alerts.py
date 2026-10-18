@@ -42,8 +42,11 @@ def test_a_stock_drop_under_an_approved_plan_proposes_a_new_pick_and_approves_no
     assert alert["new_plan"]["label"] == "Move the full order to an alternative carrier" and alert["new_plan"]["incremental_cost_usd"] == 80
     assert f"your approved plan “{approved['label']}” no longer applies" in alert["message"]
     assert "The new pick is “Move the full order to an alternative carrier”: $80, 3 h late." in alert["message"]
-    assert "Nothing was approved" in alert["message"] and "Nothing was approved" in alert["spoken"]
-    assert "$80, 3 hours late" in alert["spoken"]
+    assert "Nothing was approved" not in alert["message"] + alert["spoken"]
+    assert "Approve again to go ahead" in alert["message"]
+    assert alert["spoken"] == ("Heads up on SHIP-421: Arequipa stock is now 3 units, so your approval of "
+                               f"{approved['label']} no longer applies. The new pick is Move the full order to an alternative carrier, "
+                               "$80, 3 hours late. Approve it to go ahead.")
     assert not PLAN_ID.search(alert["message"] + alert["spoken"])
     snapshot = service.get("SHIP-421")
     assert not [item for item in snapshot["approvals"] if item["is_current"]] and not snapshot["executions"]

@@ -132,7 +132,7 @@ LOGIOPS_AGENT_MODE=replay uv run uvicorn logiops.api:app --host 127.0.0.1 --port
    change"). Within a moment LogiOps says "Heads up on SHIP-421: Arequipa stock is
    now 3 units, so your approved plan … no longer applies", with the recalculated pick
    ($80, 3 h late) preselected for approval; the device shows it as an alert card.
-   Nothing was approved. Do the same while another incident is open: a bell in the
+   Nothing new is approved until you say so. Do the same while another incident is open: a bell in the
    top bar opens it. `GET /alerts` and the MCP tool `list_alerts` show the same alerts.
 14. **Memory.** After a few turns, open the demo in a new browser window (a new
    session). It greets you with "Welcome back… Last time … we were on SHIP-433 and you

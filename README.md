@@ -585,8 +585,8 @@ It never approves or books: the alert proposes, and a person decides. For
 example: "Heads up on SHIP-421: Arequipa stock is now 3 units, so your
 approved plan “Fulfill local stock and send the rest express” no longer
 applies. I recalculated the plans. The new pick is “Move the full order to an
-alternative carrier”: $80, 3 h late. Nothing was approved." If no plan works
-any more, the alert says so.
+alternative carrier”: $80, 3 h late. Approve again to go ahead." The spoken
+line says the same in one breath. If no plan works any more, the alert says so.
 
 It scans right after `POST /demo/inventory`, and in the background every
 `LOGIOPS_ALERT_SCAN_SECONDS` (30 by default; 0 turns it off). The endpoints
