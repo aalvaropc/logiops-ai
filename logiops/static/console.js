@@ -10,7 +10,7 @@ import { createCommands } from "./app/commands.js";
 import { createStore } from "./app/store.js";
 import {
   EVENT_LABELS, formatDate, visibleVersion, visibleApproval, visiblePlans, latestAgentEvent, byRank, allocationSummary,
-  localWarehouse, namedPlanKinds, recommendedPlan as pickRecommended, planFromUtterance as pickFromUtterance,
+  localWarehouse, namedPlanKinds, distinguishing, recommendedPlan as pickRecommended, planFromUtterance as pickFromUtterance,
 } from "./app/selectors.js";
 import { welcomeText as greeting } from "./app/greeting.js";
 import { checkBadge, checkNote, fallbackNote, traceSummary, executionSummary } from "./app/run-badges.js";
@@ -140,6 +140,7 @@ function renderPlans(snapshot) {
   } else if (!plans.some((plan) => plan.id === state.selectedPlanId)) {
     state.selectedPlanId = recommended?.id || plans[0].id;
   }
+  const labels = plans.map((plan) => plan.label);
   for (const plan of plans) {
     const isRecommended = plan.id === recommended?.id;
     const card = document.createElement("label");
@@ -157,7 +158,15 @@ function renderPlans(snapshot) {
     });
     const description = document.createElement("div");
     const title = document.createElement("strong");
-    title.textContent = plan.label;
+    const [before, diff, after] = distinguishing(plan.label, labels);
+    if (diff === undefined) {
+      title.textContent = before;
+    } else {
+      const mark = document.createElement("span");
+      mark.className = "diff";
+      mark.textContent = diff;
+      title.append(...[before && `${before} `, mark, after && ` ${after}`].filter(Boolean));
+    }
     const badges = [];
     if (isRecommended) badges.push(["Agent pick", "badge"]);
     if (plan.id === snapshot.preference?.preferred_plan_id) badges.push(["Your preference", "badge preference"]);

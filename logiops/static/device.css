@@ -51,6 +51,7 @@ button:focus-visible, input:focus-visible, a:focus-visible, .carousel-track:focu
 .surface { flex: 1 1 auto; min-height: 0; overflow: auto; overscroll-behavior: contain; padding: 14px calc(var(--gutter) + env(safe-area-inset-right)) 18px calc(var(--gutter) + env(safe-area-inset-left)); scrollbar-width: thin; }
 .card[hidden] { display: none; }
 .card h2[tabindex="-1"]:focus { outline: none; }
+.diff { font-weight: 800; text-decoration: underline; text-decoration-color: var(--shell); text-decoration-thickness: 3px; text-underline-offset: 4px; }
 .card h2 { margin: 0 0 6px; font-size: var(--type-title); line-height: 1.15; letter-spacing: -.01em; }
 .card .lead { margin: 0; font-size: var(--type-lead); line-height: 1.4; font-weight: 600; }
 .card .note { margin: 12px 0 0; color: var(--ink-3); font-size: var(--type-meta); line-height: 1.5; }

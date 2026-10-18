@@ -1,5 +1,5 @@
 import { dollars, bookingRows } from "../app/purchase.js";
-import { formatDate, allocationSummary, TIME_ZONE } from "../app/selectors.js";
+import { formatDate, allocationSummary, distinguishing, TIME_ZONE } from "../app/selectors.js";
 import { incidentFacts, confirmDetails, resultFigures, alertDetails } from "./surfaces.js";
 import { EMPTY_SESSION } from "../app/metrics.js";
 
@@ -22,6 +22,12 @@ function svg(tag, attributes, text, doc = globalThis.document) {
   for (const [name, value] of Object.entries(attributes || {})) node.setAttribute(name, String(value));
   if (text !== undefined) node.textContent = text;
   return node;
+}
+
+export function labelNodes(label, labels, doc = globalThis.document) {
+  const [before, diff, after] = distinguishing(label, labels);
+  if (diff === undefined) return [before];
+  return [before && `${before} `, el("span", "diff", diff, doc), after && ` ${after}`].filter(Boolean);
 }
 
 function when(iso) {
@@ -159,11 +165,13 @@ export function renderIncident(section, { snapshot, plan, summary, route }, doc 
 export function renderPlanList(container, { plans, selectedId, recommendedId, preferredId, locked, onSelect }, doc = globalThis.document) {
   container.replaceChildren();
   container.setAttribute("role", "list");
+  const labels = plans.map((plan) => plan.label);
   for (const plan of plans) {
     const item = el("div", `plan${plan.id === selectedId ? " selected" : ""}${plan.id === recommendedId ? " recommended" : ""}`, undefined, doc);
     item.setAttribute("role", "listitem");
     const description = el("div", "", undefined, doc);
-    const title = el("strong", "", plan.label, doc);
+    const title = el("strong", "", undefined, doc);
+    title.append(...labelNodes(plan.label, labels, doc));
     if (plan.id === recommendedId) title.append(el("span", "badge", "Agent pick", doc));
     if (plan.id === preferredId) title.append(el("span", "badge preference", "Your preference", doc));
     if (plan.projected_customer_delay_hours === 0) title.append(el("span", "badge", "Zero delay", doc));
@@ -176,11 +184,13 @@ export function renderPlanList(container, { plans, selectedId, recommendedId, pr
   }
 }
 
-export function renderConfirm(section, payload, { onYes, onNo }, doc = globalThis.document) {
+export function renderConfirm(section, payload, { onYes, onNo, labels = [] }, doc = globalThis.document) {
   const details = confirmDetails(payload);
   const card = el("div", `confirm-card ${details.kind}`, undefined, doc);
   if (details.warning) card.append(el("p", "band late", details.warning, doc));
-  card.append(el("h2", "", details.title, doc), el("p", "lead", details.lead, doc));
+  const lead = el("p", "lead", undefined, doc);
+  lead.append(...labelNodes(details.lead, labels, doc));
+  card.append(el("h2", "", details.title, doc), lead);
   const figure = el("p", "confirm-figure", undefined, doc);
   figure.append(el("strong", "", details.figure[0], doc), " ", el("span", "", details.figure[1], doc));
   card.append(figure);

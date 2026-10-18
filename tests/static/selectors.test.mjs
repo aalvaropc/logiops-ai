@@ -60,3 +60,19 @@ test("event labels and dates read for people", () => {
   assert.equal(selectors.EVENT_LABELS.plan_approved, "Plan approved by operator");
   assert.equal(selectors.formatDate("2026-10-12T13:00:00-05:00"), "Oct 12, 01:00 PM");
 });
+
+test("the look-alike guard marks the words that set a plan apart from its nearest neighbour", () => {
+  const labels = [
+    "Wait for the booked carrier to restart", "Rebook both orders on an alternative ground carrier",
+    "Fly the hospital order; the store order waits for the carrier", "Fly the hospital order; rebook the store order on ground",
+  ];
+  assert.deepEqual(selectors.distinguishing(labels[3], labels), ["Fly the hospital order;", "rebook the store order on ground", ""]);
+  assert.deepEqual(selectors.distinguishing(labels[2], labels), ["Fly the hospital order;", "the store order waits for the carrier", ""]);
+  assert.deepEqual(selectors.distinguishing(labels[0], labels), [labels[0]]);
+  assert.deepEqual(selectors.distinguishing("Send the rest express", ["Send the rest by ground"]), ["Send the rest", "express", ""]);
+  assert.deepEqual(selectors.distinguishing("Same plan", ["Same plan"]), ["Same plan"]);
+  for (const label of labels) {
+    const parts = selectors.distinguishing(label, labels).filter(Boolean);
+    assert.equal(parts.join(" "), label);
+  }
+});

@@ -103,6 +103,7 @@ input::placeholder { color: var(--ink-3); }
 .plan.selected { border-color: var(--shell); box-shadow: inset 0 0 0 2px var(--shell); background: var(--shell-tint); }
 .plan input { width: 18px; min-height: 0; height: 18px; padding: 0; accent-color: var(--shell); }
 .plan strong, .plan small { display: block; }
+.diff { font-weight: 800; text-decoration: underline; text-decoration-color: var(--shell); text-decoration-thickness: 3px; text-underline-offset: 4px; }
 .plan strong { font-size: 15px; }
 .plan small { margin-top: 4px; color: var(--ink-3); font-size: 14px; }
 .plan .plan-value { text-align: right; font-size: 16px; font-weight: 800; font-variant-numeric: tabular-nums; white-space: nowrap; }
