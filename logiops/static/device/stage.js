@@ -4,13 +4,14 @@ const CADENCE_MS = 120;
 const HOLD_MS = 1500;
 const LEAVE_MS = 360;
 
-export function createStage({ root, surface, document: doc = globalThis.document, reducedMotion = () => false }) {
+export function createStage({ root, surface, quiet = [], document: doc = globalThis.document, reducedMotion = () => false }) {
   const line = root.querySelector(".agent-ask");
   const stations = root.querySelector(".agent-stations");
   const meta = root.querySelector(".agent-meta");
   let timers = [];
   let live = 0;
   let nextAt = 0;
+  let waiting = [];
 
   const later = (work, ms) => timers.push(setTimeout(work, ms));
 
@@ -38,6 +39,12 @@ export function createStage({ root, surface, document: doc = globalThis.document
     root.classList.remove("leaving");
     root.dataset.phase = "asking";
     root.hidden = false;
+    for (const node of quiet) node.inert = true;
+  }
+
+  function whenGone(work) {
+    if (root.hidden) work();
+    else waiting.push(work);
   }
 
   function tick(seconds) {
@@ -64,6 +71,10 @@ export function createStage({ root, surface, document: doc = globalThis.document
     root.hidden = true;
     root.classList.remove("leaving");
     root.dataset.phase = "";
+    for (const node of quiet) node.inert = false;
+    const queued = waiting;
+    waiting = [];
+    for (const work of queued) work();
   }
 
   function leave() {
@@ -103,5 +114,5 @@ export function createStage({ root, surface, document: doc = globalThis.document
     }, 0);
   }
 
-  return { ask, tick, step, replay, settle, clear };
+  return { ask, tick, step, replay, settle, clear, whenGone };
 }

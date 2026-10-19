@@ -14,14 +14,16 @@ export function stageLine(path) {
 
 export function stageCaption(run, seconds, live = false) {
   const calls = run.tool_trace?.length || 0;
-  return [live ? "Live from the MCP tool calls" : "Replayed from the recorded tool trace", `${calls} MCP ${plural(calls, "call")}`,
-    Number.isFinite(seconds) ? `answered in ${seconds.toFixed(1)} s` : "", run.mode === "replay" ? "scripted replay" : ""].filter(Boolean).join(" · ");
+  const count = `${calls} MCP ${plural(calls, "call")}`;
+  if (run.mode === "replay") return ["Replayed from a recorded run", count, "scripted model"].join(" · ");
+  return [live ? "Live from the MCP tool calls" : "Replayed from the recorded tool trace", count,
+    Number.isFinite(seconds) ? `answered in ${seconds.toFixed(1)} s` : ""].filter(Boolean).join(" · ");
 }
 
 export function agentLine(run, check) {
   const calls = run?.tool_trace?.length || 0;
   if (!calls) return "";
-  return [`${calls} MCP ${plural(calls, "call")} by the agent`, check?.text, run.mode === "replay" ? "scripted replay" : ""].filter(Boolean).join(" · ");
+  return [`${calls} MCP ${plural(calls, "call")} by the agent`, check?.text, run.mode === "replay" ? "scripted model" : ""].filter(Boolean).join(" · ");
 }
 
 const DECISION_LEAD = /^([A-Z]+-\d+) needs a decision\.\s*I recommend:\s*/;
