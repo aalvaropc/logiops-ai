@@ -34,7 +34,7 @@
   .field svg { display: block; width: 100%; height: auto; overflow: visible; }
   .field .axis { fill: none; stroke: var(--line); stroke-width: 1.5; }
   .field .tick { stroke: var(--line); stroke-width: 1.5; }
-  .field .axis-label { fill: var(--muted); font-size: var(--type-tag); font-weight: 700; letter-spacing: .04em; }
+  .field .axis-label { fill: var(--muted); font-size: calc(var(--type-tag) + 2px); font-weight: 700; letter-spacing: .04em; }
   .field .dot { stroke-width: 2.5; }
   .field .dot.on-time { fill: var(--ok); stroke: var(--ok); }
   .field .dot.late { fill: var(--muted); stroke: var(--muted); }
@@ -42,8 +42,8 @@
   .field .dot.chosen { fill: var(--accent); stroke: var(--accent); }
   .field .dot-ring { fill: none; stroke: var(--accent); stroke-width: 1.5; }
   .field .dot-glow { fill: var(--accent); opacity: .45; }
-  .field .dot-label { fill: var(--muted); font-size: var(--type-tag); font-weight: 700; font-variant-numeric: tabular-nums; }
-  .field .dot-label.chosen { fill: var(--text); font-size: var(--type-meta); font-weight: 800; }
+  .field .dot-label { fill: var(--muted); font-size: calc(var(--type-tag) + 2px); font-weight: 700; font-variant-numeric: tabular-nums; }
+  .field .dot-label.chosen { fill: var(--text); font-size: calc(var(--type-meta) + 2px); font-weight: 800; }
   .field-key { display: flex; flex-wrap: wrap; gap: 4px 14px; margin: 2px 0 0; padding: 0; list-style: none; color: var(--muted); font-size: var(--type-tag); font-weight: 700; letter-spacing: .04em; text-transform: uppercase; }
   .field-key li { display: inline-flex; align-items: center; gap: 6px; }
   .field-key li::before { content: ""; width: 9px; height: 9px; border-radius: 50%; background: var(--ok); }

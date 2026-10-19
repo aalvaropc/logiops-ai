@@ -469,3 +469,29 @@ def test_the_agent_stage_shows_the_work_before_the_answer_then_gives_way(page, r
     assert_accessible(page)
     assert page_errors == []
 
+
+
+def test_a_touch_echo_show_reads_larger_type_without_scrolling(browser, replay_server, reset_demo):
+    context = browser.new_context(viewport={"width": 1280, "height": 800}, has_touch=True, is_mobile=True)
+    page = context.new_page()
+    errors = []
+    page.on("pageerror", lambda error: errors.append(str(error)))
+    try:
+        page.goto(f"{replay_server}/demo#SHIP-433")
+        expect(page.locator("#connection")).to_have_text("Connected")
+        assert page.evaluate("matchMedia('(pointer: coarse)').matches")
+        sizes = page.evaluate("""(() => { const style = getComputedStyle(document.documentElement);
+            return ["--type-body", "--type-meta", "--type-tag"].map((name) => style.getPropertyValue(name).trim()); })()""")
+        assert sizes == ["18px", "16px", "14px"]
+        scrolls = "(() => { const s = document.querySelector('#surface'); return s.scrollHeight > s.clientHeight + 1; })()"
+        say_on_device(page, "What's happening with SHIP-433, and which plan should we choose?")
+        say_on_device(page, "approve the recommended plan")
+        assert not page.evaluate(scrolls), "the confirmation fits"
+        page.click("#confirm-yes")
+        expect(page.locator("#plans-state")).to_contain_text("Approved by you")
+        say_on_device(page, "execute it")
+        expect(page.locator('[data-surface="result"]')).to_be_visible()
+        assert not page.evaluate(scrolls), "the result fits"
+        assert errors == []
+    finally:
+        context.close()

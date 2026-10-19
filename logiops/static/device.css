@@ -358,7 +358,7 @@ input::placeholder { color: var(--ink-3); }
   .talk { gap: 6px; padding-top: 6px; }
 }
 @media (min-width: 768px) {
-  :root { --gutter: 24px; --type-meta: 14px; --type-body: 15px; }
+  :root { --gutter: 24px; }
   .device-clock { display: inline; }
   .incident-grid { grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); gap: 28px; align-items: center; }
   .figures { grid-template-columns: repeat(4, minmax(0, 1fr)); }
@@ -391,8 +391,13 @@ input::placeholder { color: var(--ink-3); }
   .label-split { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 0 32px; align-items: start; }
   .label-side > :first-child { margin-top: 4px; }
 }
+@media (min-width: 768px) and (max-width: 1023px) {
+  :root { --type-meta: 14px; --type-body: 15px; }
+}
+@media (min-width: 1024px) and (pointer: coarse) {
+  :root { --type-tag: 14px; --type-meta: 16px; --type-body: 18px; }
+}
 @media (min-width: 1024px) and (pointer: fine) {
-  :root { --type-meta: 15px; --type-body: 16px; }
   body { background: var(--outer); }
   .stage { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; padding: 16px; }
   .device { width: min(100%, 1180px); height: auto; aspect-ratio: 16 / 10; max-height: calc(100vh - 92px); min-height: 560px; border: 10px solid var(--bezel); border-radius: 28px; box-shadow: 0 24px 48px rgba(17, 20, 24, .28); overflow: hidden; }
