@@ -12,8 +12,8 @@ def say_on_device(page, text: str) -> str:
     """Send one line from the device's field and return the spoken reply once the device is idle again."""
     page.fill("#ask-input", text)
     page.click("#ask")
-    page.wait_for_function("""(text) => document.querySelector("#device-heard").textContent === text && !document.querySelector("#ask").disabled""",
-                           arg=text, timeout=REPLY_TIMEOUT_MS)
+    page.wait_for_function("""(text) => document.querySelector("#device-heard").textContent === text && !document.querySelector("#ask").disabled
+                              && document.querySelector("#agent-stage").hidden""", arg=text, timeout=REPLY_TIMEOUT_MS)
     return page.locator("#device-spoken").inner_text()
 
 
@@ -443,20 +443,27 @@ def test_an_alert_elsewhere_opens_as_a_card(page, replay_server, page_errors, re
     assert page_errors == []
 
 
-def test_the_agent_stage_lights_the_tool_calls_live_then_gives_way(page, replay_server, page_errors, reset_demo):
+def test_the_agent_stage_shows_the_work_before_the_answer_then_gives_way(page, replay_server, page_errors, reset_demo):
     page.goto(f"{replay_server}/demo#SHIP-433")
     expect(page.locator("#connection")).to_have_text("Connected")
-    say_on_device(page, "What's happening with SHIP-433, and which plan should we choose?")
+    page.fill("#ask-input", "What's happening with SHIP-433, and which plan should we choose?")
+    page.click("#ask")
     stage = page.locator("#agent-stage")
+    expect(stage).to_be_visible()
+    expect(page.locator("#device-spoken")).to_have_text("Asking the agent about SHIP-433…")
+    assert page.evaluate("document.querySelector('#chips').inert"), "chips wait for the stage"
     expect(stage.locator(".agent-ask")).to_have_text("Asking the agent about SHIP-433")
     stations = stage.locator(".agent-stations li")
     expect(stations).to_have_count(6)
     expect(stations.first).to_have_text("Shipment · SHIP-433")
     expect(stations.last).to_have_text("Checked against the data")
-    expect(stage.locator(".agent-meta")).to_contain_text("Live from the MCP tool calls · 5 MCP calls · answered in")
-    expect(stage.locator(".agent-meta")).to_contain_text("scripted replay")
+    expect(stage.locator(".agent-meta")).to_have_text("Replayed from a recorded run · 5 MCP calls · scripted model")
+    expect(page.locator("#device-spoken")).to_have_text("Asking the agent about SHIP-433…")
+    expect(page.locator(".talk")).to_have_attribute("data-voice", "thinking")
     expect(stage).to_be_hidden(timeout=6000)
-    expect(page.locator("#plans-agent")).to_have_text("5 MCP calls by the agent · Checked against the data · scripted replay")
+    expect(page.locator("#device-spoken")).to_contain_text("Fly the hospital order")
+    assert not page.evaluate("document.querySelector('#chips').inert")
+    expect(page.locator("#plans-agent")).to_have_text("5 MCP calls by the agent · Checked against the data · scripted model")
     expect(page.locator("#plans-agent .agent-dots span")).to_have_count(6)
     assert_accessible(page)
     assert page_errors == []

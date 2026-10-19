@@ -48,8 +48,9 @@ LOGIOPS_AGENT_MODE=replay uv run uvicorn logiops.api:app --host 127.0.0.1 --port
    plan's legs with late legs dashed red and a text list for screen readers, its
    one large figure, and each order on one time scale against its promise), the
    agent stage while an investigation runs (each MCP tool call lit as it returns,
-   then the data check, captioned "Live from the MCP tool calls", plus "scripted
-   replay" in replay mode), the plans (the MCP App card with its decision field,
+   then the data check, captioned "Live from the MCP tool calls" with the measured
+   time, or "Replayed from a recorded run … scripted model" in replay mode; the
+   spoken answer and the chips wait until the stage gives way), the plans (the MCP App card with its decision field,
    or a plain list when no second origin is available), a confirmation (Yes /
    No), the receipt, a proactive alert and the result. Every request below plays
    on the device: the voice light bar and its label move from Listening (voice) to

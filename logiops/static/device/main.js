@@ -53,7 +53,7 @@ const surfaces = createSurfaces(location.hash ? "incident" : "home");
 const sections = Object.fromEntries(SURFACES.map((name) => [name, document.querySelector(`[data-surface="${name}"]`)]));
 const incidentPath = (suffix = "") => `/incidents/${encodeURIComponent(state.incidentId)}${suffix}`;
 const orb = { state: "ready", started: 0, ticker: 0, answered: null };
-const stage = createStage({ root: $("agent-stage"), surface: $("surface"), reducedMotion });
+const stage = createStage({ root: $("agent-stage"), surface: $("surface"), quiet: [$("chips"), $("more")], reducedMotion });
 let shownTrace = null;
 
 function message(text, success = false) {
@@ -75,7 +75,7 @@ function elapsed() {
   stage.tick(seconds);
 }
 
-function setVoice(event, speaking = false) {
+function setVoice(event, speaking = false, at = performance.now()) {
   const next = route.voiceState(orb.state, event, speaking);
   if (next.state === "thinking" && orb.state !== "thinking") {
     orb.started = performance.now();
@@ -84,10 +84,9 @@ function setVoice(event, speaking = false) {
     orb.ticker = setInterval(elapsed, 250);
   } else if (next.state !== "thinking" && orb.state === "thinking") {
     clearInterval(orb.ticker);
-    orb.answered = orb.started ? (performance.now() - orb.started) / 1000 : null;
+    orb.answered = orb.started ? (at - orb.started) / 1000 : null;
     if (orb.answered !== null) $("device-elapsed").textContent = `answered in ${orb.answered.toFixed(1)} s`;
     orb.started = 0;
-    stage.settle();
   }
   orb.state = next.state;
   $("device-orb").dataset.state = orb.state;
@@ -104,13 +103,20 @@ function device(method, ...args) {
   }
   else if (method === "reply") {
     const [text, spoken, speaking] = args;
-    $("device-spoken").textContent = shortSpoken(text, spoken, markdown.plainText);
-    document.querySelector(".talk").classList.remove("expanded");
-    document.querySelector(".talk").classList.add("replied");
-    $("more").hidden = false;
-    setVoice("reply", speaking);
+    const at = performance.now();
+    stage.whenGone(() => {
+      $("device-spoken").textContent = shortSpoken(text, spoken, markdown.plainText);
+      document.querySelector(".talk").classList.remove("expanded");
+      document.querySelector(".talk").classList.add("replied");
+      $("more").hidden = false;
+      setVoice("reply", speaking, at);
+    });
+    stage.settle();
   }
-  else if (method === "trace") stage.replay(args[0], checkBadge(args[0]), (live) => stageCaption(args[0], orb.answered, live));
+  else if (method === "trace") {
+    const seconds = orb.started ? (performance.now() - orb.started) / 1000 : orb.answered;
+    stage.replay(args[0], checkBadge(args[0]), (live) => stageCaption(args[0], seconds, live));
+  }
 }
 
 function setBusy(busy) {
@@ -448,6 +454,7 @@ function paintTalk() {
   const reply = [...state.conversation].reverse().find((turn) => turn.role === "assistant");
   $("heard-label").hidden = !heard;
   $("device-heard").textContent = heard ? heard.text : "Try “any delays today?”";
+  if (!$("agent-stage").hidden) return;
   $("device-spoken").textContent = reply ? shortSpoken(reply.text, reply.spoken, markdown.plainText) : "Ask about the queue, an incident, or a plan.";
   document.querySelector(".talk").classList.remove("expanded");
   $("more").hidden = !state.conversation.length;
@@ -619,7 +626,7 @@ function say(role, text, meta, spoken, check) {
   }
   const speaking = speechOn();
   device("reply", text, spoken, speaking);
-  if (speaking) speak(spoken || markdown.plainText(text));
+  if (speaking) stage.whenGone(() => speak(spoken || markdown.plainText(text)));
 }
 
 function paintVoiceToggle() {

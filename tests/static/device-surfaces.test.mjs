@@ -194,10 +194,12 @@ test("the agent stage names who is asked and captions the recorded trace honestl
   assert.deepEqual(stageLine("/agent/briefing"), ["Asking the agent about", "your queue"]);
   assert.deepEqual(stageLine("/incidents/SHIP-433/agent/ask"), ["Asking the agent", ""]);
   const run = { tool_trace: [{ tool: "get_shipment" }, { tool: "investigate_incident" }], mode: "replay" };
-  assert.equal(stageCaption(run, 13.04), "Replayed from the recorded tool trace · 2 MCP calls · answered in 13.0 s · scripted replay");
-  assert.equal(stageCaption({ tool_trace: [{ tool: "list_incidents" }], mode: "bedrock" }, null), "Replayed from the recorded tool trace · 1 MCP call");
-  assert.equal(stageCaption(run, 3.14, true), "Live from the MCP tool calls · 2 MCP calls · answered in 3.1 s · scripted replay");
-  assert.equal(agentLine(run, { passed: true, text: "Checked against the data" }), "2 MCP calls by the agent · Checked against the data · scripted replay");
+  assert.equal(stageCaption(run, 13.04), "Replayed from a recorded run · 2 MCP calls · scripted model");
+  assert.equal(stageCaption(run, 3.14, true), "Replayed from a recorded run · 2 MCP calls · scripted model");
+  const bedrock = { tool_trace: [{ tool: "list_incidents" }], mode: "bedrock" };
+  assert.equal(stageCaption(bedrock, null), "Replayed from the recorded tool trace · 1 MCP call");
+  assert.equal(stageCaption(bedrock, 13.04, true), "Live from the MCP tool calls · 1 MCP call · answered in 13.0 s");
+  assert.equal(agentLine(run, { passed: true, text: "Checked against the data" }), "2 MCP calls by the agent · Checked against the data · scripted model");
   assert.equal(agentLine({ tool_trace: [], mode: "bedrock" }, null), "");
   assert.equal(agentLine(undefined, null), "");
 });
