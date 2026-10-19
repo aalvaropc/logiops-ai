@@ -126,9 +126,9 @@ test("an inbox card carries at most two tags: start here, then risk or a critica
   const card = { startHere: true, critical_units_at_risk: 12, priority: "critical", status: "investigated" };
   assert.deepEqual(cardTags(card), [["start-here", "Start here"], ["at-risk", "12 critical units at risk"]]);
   assert.deepEqual(cardTags({ ...card, startHere: false }), [["at-risk", "12 critical units at risk"], ["state", "Investigated"]]);
-  assert.deepEqual(cardTags({ ...card, startHere: false, critical_units_at_risk: 0, status: "approved" }), [["critical", "Critical order"], ["state", "Approved"]]);
+  assert.deepEqual(cardTags({ ...card, startHere: false, critical_units_at_risk: 0, status: "approved" }), [["critical", "Critical order covered"], ["state", "Approved"]]);
   assert.deepEqual(cardTags({ ...card, critical_units_at_risk: 0, status: "verified" }), [["executed", "Executed"]]);
-  assert.deepEqual(cardTags({ ...card, startHere: false, critical_units_at_risk: 0, status: "detected" }), [["critical", "Critical order"]]);
+  assert.deepEqual(cardTags({ ...card, startHere: false, critical_units_at_risk: 0, status: "detected" }), [["critical", "Critical order covered"]]);
   assert.deepEqual(cardTags({ priority: "standard", critical_units_at_risk: 0, status: "detected" }), []);
 });
 
@@ -177,16 +177,14 @@ test("the incident band follows the approved or executed plan, not the risk it h
   const base = { ...snapshot, plans: [fly, slow] };
   assert.deepEqual(criticalOutcome(fly), { critical: true, onTime: 12, total: 12 });
   assert.deepEqual(criticalOutcome({ orders: [orders[1]] }), { critical: false, onTime: 0, total: 18 });
-  assert.deepEqual(incidentBand(base, { critical_units_at_risk: 12 }), ["late", "12 critical units at risk until a plan is approved"]);
-  assert.deepEqual(incidentBand({ ...base, plans: [] }, { critical_units_at_risk: 12 }), ["late", "12 critical units at risk"]);
-  assert.equal(incidentBand(base, { critical_units_at_risk: 0 }), null);
+  assert.equal(incidentBand(base), null);
   const approve = (id) => ({ ...base, approvals: [{ plan_id: id, source_version: 1 }] });
-  assert.deepEqual(incidentBand(approve("p-fly"), { critical_units_at_risk: 12 }), ["warn", "Approved · 12 critical units projected on time once executed"]);
-  assert.deepEqual(incidentBand(approve("p-slow"), { critical_units_at_risk: 12 }), ["late", "Approved · 0 of 12 critical units projected on time"]);
+  assert.deepEqual(incidentBand(approve("p-fly")), ["warn", "Approved · 12 critical units projected on time once executed"]);
+  assert.deepEqual(incidentBand(approve("p-slow")), ["late", "Approved · 0 of 12 critical units projected on time"]);
   const executed = { ...approve("p-fly"), executions: [{ plan_id: "p-fly", source_version: 1 }] };
-  assert.deepEqual(incidentBand(executed, { critical_units_at_risk: 0 }), ["ok", "Executed · 12 critical units projected on time"]);
+  assert.deepEqual(incidentBand(executed), ["ok", "Executed · 12 critical units projected on time"]);
   const standard = { ...base, plans: [{ ...fly, orders: [{ ...orders[1], delay_hours: 0, late_units: 0 }] }], executions: [{ plan_id: "p-fly", source_version: 1 }] };
-  assert.deepEqual(incidentBand(standard, null), ["ok", "Executed · 18 units projected on time"]);
+  assert.deepEqual(incidentBand(standard), ["ok", "Executed · 18 units projected on time"]);
 });
 
 test("the agent stage names who is asked and captions the recorded trace honestly", () => {
