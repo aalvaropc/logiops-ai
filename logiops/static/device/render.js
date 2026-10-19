@@ -1,5 +1,5 @@
 import { dollars, bookingRows } from "../app/purchase.js";
-import { formatDate, allocationSummary, distinguishing, TIME_ZONE } from "../app/selectors.js";
+import { formatDate, allocationSummary, distinguishing, visibleApproval, TIME_ZONE } from "../app/selectors.js";
 import { incidentFacts, incidentBand, confirmDetails, resultFigures, resultOutcome, orderRows, alertDetails } from "./surfaces.js";
 import { EMPTY_SESSION } from "../app/metrics.js";
 
@@ -160,6 +160,10 @@ export function drawMap(map, caption, snapshot, plan, { route, journey, id = "de
     const line = el("p", "plan-line", undefined, doc);
     const labels = snapshot.plans.filter((item) => item.source_version === plan.source_version).map((item) => item.label);
     line.append(...labelNodes(plan.label, labels, doc), ` · $${plan.incremental_cost_usd}`);
+    if (!decided(snapshot)) {
+      const outcome = resultOutcome(plan);
+      line.append(` · keeps ${outcome.value} ${outcome.label}`);
+    }
     caption.append(line);
   }
   const shipment = snapshot?.state?.shipment;
@@ -235,16 +239,24 @@ export function drawBars(list, plan, { route, journey }, shipment, doc = globalT
   });
 }
 
-function incidentFigure(snapshot, plan, doc) {
+function decided(snapshot) {
+  return snapshot.executions.length > 0 || Boolean(visibleApproval(snapshot));
+}
+
+function incidentFigure(snapshot, plan, summary, doc) {
   const figure = el("p", "incident-figure", undefined, doc);
-  if (plan) {
+  if (plan && decided(snapshot)) {
     const outcome = resultOutcome(plan);
     figure.append(el("strong", "", outcome.value, doc), " ", el("span", "", outcome.label, doc), " ", el("small", "", outcome.note, doc));
     return figure;
   }
+  figure.classList.add("late");
+  if (summary?.critical_units_at_risk > 0) {
+    figure.append(el("strong", "", String(summary.critical_units_at_risk), doc), " ", el("span", "", "critical units at risk", doc));
+    return figure;
+  }
   const shipment = snapshot.state.shipment;
   const hours = Math.round((Date.parse(shipment.delayed_eta) - Date.parse(shipment.original_eta)) / 3600000);
-  figure.classList.add("late");
   figure.append(el("strong", "", `+${hours} h`, doc), " ", el("span", "", "booked shipment delay", doc));
   return figure;
 }
@@ -255,14 +267,14 @@ export function renderIncident(section, { snapshot, plan, summary, route, journe
   const title = el("h2", "", undefined, doc);
   title.append(el("span", "incident-id", facts.id, doc));
   head.append(title, el("p", "incident-route", [summary?.kind_label, facts.route, `${facts.units} units`].filter(Boolean).join(" · "), doc));
-  const band = incidentBand(snapshot, summary);
+  const band = incidentBand(snapshot);
   if (band) head.append(el("p", `band ${band[0]}`, band[1], doc));
   const figure = el("figure", "device-map", undefined, doc);
   settle(section, figure, `${facts.id}:${plan?.id || ""}`);
   const map = svg("svg", { id: "device-map", viewBox: `0 0 ${journey.WIDE.width} ${journey.WIDE.height}`, role: "img", "aria-labelledby": "device-map-title" }, undefined, doc);
   const caption = el("figcaption", "", undefined, doc);
   caption.id = "device-map-caption";
-  figure.append(map, incidentFigure(snapshot, plan, doc), caption);
+  figure.append(map, incidentFigure(snapshot, plan, summary, doc), caption);
   drawMap(map, caption, snapshot, plan, { route, journey }, doc);
   const promise = el("div", "device-promise", undefined, doc);
   const bars = el("ol", "promise-list", undefined, doc);

@@ -14,11 +14,11 @@ against the incident's data before it is shown.
 
 | The agent at work: each MCP tool call lit as it returns | The plans: the MCP App card with its decision field | The shipment's journey with the chosen plan |
 |---|---|---|
-| ![The agent stage: "Asking the agent about SHIP-433", five tool-call stations on a lit rail and the data check, captioned as a replay of a recorded run](docs/img/device-agent.png) | ![The plans card: every plan placed by delay and cost, the pick lit with a ring, the plan that leaves the hospital late as a hollow red ring](docs/img/device-plans.png) | ![The incident: the route from Lima to Cusco with the air leg as a white trail and the late ground leg dashed red, 12 critical units on time, and each order on one time scale](docs/img/device-journey.png) |
+| ![The agent stage: "Asking the agent about SHIP-433", five tool-call stations on a lit rail and the data check, captioned as a replay of a recorded run](docs/img/device-agent.png) | ![The plans card: every plan placed by delay and cost, the pick lit with a ring, the plan that leaves the hospital late as a hollow red ring](docs/img/device-plans.png) | ![The incident with the agent's pick: the route from Lima to Cusco with the air leg as a white trail and the late ground leg dashed red, 12 critical units still at risk until approval, the pick keeping them on time, and each order on one time scale](docs/img/device-journey.png) |
 
 | Approve with one yes | The result, verified | The device on a phone |
 |---|---|---|
-| ![Confirmation: $390 in large type, each order's trail to its promise, Yes and No](docs/img/device-confirm.png) | ![Result: the executed route and 12 critical units on time, with the decision times](docs/img/device-result.png) | ![The device on a phone: SHIP-433 with its booked shipment delay of +24 h](docs/img/device-phone.png) |
+| ![Confirmation: $390 in large type, each order's trail to its promise, Yes and No](docs/img/device-confirm.png) | ![Result: the executed route and 12 critical units on time, with the decision times](docs/img/device-result.png) | ![The device on a phone: SHIP-433 with 12 critical units at risk and the booked route dashed red](docs/img/device-phone.png) |
 
 ![The operator console: the same incidents in full, with the session's measured outcomes, the decision field beside the plans and the audit trail](docs/img/console.png)
 

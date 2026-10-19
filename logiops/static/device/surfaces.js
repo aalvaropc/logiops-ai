@@ -55,7 +55,7 @@ export function cardTags(card) {
   const tags = [];
   if (card.startHere) tags.push(["start-here", "Start here"]);
   if (card.critical_units_at_risk > 0) tags.push(["at-risk", `${card.critical_units_at_risk} critical units at risk`]);
-  else if (card.priority === "critical") tags.push(["critical", "Critical order"]);
+  else if (card.priority === "critical") tags.push(["critical", "Critical order covered"]);
   if (STATES[card.status]) tags.push(["state", STATES[card.status]]);
   return tags.slice(0, 2);
 }
@@ -77,7 +77,7 @@ function unitsOnTime(plan) {
   return { allOnTime: onTime === total, text: `${onTime === total ? total : `${onTime} of ${total}`} ${units} projected on time` };
 }
 
-export function incidentBand(snapshot, summary) {
+export function incidentBand(snapshot) {
   const execution = snapshot.executions[0];
   const decided = execution?.plan_id || visibleApproval(snapshot)?.plan_id;
   const plan = decided && snapshot.plans.find((item) => item.id === decided);
@@ -86,9 +86,7 @@ export function incidentBand(snapshot, summary) {
     if (execution) return [allOnTime ? "ok" : "late", `Executed · ${text}`];
     return allOnTime ? ["warn", `Approved · ${text} once executed`] : ["late", `Approved · ${text}`];
   }
-  if (!(summary?.critical_units_at_risk > 0)) return null;
-  const pending = visiblePlans(snapshot).length ? " until a plan is approved" : "";
-  return ["late", `${summary.critical_units_at_risk} critical units at risk${pending}`];
+  return null;
 }
 
 const capital = (name) => `${name[0].toUpperCase()}${name.slice(1)}`;
