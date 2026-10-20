@@ -55,6 +55,8 @@ const incidentPath = (suffix = "") => `/incidents/${encodeURIComponent(state.inc
 const orb = { state: "ready", started: 0, ticker: 0, answered: null };
 const stage = createStage({ root: $("agent-stage"), surface: $("surface"), quiet: [$("chips"), $("more")], reducedMotion });
 let shownTrace = null;
+let inFlight = false;
+let hushes = 0;
 
 function message(text, success = false) {
   const box = $("message");
@@ -104,16 +106,21 @@ function device(method, ...args) {
   else if (method === "reply") {
     const [text, spoken, speaking] = args;
     const at = performance.now();
+    const stray = inFlight;
+    const hush = hushes;
     stage.whenGone(() => {
+      const voiced = !stray && speaking && hush === hushes && speechOn();
       $("device-spoken").textContent = shortSpoken(text, spoken, markdown.plainText);
       document.querySelector(".talk").classList.remove("expanded");
       document.querySelector(".talk").classList.add("replied");
       $("more").hidden = false;
-      setVoice("reply", speaking, at);
+      if (!stray && orb.state !== "listening") setVoice("reply", voiced, at);
+      if (voiced) speak(spoken || markdown.plainText(text));
     });
-    stage.settle();
+    if (!stray) stage.settle();
   }
   else if (method === "trace") {
+    clearInterval(orb.ticker);
     const seconds = orb.started ? (performance.now() - orb.started) / 1000 : orb.answered;
     stage.replay(args[0], checkBadge(args[0]), (live) => stageCaption(args[0], seconds, live));
   }
@@ -139,13 +146,15 @@ const api = createApi({
   },
   onAgentCall: (phase, path) => {
     if (phase === "request") {
-      device("voice", "request");
       const asking = stageLine(path);
       stage.ask(asking);
+      inFlight = true;
+      device("voice", "request");
       $("device-spoken").textContent = `${asking.filter(Boolean).join(" ")}…`;
       startFiller();
       return;
     }
+    inFlight = false;
     voice.cancelFiller();
     if (phase === "error") {
       device("voice", "error");
@@ -625,7 +634,6 @@ function say(role, text, meta, spoken, check) {
   }
   const speaking = speechOn();
   device("reply", text, spoken, speaking);
-  if (speaking) stage.whenGone(() => speak(spoken || markdown.plainText(text)));
 }
 
 function paintVoiceToggle() {
@@ -645,7 +653,10 @@ function speechOn() {
 }
 
 const voice = createVoice({ getToken: () => state.token, getConfig: () => state.voice, isEnabled: speechOn, device });
-const stopSpeaking = (options) => voice.stop(options);
+const stopSpeaking = (options) => {
+  hushes += 1;
+  voice.stop(options);
+};
 const speak = (line, options) => voice.speak(line, options);
 const startFiller = () => voice.startFiller();
 
