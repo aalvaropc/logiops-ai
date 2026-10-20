@@ -78,3 +78,14 @@ def test_the_release_caps_live_model_calls_and_documents_it():
     assert row.endswith("| `150`; the AWS deployment sets `40` |")
     assert "DEFAULT_DAILY_CALLS = 150" in (ROOT / "logiops" / "budget.py").read_text()
     assert "daily budget of 40 model calls" in readme and "mcp-apps-web-host" in readme
+
+
+def test_the_uptime_check_runs_every_check_reports_why_and_closes_its_issue():
+    workflows = ROOT / ".github" / "workflows"
+    uptime, ci = (workflows / "uptime.yml").read_text(), (workflows / "ci.yml").read_text()
+    assert uptime.count("if: ${{ !cancelled()") == 4, "a failed check does not hide the next ones"
+    assert uptime.count('echo "reason=$reason" >> "$GITHUB_OUTPUT"') == 4
+    assert "--retry 2 --retry-delay 10 --retry-all-errors" in uptime and "timeout-minutes: 5" in uptime
+    assert "if: ${{ failure() }}" in uptime and "if: ${{ success() }}" in uptime and 'gh issue close "$number"' in uptime
+    assert "select(.title == env.TITLE)" in uptime and "--label uptime" in uptime
+    assert "ubuntu-latest" not in uptime + ci

@@ -4,47 +4,95 @@ on:
   schedule:
     - cron: "17 */6 * * *"
   workflow_dispatch:
+    inputs:
+      base:
+        description: "Origin of the demo to check (empty: the deployed demo)"
+        required: false
+        default: ""
 
 permissions:
   contents: read
-  issues: write
 
 jobs:
   demo:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      issues: write
     env:
-      BASE: https://dir4g4n7eq982.cloudfront.net
+      BASE: ${{ inputs.base || 'https://dir4g4n7eq982.cloudfront.net' }}
+      SANDBOX: https://d2g3j76wk1trm1.cloudfront.net
+      TITLE: Deployed demo check failed
+      CURL: curl -sS --max-time 20 --retry 2 --retry-delay 10 --retry-all-errors
     steps:
       - name: Health
         id: health
+        if: ${{ !cancelled() }}
         run: |
-          set -eu
-          code=$(curl -sS -o /tmp/healthz -w '%{http_code}' --max-time 20 "$BASE/healthz")
-          echo "healthz=$code" >> "$GITHUB_OUTPUT"
-          [ "$code" = "200" ] && grep -q '"status":"ok"' /tmp/healthz
+          code=$($CURL -o /tmp/healthz -w '%{http_code}' "$BASE/healthz") || code="no answer"
+          if [ "$code" != "200" ]; then reason="HTTP $code"
+          elif ! grep -q '"status":"ok"' /tmp/healthz; then reason="200 without status ok"
+          else reason="ok"; fi
+          echo "reason=$reason" >> "$GITHUB_OUTPUT"
+          [ "$reason" = "ok" ]
       - name: MCP initialize as a guest
         id: mcp
+        if: ${{ !cancelled() }}
         run: |
-          set -eu
-          code=$(curl -sS -o /tmp/mcp -w '%{http_code}' --max-time 20 -X POST "$BASE/mcp" \
+          code=$($CURL -o /tmp/mcp -w '%{http_code}' -X POST "$BASE/mcp" \
             -H 'content-type: application/json' -H 'accept: application/json, text/event-stream' \
-            -d '{"jsonrpc":"2.0","id":0,"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"uptime","version":"1"}}}')
-          echo "mcp=$code" >> "$GITHUB_OUTPUT"
-          [ "$code" = "200" ] && grep -q '"protocolVersion"' /tmp/mcp
+            -d '{"jsonrpc":"2.0","id":0,"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"uptime","version":"1"}}}') || code="no answer"
+          if [ "$code" != "200" ]; then reason="HTTP $code"
+          elif ! grep -q '"protocolVersion"' /tmp/mcp; then reason="200 without a protocol version"
+          else reason="ok"; fi
+          echo "reason=$reason" >> "$GITHUB_OUTPUT"
+          [ "$reason" = "ok" ]
       - name: Device page
         id: demo
+        if: ${{ !cancelled() }}
         run: |
-          set -eu
-          code=$(curl -sS -o /tmp/demo -w '%{http_code}' --max-time 20 "$BASE/demo")
-          echo "demo=$code" >> "$GITHUB_OUTPUT"
-          [ "$code" = "200" ] && grep -q 'id="device"' /tmp/demo
-      - name: Open an issue when the demo is down
-        if: failure()
+          code=$($CURL -o /tmp/demo -w '%{http_code}' "$BASE/demo") || code="no answer"
+          if [ "$code" != "200" ]; then reason="HTTP $code"
+          elif ! grep -q 'id="device"' /tmp/demo; then reason="200 without the device"
+          else reason="ok"; fi
+          echo "reason=$reason" >> "$GITHUB_OUTPUT"
+          [ "$reason" = "ok" ]
+      - name: Sandbox origin
+        id: sandbox
+        if: ${{ !cancelled() && inputs.base == '' }}
+        run: |
+          host=$(python3 -c 'import sys, urllib.parse; print(urllib.parse.quote(sys.argv[1], safe=""))' "$BASE")
+          code=$($CURL -o /tmp/sandbox -w '%{http_code}' "$SANDBOX/mcp-app/sandbox.html?host=$host") || code="no answer"
+          page=$($CURL -o /dev/null -w '%{http_code}' "$BASE/mcp-app/sandbox.html") || page="no answer"
+          if [ "$code" != "200" ]; then reason="HTTP $code"
+          elif ! grep -q 'sandbox-proxy-ready' /tmp/sandbox; then reason="200 without the proxy"
+          elif [ "$page" != "404" ]; then reason="the page origin serves the sandbox (HTTP $page)"
+          else reason="ok"; fi
+          echo "reason=$reason" >> "$GITHUB_OUTPUT"
+          [ "$reason" = "ok" ]
+      - name: Open or update the issue
+        if: ${{ failure() }}
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
+          HEALTH: ${{ steps.health.outcome }} · ${{ steps.health.outputs.reason || 'no result' }}
+          MCP: ${{ steps.mcp.outcome }} · ${{ steps.mcp.outputs.reason || 'no result' }}
+          DEMO: ${{ steps.demo.outcome }} · ${{ steps.demo.outputs.reason || 'no result' }}
+          SANDBOX_CHECK: ${{ steps.sandbox.outcome }} · ${{ steps.sandbox.outputs.reason || 'not run' }}
+          RUN: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
-          title="Deployed demo check failed"
-          body="healthz: ${{ steps.health.outputs.healthz || 'no answer' }} · MCP initialize: ${{ steps.mcp.outputs.mcp || 'no answer' }} · /demo: ${{ steps.demo.outputs.demo || 'no answer' }}"$'\n\n'"Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
-          existing=$(gh issue list --state open --search "$title in:title" --json number --jq '.[0].number')
-          if [ -n "$existing" ]; then gh issue comment "$existing" --body "$body"; else gh issue create --title "$title" --body "$body"; fi
+          gh label create uptime --color B60205 --description "Deployed demo checks" 2>/dev/null || true
+          body=$(printf '%s\n' "Checked $BASE:" "" "- /healthz: $HEALTH" "- MCP initialize as a guest: $MCP" "- /demo: $DEMO" "- sandbox origin: $SANDBOX_CHECK" "" "Run: $RUN")
+          number=$(gh issue list --state open --label uptime --json number,title --jq '[.[] | select(.title == env.TITLE)][0].number // empty' || true)
+          if [ -n "$number" ]; then gh issue comment "$number" --body "$body"
+          else gh issue create --title "$TITLE" --label uptime --body "$body"; fi
+      - name: Close the issue when the demo is back
+        if: ${{ success() }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RUN: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          number=$(gh issue list --state open --label uptime --json number,title --jq '[.[] | select(.title == env.TITLE)][0].number // empty' || true)
+          if [ -n "$number" ]; then gh issue close "$number" --comment "Recovered: every check passed on $BASE. Run: $RUN"; fi
