@@ -139,6 +139,9 @@ test("a question investigates or follows up, shows the card for a fresh investig
   assert.equal(fresh.last().meta, "investigation · 2 MCP calls · replay mode · 0 tokens");
   assert.deepEqual(fresh.last().check, { passed: false, text: "Did not pass the data check: $99 is not in the data" });
   assert.ok(fresh.events.includes("showMcpApp") && fresh.events.includes("noteCheck") && fresh.events.includes("device:trace"));
+  const bare = harness({ responses });
+  await bare.commands.handle("investigate");
+  assert.equal(bare.calls[0].path, "/incidents/SHIP-421/agent/investigate");
   const follow = harness({ responses });
   await follow.commands.handle("Why not the cheaper one?");
   assert.equal(follow.calls[0].path, "/incidents/SHIP-421/agent/ask");
@@ -269,7 +272,7 @@ test("a standing approval blocks a second one, and withdrawing it is read back, 
   assert.equal(h.last().text, "“Fulfill local stock and send the rest express” is already approved for this data, so I can't approve another plan. "
     + "Say “withdraw the approval” first if you want to choose again.");
   await h.commands.handle("approve the recommended plan");
-  assert.match(h.last().text, /is already approved\. Press Execute or say “execute it”/);
+  assert.match(h.last().text, /is already approved\. Say “execute it”/);
   assert.equal(h.calls.length, 0);
   await h.commands.handle("withdraw the approval");
   assert.match(h.last().text, /^Withdraw the approval of “Fulfill local stock and send the rest express”\? .* resets SHIP-421 to its original data/);

@@ -364,7 +364,6 @@ function renderPlansSurface() {
   $("plans-state").textContent = executed ? "Executed and verified"
     : approval ? `Approved by ${approver}: “${approvedPlan?.label || approval.plan_id}”. Nothing has run yet.`
     : plans.length ? "Only you approve. Selecting a plan does not approve it." : "Ask what's happening to calculate them";
-  $("execute-plan").hidden = !approval || executed;
   const investigation = latestAgentEvent(snapshot)?.data;
   renderAgentLine($("plans-agent"), agentLine(investigation, investigation && checkBadge(investigation)), investigation);
   renderPlanList($("plans"), {
@@ -466,7 +465,7 @@ function renderControls() {
   $("ask-input").readOnly = !ready;
   $("mic").disabled = !ready;
   for (const chip of document.querySelectorAll(".chip")) chip.disabled = !ready;
-  for (const id of ["confirm-yes", "confirm-no", "execute-plan", "receipt-execute"]) if ($(id)) $(id).disabled = state.busy;
+  for (const id of ["confirm-yes", "confirm-no", "receipt-execute"]) if ($(id)) $(id).disabled = state.busy;
   $("account").disabled = state.busy;
 }
 
@@ -767,7 +766,6 @@ $("ask-form").addEventListener("submit", (event) => {
   if (document.activeElement === $("ask")) input.focus({ preventScroll: true });
   handleUtterance(text);
 });
-$("execute-plan").addEventListener("click", () => handleUtterance("Execute the approved plan"));
 $("more").addEventListener("click", openSheet);
 $("device-orb").addEventListener("click", () => setSpeech(!$("speak-replies").checked));
 $("speak-replies").addEventListener("change", () => setSpeech($("speak-replies").checked));
