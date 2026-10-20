@@ -105,6 +105,11 @@ test("the result card, the alert card and the chips come from the data", () => {
   const approved = { ...snapshot, approvals: [{ plan_id: "p-express", source_version: 1 }] };
   assert.deepEqual(chipsFor("plans", { ...context, snapshot: approved }).map(([text]) => text), ["Execute approved plan", "Book and pay", "Why this plan?", "Back to queue"]);
   assert.deepEqual(chipsFor("plans", { ...context, snapshot: approved })[0], ["Execute approved plan", "Execute the approved plan", "act"]);
+  const free = { ...context, plan: plans[0] };
+  const approvedFree = { ...snapshot, approvals: [{ plan_id: "p-wait", source_version: 1 }] };
+  assert.deepEqual(chipsFor("plans", { ...free, snapshot: approvedFree }).map(([text]) => text), ["Execute approved plan", "Why this plan?", "Back to queue"], "a $0 plan has nothing to book");
+  assert.deepEqual(chipsFor("plans", { ...free, snapshot: { ...approvedFree, executions: [{ plan_id: "p-wait", source_version: 1 }] } }).map(([text]) => text), ["Back to queue"]);
+  assert.deepEqual(chipsFor("plans", { ...context, snapshot: { ...approved, executions: [{ plan_id: "p-express", source_version: 1 }] } }).map(([text]) => text), ["Book and pay", "Back to queue"]);
   const executed = { ...approved, executions: [{ plan_id: "p-express", source_version: 1 }], bookings: [{ plan_id: "p-express" }] };
   assert.deepEqual(chipsFor("result", { ...context, snapshot: executed }).map(([text]) => text), ["Open SHIP-433", "Back to queue"]);
   assert.deepEqual(chipsFor("result", { ...context, snapshot: executed }).find(([text]) => text === "Open SHIP-433")[1], "Open SHIP-433");
@@ -126,9 +131,9 @@ test("an inbox card carries at most two tags: start here, then risk or a critica
   const card = { startHere: true, critical_units_at_risk: 12, priority: "critical", status: "investigated" };
   assert.deepEqual(cardTags(card), [["start-here", "Start here"], ["at-risk", "12 critical units at risk"]]);
   assert.deepEqual(cardTags({ ...card, startHere: false }), [["at-risk", "12 critical units at risk"], ["state", "Investigated"]]);
-  assert.deepEqual(cardTags({ ...card, startHere: false, critical_units_at_risk: 0, status: "approved" }), [["critical", "Critical order covered"], ["state", "Approved"]]);
+  assert.deepEqual(cardTags({ ...card, startHere: false, critical_units_at_risk: 0, status: "approved" }), [["critical", "Critical order"], ["state", "Approved"]]);
   assert.deepEqual(cardTags({ ...card, critical_units_at_risk: 0, status: "verified" }), [["executed", "Executed"]]);
-  assert.deepEqual(cardTags({ ...card, startHere: false, critical_units_at_risk: 0, status: "detected" }), [["critical", "Critical order covered"]]);
+  assert.deepEqual(cardTags({ ...card, startHere: false, critical_units_at_risk: 0, status: "detected" }), [["critical", "Critical order"]]);
   assert.deepEqual(cardTags({ priority: "standard", critical_units_at_risk: 0, status: "detected" }), []);
 });
 

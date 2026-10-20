@@ -247,6 +247,7 @@ function incidentFigure(snapshot, plan, summary, doc) {
   const figure = el("p", "incident-figure", undefined, doc);
   if (plan && decided(snapshot)) {
     const outcome = resultOutcome(plan);
+    if (incidentBand(snapshot)?.[0] === "late") figure.classList.add("late");
     figure.append(el("strong", "", outcome.value, doc), " ", el("span", "", outcome.label, doc), " ", el("small", "", outcome.note, doc));
     return figure;
   }

@@ -275,7 +275,7 @@ export function createCommands({
           else state.pendingApproval = pending;
           throw error;
         }
-        say("assistant", `Approved “${plan.label}” on the current data. Nothing has run yet: say “execute it” or press Execute when you're ready.`);
+        say("assistant", `Approved “${plan.label}” on the current data. Nothing has run yet: say “execute it” when you're ready.`);
         state.awaitingExecute = true;
         onSurface("plans");
       } else if (command === "execute" || (command === "confirm" && awaitingExecute && selectors.visibleApproval(state.snapshot))) {

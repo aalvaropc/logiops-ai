@@ -17,7 +17,7 @@
     + "and or but not no yes yeah yep nope ok okay please thanks thank hi hello hey "
     + "if then than so as up out over under after before now today tomorrow yesterday tonight morning next last "
     + "tell show give explain check need needs want happen happens happening happened going get got let make help see "
-    + "open approve execute run go ahead reset start book pay resume continue cancel confirm forget remember delete investigate investigating recheck refresh again "
+    + "open approve execute run go ahead reset start book pay resume continue cancel confirm forget remember delete investigate investigating recheck refresh "
     + "link connect sign log unlink disconnect switch back "
     + "delay delays late eta status incident incidents shipment shipments customer customers cost costs price "
     + "risk critical inventory queue inbox route truck alert alerts receipt result results withdraw revoke undo approval home list"

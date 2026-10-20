@@ -290,7 +290,7 @@ Outlined 44px pills in a horizontally scrolling, snapping row. The first action 
 `surface` panel with the voice bar, the heard line (inline "You said" label), the spoken sentence (tap or "More" to expand), chips, then orb, mic (48px filled circle, red while listening), a pill input on `sunken`, and Send (filled once text is entered; an arrow icon below 400px).
 
 ### MCP App card
-Dark by default with the device values; when the host reports a light theme it switches to a light palette (white ground, near-black `#111418` for text and on time, `#B8102A` for late, `#0B4F9C` for the pick, no green) and adopts host `--color-*` variables. Shows the decision field and the pick side by side when wide, stacked when compact, then the other plans as hairline-divided rows with "See N more".
+Dark by default with the device values; when the host reports a light theme it switches to a light palette (white ground, near-black `#111418` for text, `#0B4F9C` for the pick and for on time, as the dark palette uses one light for both, `#B8102A` for late, no green) and adopts host `--color-*` variables. Shows the decision field and the pick side by side when wide, stacked when compact, then the other plans as hairline-divided rows with "See N more".
 
 ## Do's and Don'ts
 

@@ -55,7 +55,7 @@ export function cardTags(card) {
   const tags = [];
   if (card.startHere) tags.push(["start-here", "Start here"]);
   if (card.critical_units_at_risk > 0) tags.push(["at-risk", `${card.critical_units_at_risk} critical units at risk`]);
-  else if (card.priority === "critical") tags.push(["critical", "Critical order covered"]);
+  else if (card.priority === "critical") tags.push(["critical", "Critical order"]);
   if (STATES[card.status]) tags.push(["state", STATES[card.status]]);
   return tags.slice(0, 2);
 }
