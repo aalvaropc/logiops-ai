@@ -47,6 +47,6 @@ def test_the_hackathon_package_is_complete_and_prioritised():
     for item in ("MCP Apps", "Agent Skills", "OAuth 2.1", "Purchasing", "State across sessions", "Proactive notifications"):
         assert item in readiness, item
     script = (hackathon / "video-script.md").read_text()
-    assert "2:50–3:00" in script and "under 3 minutes" in script
+    assert "2:45–2:55" in script and "under 3 minutes" in script and "Cuts, in order" in script
     instructions = (hackathon / "testing-instructions.md").read_text()
     assert "operator panel" not in instructions and "/console" in instructions

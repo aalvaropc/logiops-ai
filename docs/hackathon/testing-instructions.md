@@ -25,6 +25,11 @@ LOGIOPS_AGENT_MODE=replay uv run uvicorn logiops.api:app --host 127.0.0.1 --port
 
 ## Walkthrough
 
+**Any MCP client first, if you like.** `npx @modelcontextprotocol/inspector --cli http://127.0.0.1:8000/mcp --transport http --method tools/list`
+lists the 12 tools from a standard client; `--method tools/call --tool-name get_shipment --tool-arg shipment_id=SHIP-433`
+returns one record. Against the deployed demo, add `--header "Authorization: Bearer <token>"`; without it a write tool
+answers `401` with the OAuth challenge, and Inspector's web UI offers the Cognito sign-in.
+
 1. **MCP check.** `uv run python scripts/check_mcp.py http://127.0.0.1:8000/mcp`
    performs `initialize`, `tools/list`, `tools/call(get_shipment)` and
    `tools/call(list_incidents)`, and prints the negotiated protocol version

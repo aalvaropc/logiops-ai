@@ -1,24 +1,42 @@
 # Video script (under 3 minutes, English)
 
 Recorded against the deployed demo in bedrock mode (a few cents); the device in one
-tab, the operator console in another. Timings are targets; cut words before cutting
-steps. Nothing on screen may show a token, an e-mail address or an account id.
+tab, the operator console in a second tab for one step, and MCP Inspector in a
+third. Timings are targets; cut words before cutting steps. Nothing on screen may
+show a token, an e-mail address or an account id.
+
+Three acts, one per judging criterion: the idea (a decision, not a chat), the
+safety (the data changes and the system notices), and the fit (a real MCP server
+any client can drive). The line to land is said once, at the end: **"The agent
+proposes. You approve. Code enforces it."**
 
 | Time | On screen | Narration |
 |---|---|---|
-| 0:00–0:15 | The device home: "12 critical units at risk" and the open incidents as light lanes trailing their delay; the queue beside them. | "LogiOps AI is an operations desk you talk to. These are today's logistics exceptions: a delayed truck, a carrier that stopped departures, a customs hold, two orders competing for stock. Everything you'll see runs on a self-hosted MCP server, Amazon Bedrock and Strands Agents." |
-| 0:15–0:30 | Say "Any delays today?" The queue reorders; SHIP-433 gets "Start here". | "Ask for a briefing. The agent reads the inbox over MCP and tells me where to start: a carrier outage with a critical hospital order." |
-| 0:30–0:55 | Tap SHIP-433. The incident: the booked route dashed red, "+24 h". Say "What's happening with SHIP-433?" The agent stage lights each MCP tool call as it returns, then "Checked against the data"; the plans card appears with its decision field; the spoken line is read aloud by Polly. | "I open it and ask. The agent calls five tools — shipment, orders, stock, carrier quotes — and the plans are calculated by code, not by the model. This card is an MCP App served by the server itself. The pick protects the hospital order. And every answer is checked against the data before it's shown." |
-| 0:55–1:15 | Say "approve the recommended plan". The confirmation card reads the plan back; press Yes. Then "execute it": the result card with its figures. | "Only I approve. It reads the plan back — price, delay, who's affected — and approves on my yes, bound to this exact data version. Execute: thirty units accounted for, verified, with the decision time measured from the events." |
-| 1:15–1:35 | Say "book it". The purchase card with carriers, fee, tax and total; press Yes; the receipt card. | "Now the purchase. It reads the full price back with tax; one yes books and pays, charged once, with a receipt. A different amount or stale data is refused." |
-| 1:35–1:55 | Press "More": the transcript with the Agent Skill and the tool trace, "Checked against the data". Switch to the console tab: the same incident, the audit trail, the session metrics strip. | "Behind the card: the Agent Skill the server publishes, the recorded tool trace, and the audit trail. The operator console shows the same incident in full, with the session's measured outcomes." |
-| 1:55–2:15 | In the console's Developer drawer, change SHIP-421's stock; back on the device the bell shows an alert; open it: the "Heads up" card. | "Data changes. Stock moved under an investigated plan, and the agent raised a proactive alert with the new pick — nothing approved." |
-| 2:15–2:35 | In the Developer drawer, import `scenario_pack.json`; the inbox shows SHIP-470; open it on the device. | "And it's not four fixed incidents: this is a scenario pack. Bring your own — a dock strike at Paita — and it runs through the same agent, tools and cards." |
-| 2:35–2:50 | Reload the device in a new window: "Welcome back… we were on SHIP-433". | "Memory across sessions runs on AgentCore Memory, per signed-in user, and 'forget me' deletes it." |
-| 2:50–3:00 | The README's first screen. | "Open source, MIT, with the MCP Apps host bridge as its own library. LogiOps AI." |
+| 0:00–0:12 | The device home: "12 critical units at risk" in red, the four incidents as light lanes trailing their delay. | "Four late shipments this morning. One of them carries a hospital order. LogiOps AI is an operations desk you talk to: an Alexa+-style device over a self-hosted MCP server, with the agent on Amazon Bedrock." |
+| 0:12–0:28 | Say "Any delays today?" The lanes stay, SHIP-433 gets "Start here", Polly reads the short line. | "I ask for the day. The agent reads the inbox over MCP and says where to start: the carrier outage with the critical order. A briefing only reads; it cannot change anything." |
+| 0:28–0:55 | Tap SHIP-433: the booked route dashed red, "12 critical units at risk". Say "What's happening with SHIP-433, and which plan should we choose?" The agent stage lights each MCP call as it returns, then "Checked against the data". The plans appear with the decision field; the pick is the lit dot. | "Each station is a tool call as it happens: shipment, orders, carrier quotes, plans. The plans are calculated by code; the model compares them and explains. And before anything is shown, the answer is checked against the incident's data. The pick keeps the hospital on time for $390." |
+| 0:55–1:15 | Type "Remember my spend cap is $250." Ask "Which plan now?" The pick moves to the $240 plan with "Your preference"; the spoken line names what it trades away. | "This is where state matters. I tell it my spend cap once, and it keeps it across sessions. The same calculated plans, a different pick: $240, and the agent says what that costs the store. A preference never approves anything." |
+| 1:15–1:35 | Say "approve the recommended plan". The confirmation: "$240" large, each order's trail to its promise, Yes / No. Press Yes. Say "execute it". The result: the route redrawn, "12 critical units on time", "Decided in 11 s". | "Only I approve. It reads the plan back, and my yes is bound to this exact plan and this version of the data. Execute: thirty units accounted for, verified, and the time to decision measured from the events, not claimed." |
+| 1:35–2:05 | Console tab, Developer drawer: on SHIP-421 (investigated and approved before the take), set stock to 11, Apply. Back on the device: the bell, the "Heads up" alert with the previous plan dashed and the new one lit. Say "execute it": refused. | "Act two: the world changes. Stock moves under an approved plan. The approval no longer applies, the agent raises an alert with the new pick, and execute is refused until a person decides again. That is the whole point: the agent proposes, code enforces." |
+| 2:05–2:30 | MCP Inspector tab, already connected to the deployed server over HTTPS. Show the tool list (12 tools), call `get_shipment` for SHIP-433, then call `execute_approved_plan` as a guest: 401 with the OAuth challenge, and the Cognito sign-in. | "Act three: this is a real MCP server. Here it is in MCP Inspector, a standard client, over the same URL: Streamable HTTP, OAuth 2.1 with Amazon Cognito, and the write tools refuse a guest. Connecting the real Alexa+ is a registration step, not a rewrite." |
+| 2:30–2:45 | Press "More" on the device: the Agent Skill and the tool trace of each reply. Cut to the README's first screen with the gallery. | "Open source, MIT, with the MCP Apps host bridge as its own library. Four hundred tests, replay mode so judges can run it for free, and every step in the audit trail." |
+| 2:45–2:55 | End card: the repo URL and the line. | "LogiOps AI. The agent proposes. You approve. Code enforces it." |
 
 ## Cuts, in order, if the take runs long
 
-1. The memory reload (0:15).
-2. The scenario pack import (0:20).
-3. The console tab (keep "More").
+1. The "More" sheet (0:10).
+2. The guest 401 in Inspector (0:08): keep the tool list and one call.
+3. The briefing (0:16): open SHIP-433 directly.
+
+## Before the take
+
+- Reset all incidents and preferences; then investigate and approve SHIP-421 (the
+  alert needs an approved plan to invalidate), and open SHIP-433 last.
+- Chrome or Edge for the microphone; if speech fails, type the line: the flow is the
+  same. Turn on "Read replies aloud" so Polly is heard.
+- MCP Inspector (`npx @modelcontextprotocol/inspector`) connected to
+  `https://…/mcp` with the bearer token pasted in its Authentication panel, never
+  shown; open the tool list before recording. The guest step is a second
+  connection without the token; "Sign in" there opens Cognito with the demo
+  user (type the password off camera, or cut to the signed-in state).
+- Narration at about 150 words per minute; the text above is about 330 words, so there is room for the 12 s investigation and the sign-in.
