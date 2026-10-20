@@ -37,15 +37,24 @@ data version, a stock change invalidates it and raises a proactive alert, execut
 is idempotent and verified, and a payment is read back with its tax and charged
 once. The audit trail records every step.
 
-**Measured on the deployed demo (2026-10-12, live Amazon Bedrock through
-Strands Agents):** a grounded recommendation for a two-order carrier outage in
-13.6 s with 5 MCP calls and 5,872 tokens; from the first investigation to the
-approval in 10.0 s and to the verified execution in 10.8 s; 12 critical units on
-time and 18 standard units late for $390 extra; a $466.10 booking charged once
-with its receipt. The same day's SHIP-421 run read 5,818 tokens from the prompt
-cache (the Agent Skill and the prompt are cached after the first turn).
+**The agent proposes. You approve. Code enforces it.**
+
+**Measured on the deployed demo (2026-10-19, live Amazon Bedrock through
+Strands Agents), for the two-order carrier outage SHIP-433:**
+
+| What | Measured |
+|---|---|
+| From the question to a grounded recommendation | 12.2 s, 5 MCP calls, 4 priced plans, 5,941 tokens, one model call |
+| Tool calls streamed to the device as they return | first at 2.6 s, last at 5.7 s; the answer at 12.5 s |
+| From the first investigation to the verified execution | 13.1 s |
+| Outcome of the chosen plan | 12 critical units on time, 18 standard units 8 h late, $390 extra |
+| Booking read back and charged once | $466.10 with tax, receipt served |
+| Cost of the run | about US$0.04 of Bedrock usage (the prompt and the Agent Skill are cached after the first turn) |
+
 `GET /metrics` reports these figures from the recorded events, per incident and
-per session.
+per session; nothing above is typed in by hand. The same pattern fits any
+exceptions desk where an agent proposes and a person decides: payments
+operations, on-call incidents, returns.
 
 **Bring your own incidents.** The four built-in incidents are a scenario pack
 like any other: `GET /scenario/packs/builtin` is the template, `POST
@@ -61,7 +70,7 @@ Challenge. Runtime: Amazon Bedrock.
 
 | Tag | Devpost | Live demo | Open-source library |
 |---|---|---|---|
-| `amazon-v1.0` (to be tagged on 2026-10-21) | _pending_ | Deployed on AWS; URL, demo user and token in the private testing instructions (hosting is optional, D-AMZ-1) | [`aalvaropc/mcp-apps-web-host`](https://github.com/aalvaropc/mcp-apps-web-host), MIT: the MCP Apps host bridge and sandbox proxy used here (public from 2026-10-20) |
+| `amazon-v1.0` (to be tagged on 2026-10-22) | _pending_ | Deployed on AWS; URL, demo user and token in the private testing instructions (hosting is optional, D-AMZ-1) | [`aalvaropc/mcp-apps-web-host`](https://github.com/aalvaropc/mcp-apps-web-host), MIT: the MCP Apps host bridge and sandbox proxy used here (public from 2026-10-20) |
 
 The live demo shares a daily budget of 40 model calls (`LOGIOPS_DAILY_MODEL_CALLS`);
 when it is spent, replies come from the scripted replay until midnight (UTC-05:00),
@@ -74,6 +83,29 @@ the replay command in `docs/hackathon/testing-instructions.md`) runs the whole d
 Open <http://127.0.0.1:8000/demo> for the device and <http://127.0.0.1:8000/console>
 for the operator console. `uv run python scripts/rehearse_api.py` walks through it
 headless and prints PASS or FAIL.
+
+### Use it from any MCP client
+
+The server is a standard MCP server, so the device is one client among many. With
+[MCP Inspector](https://github.com/modelcontextprotocol/inspector) against the
+deployed demo (replace `<token>` with the operator token from the testing
+instructions, or drop the header to connect as a guest):
+
+```bash
+npx @modelcontextprotocol/inspector --cli https://dir4g4n7eq982.cloudfront.net/mcp \
+  --transport http --header "Authorization: Bearer <token>" --method tools/list
+npx @modelcontextprotocol/inspector --cli https://dir4g4n7eq982.cloudfront.net/mcp \
+  --transport http --header "Authorization: Bearer <token>" \
+  --method tools/call --tool-name get_shipment --tool-arg shipment_id=SHIP-433
+```
+
+The first lists the 12 tools; the second returns SHIP-433's record. Without the
+header, a read tool still answers and a write tool such as `execute_approved_plan`
+returns `401` with the OAuth challenge; Inspector's web UI (`npx
+@modelcontextprotocol/inspector`) then offers to sign in, which opens Amazon
+Cognito: the client id and scopes are the public ones `GET /auth/config` reports,
+and Inspector's callback is registered. Locally, point the same commands at
+`http://127.0.0.1:8000/mcp`.
 
 ## Architecture
 

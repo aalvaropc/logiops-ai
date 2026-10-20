@@ -1,0 +1,50 @@
+name: uptime
+
+on:
+  schedule:
+    - cron: "17 */6 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  demo:
+    runs-on: ubuntu-latest
+    env:
+      BASE: https://dir4g4n7eq982.cloudfront.net
+    steps:
+      - name: Health
+        id: health
+        run: |
+          set -eu
+          code=$(curl -sS -o /tmp/healthz -w '%{http_code}' --max-time 20 "$BASE/healthz")
+          echo "healthz=$code" >> "$GITHUB_OUTPUT"
+          [ "$code" = "200" ] && grep -q '"status":"ok"' /tmp/healthz
+      - name: MCP initialize as a guest
+        id: mcp
+        run: |
+          set -eu
+          code=$(curl -sS -o /tmp/mcp -w '%{http_code}' --max-time 20 -X POST "$BASE/mcp" \
+            -H 'content-type: application/json' -H 'accept: application/json, text/event-stream' \
+            -d '{"jsonrpc":"2.0","id":0,"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"uptime","version":"1"}}}')
+          echo "mcp=$code" >> "$GITHUB_OUTPUT"
+          [ "$code" = "200" ] && grep -q '"protocolVersion"' /tmp/mcp
+      - name: Device page
+        id: demo
+        run: |
+          set -eu
+          code=$(curl -sS -o /tmp/demo -w '%{http_code}' --max-time 20 "$BASE/demo")
+          echo "demo=$code" >> "$GITHUB_OUTPUT"
+          [ "$code" = "200" ] && grep -q 'id="device"' /tmp/demo
+      - name: Open an issue when the demo is down
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          title="Deployed demo check failed"
+          body="healthz: ${{ steps.health.outputs.healthz || 'no answer' }} · MCP initialize: ${{ steps.mcp.outputs.mcp || 'no answer' }} · /demo: ${{ steps.demo.outputs.demo || 'no answer' }}"$'\n\n'"Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          existing=$(gh issue list --state open --search "$title in:title" --json number --jq '.[0].number')
+          if [ -n "$existing" ]; then gh issue comment "$existing" --body "$body"; else gh issue create --title "$title" --body "$body"; fi
