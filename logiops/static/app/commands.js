@@ -115,7 +115,7 @@ export function createCommands({
       if (id) {
         const item = state.inbox.find((entry) => entry.incident_id === id);
         const next = state.snapshot?.executions.length ? "Say “show the result” to see what ran."
-          : selectors.visibleApproval(state.snapshot) ? "Press Execute or say “execute it” when you're ready."
+          : selectors.visibleApproval(state.snapshot) ? "Say “execute it” when you're ready."
           : investigated() ? "Say “show the plans” or “approve the recommended plan”." : "Ask me what's happening, or say “investigate”.";
         say("assistant", `${command === "open" ? "Opened" : "Here's"} ${id}: ${item?.title || "incident"}. ${next}`);
         onSurface("incident");
@@ -248,9 +248,9 @@ export function createCommands({
         const standing = selectors.visibleApproval(state.snapshot);
         if (standing) {
           const approvedLabel = state.snapshot.plans.find((item) => item.id === standing.plan_id)?.label || standing.plan_id;
-          say("assistant", plan?.id === standing.plan_id ? `“${approvedLabel}” is already approved. Press Execute or say “execute it” when you're ready.`
+          say("assistant", plan?.id === standing.plan_id ? `“${approvedLabel}” is already approved. Say “execute it” when you're ready.`
             : `“${approvedLabel}” is already approved for this data, so I can't approve another plan. Say “withdraw the approval” first if you want to choose again.`,
-          undefined, plan?.id === standing.plan_id ? "Already approved. Press Execute when you're ready." : "Another plan is already approved. Say “withdraw the approval” to choose again.");
+          undefined, plan?.id === standing.plan_id ? "Already approved. Say execute it when you're ready." : "Another plan is already approved. Say “withdraw the approval” to choose again.");
           return;
         }
         if (!plan) {

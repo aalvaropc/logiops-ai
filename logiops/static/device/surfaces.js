@@ -230,7 +230,7 @@ export function chipsFor(surface, { snapshot, incidentId, inbox = [], plan = nul
     case "plans":
       if (executed) return [...pay, back];
       if (approved) return [execute, ...pay, ["Why this plan?", "Why is that the recommended plan?"], back];
-      return [approve, ["Why this plan?", "Why is that the recommended plan?"], ["Show the incident", "Show the incident"], ...pay, back];
+      return [approve, ["Why this plan?", "Why is that the recommended plan?"], ["Show the incident", "Show the incident"], back];
     case "receipt":
       if (executed) return [...result, ...openNext, back];
       return approved ? [execute, back] : [back];
