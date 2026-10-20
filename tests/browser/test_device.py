@@ -475,6 +475,49 @@ def test_the_agent_stage_shows_the_work_before_the_answer_then_gives_way(page, r
     assert page_errors == []
 
 
+SPEECH_STUB = """(() => {
+  window.spokenLines = [];
+  class Utterance extends EventTarget { constructor(text) { super(); this.text = text; } }
+  const synth = {
+    speaking: false, pending: false, getVoices: () => [], cancel() {},
+    speak(utterance) { window.spokenLines.push(utterance.text); setTimeout(() => utterance.dispatchEvent(new Event("end")), 0); },
+  };
+  Object.defineProperty(window, "speechSynthesis", { configurable: true, get: () => synth });
+  window.SpeechSynthesisUtterance = Utterance;
+})();"""
+
+
+def test_a_held_reply_stays_silent_once_the_voice_is_off_or_the_next_question_is_asked(page, replay_server, page_errors, reset_demo):
+    page.add_init_script(SPEECH_STUB)
+    page.goto(f"{replay_server}/demo#SHIP-433")
+    expect(page.locator("#connection")).to_have_text("Connected")
+    orb, stage = page.locator("#device-orb"), page.locator("#agent-stage")
+    orb.click()
+    expect(orb).to_have_attribute("aria-pressed", "true")
+    say_on_device(page, "open SHIP-421")
+    assert page.evaluate("window.spokenLines.length") == 1, "the voice is on and a reply is read"
+
+    page.fill("#ask-input", "What's happening with SHIP-433, and which plan should we choose?")
+    page.click("#ask")
+    expect(stage).to_have_attribute("data-phase", "replay")
+    orb.click()
+    expect(orb).to_have_attribute("aria-pressed", "false")
+    expect(stage).to_be_hidden(timeout=6000)
+    expect(page.locator("#device-spoken")).to_contain_text("Fly the hospital order")
+    expect(page.locator(".talk")).to_have_attribute("data-voice", "ready")
+
+    orb.click()
+    page.fill("#ask-input", "What's happening with SHIP-433, and which plan should we choose?")
+    page.click("#ask")
+    expect(stage).to_have_attribute("data-phase", "replay")
+    reply = say_on_device(page, "What's happening with SHIP-421?")
+    assert "hospital" not in reply
+    page.wait_for_timeout(300)
+    spoken = page.evaluate("window.spokenLines")
+    assert not any("hospital" in line for line in spoken), spoken
+    assert len(spoken) == 2, spoken
+    assert page_errors == []
+
 
 def test_a_touch_echo_show_reads_larger_type_without_scrolling(browser, replay_server, reset_demo):
     context = browser.new_context(viewport={"width": 1280, "height": 800}, has_touch=True, is_mobile=True)

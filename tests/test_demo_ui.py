@@ -363,7 +363,7 @@ def test_the_demo_shows_preferences_briefings_and_speaks_the_short_line():
     assert '"Your preference", "badge preference"' in script and "never approve" in script
     assert '"badge preference", "Your preference"' in (root / "device" / "render.js").read_text()
     assert "if (speechOn()) speak(spoken || window.LogiOpsMarkdown.plainText(text));" in script
-    assert "if (speaking) stage.whenGone(() => speak(spoken || markdown.plainText(text)));" in device
+    assert "if (voiced) speak(spoken || markdown.plainText(text));" in device and "hush === hushes && speechOn()" in device
     assert "const utterance = new win.SpeechSynthesisUtterance(line);" in (Path(__file__).resolve().parents[1] / "logiops" / "static" / "app" / "voice.js").read_text()
     assert "run.spoken, badges.checkBadge(run));" in commands
     assert "operator_preferences" in view and '"Your preference"' in view

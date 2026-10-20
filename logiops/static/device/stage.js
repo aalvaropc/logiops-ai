@@ -27,7 +27,7 @@ export function createStage({ root, surface, quiet = [], document: doc = globalT
   }
 
   function ask([lead, subject]) {
-    reset();
+    clear();
     root.style.top = `${surface.offsetTop}px`;
     root.style.height = `${surface.offsetHeight}px`;
     line.replaceChildren(subject ? `${lead} ` : lead);
@@ -90,6 +90,7 @@ export function createStage({ root, surface, quiet = [], document: doc = globalT
       return;
     }
     const streamed = live > 0;
+    const hold = reducedMotion() ? 0 : HOLD_MS;
     root.dataset.phase = "replay";
     if (streamed) {
       steps.slice(live).forEach((item, offset) => schedule(item, live + offset));
@@ -97,7 +98,7 @@ export function createStage({ root, surface, quiet = [], document: doc = globalT
       if (check) later(() => stations.append(station(check.text, check.passed ? "check" : "check failed", 0)), wait);
       meta.textContent = caption(true);
       meta.style.setProperty("--step", "0");
-      later(leave, wait + HOLD_MS);
+      later(leave, wait + hold);
       return;
     }
     reset();
@@ -105,7 +106,7 @@ export function createStage({ root, surface, quiet = [], document: doc = globalT
     if (check) stations.append(station(check.text, check.passed ? "check" : "check failed", steps.length));
     meta.textContent = caption(false);
     meta.style.setProperty("--step", String(stations.children.length));
-    later(leave, (reducedMotion() ? 0 : stations.children.length * CADENCE_MS) + HOLD_MS);
+    later(leave, (reducedMotion() ? 0 : stations.children.length * CADENCE_MS) + hold);
   }
 
   function settle() {
