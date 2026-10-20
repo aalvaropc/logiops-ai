@@ -13,11 +13,13 @@ def test_every_screenshot_is_referenced_and_present():
     for path in referenced:
         assert (ROOT / path).is_file(), path
     present = {f"docs/img/{path.name}" for path in (ROOT / "docs" / "img").glob("*.png")}
-    assert present >= referenced
+    assert present == referenced, "every image in docs/img is in the README, and only those"
     assert all((ROOT / path).stat().st_size < 1_000_000 for path in present), "a screenshot is larger than 1 MB"
     script = (ROOT / "scripts" / "screenshots.py").read_text()
-    for name in ("device-home", "device-plans", "device-confirm", "device-result", "console", "device-phone"):
+    for name in ("device-home", "device-agent", "device-plans", "device-journey", "device-confirm", "device-result", "console", "device-phone"):
         assert f'"{name}"' in script, name
+    product = (ROOT / "PRODUCT.md").read_text()
+    assert all(Path(path).name in product for path in present), "PRODUCT.md lists the current screenshots"
 
 
 def test_the_docs_name_the_device_the_console_strands_metrics_and_packs():

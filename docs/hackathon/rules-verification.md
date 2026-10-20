@@ -33,9 +33,3 @@ settle it; the drafted question is ready to send to the organizers.
    Ask. Moot if the repository is public at submission time, which is the cheapest
    way to close it. Otherwise invite `testing@devpost.com` and the six reviewers
    named in the rules; invitations can expire, so re-check before the deadline.
-
-7. **Is the same project allowed in two hackathons (D0)?**
-   Not covered by the rules text. The two submissions are separate repositories
-   with different products around the same synthetic scenario; see `decisions.md`
-   (D0). Draft: "May a builder enter two different hackathons with separate
-   projects that share a synthetic data set?"

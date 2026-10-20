@@ -6,21 +6,21 @@ stopped departures, an import held at customs, two orders competing for the
 same stock — on a simulated Alexa+ device. For each incident it reads orders,
 inventory and carrier quotes through MCP tools, calculates every feasible plan,
 recommends one by cost, ETA and order priority, and reads it back; a person
-approves with one "yes", the agent executes and verifies the result, and can
-book and pay the carriers after reading the price back. Every answer is checked
-against the incident's data before it is shown.
+approves with one "yes", then the system executes the approved plan and
+verifies the result, and can book and pay the carriers after reading the price
+back. Every answer is checked against the incident's data before it is shown.
 
 ![The simulated Alexa+ device at home: 12 critical units at risk in large red type, and the four open incidents as light lanes that run to their promise and trail their delay in dashed red](docs/img/device-home.png)
 
-| The agent at work: each MCP tool call lit as it returns | The plans: the MCP App card with its decision field | The shipment's journey with the chosen plan |
+| The agent at work: each MCP tool call lit as it returns | The plans: the MCP App card with its decision field | The shipment's journey with the agent's pick |
 |---|---|---|
-| ![The agent stage: "Asking the agent about SHIP-433", five tool-call stations on a lit rail and the data check, captioned as a replay of a recorded run](docs/img/device-agent.png) | ![The plans card: every plan placed by delay and cost, the pick lit with a ring, the plan that leaves the hospital late as a hollow red ring](docs/img/device-plans.png) | ![The incident with the agent's pick: the route from Lima to Cusco with the air leg as a white trail and the late ground leg dashed red, 12 critical units still at risk until approval, the pick keeping them on time, and each order on one time scale](docs/img/device-journey.png) |
+| ![The agent stage: "Asking the agent about SHIP-433", five tool-call stations on a lit rail and the data check, captioned as a replay of a recorded run](docs/img/device-agent.png) | ![The plans card: every plan placed by delay and cost, the pick lit with a ring, the two plans that leave the hospital late as hollow red rings](docs/img/device-plans.png) | ![The incident with the agent's pick: the route from Lima to Cusco with the air leg as a white trail and the late ground leg dashed red, 12 critical units still at risk until approval, the pick keeping them on time, and each order on one time scale](docs/img/device-journey.png) |
 
 | Approve with one yes | The result, verified | The device on a phone |
 |---|---|---|
 | ![Confirmation: $390 in large type, each order's trail to its promise, Yes and No](docs/img/device-confirm.png) | ![Result: the executed route and 12 critical units on time, with the decision times](docs/img/device-result.png) | ![The device on a phone: SHIP-433 with 12 critical units at risk and the booked route dashed red](docs/img/device-phone.png) |
 
-![The operator console: the same incidents in full, with the session's measured outcomes, the decision field beside the plans and the audit trail](docs/img/console.png)
+![The operator console: the session's measured outcomes in one row, the incident inbox with SHIP-433 executed and verified, its shipment details, and the agent panel offering to reset the incident](docs/img/console.png)
 
 **Who it is for (illustrative):** the exceptions desk of a mid-size regional
 distributor that ships electronics and medical supplies from its hubs to
@@ -44,15 +44,18 @@ Strands Agents), for the two-order carrier outage SHIP-433:**
 
 | What | Measured |
 |---|---|
-| From the question to a grounded recommendation | 12.2 s, 5 MCP calls, 4 priced plans, 5,941 tokens, one model call |
+| From the question to a grounded recommendation | 12.2 s, 5 MCP calls, 4 priced plans, 5,941 tokens, one live agent run |
 | Tool calls streamed to the device as they return | first at 2.6 s, last at 5.7 s; the answer at 12.5 s |
 | From the first investigation to the verified execution | 13.1 s |
 | Outcome of the chosen plan | 12 critical units on time, 18 standard units 8 h late, $390 extra |
 | Booking read back and charged once | $466.10 with tax, receipt served |
 | Cost of the run | about US$0.04 of Bedrock usage (the prompt and the Agent Skill are cached after the first turn) |
 
-`GET /metrics` reports these figures from the recorded events, per incident and
-per session; nothing above is typed in by hand. The same pattern fits any
+`GET /metrics` reports the decision and execution times, the outcome of the
+chosen plan, the booking, and the model calls and tokens, per incident and per
+session, from the recorded events. The answer and streaming times are what the
+client measured through CloudFront, and the cost is the run's tokens at
+Bedrock's prices. The same pattern fits any
 exceptions desk where an agent proposes and a person decides: payments
 operations, on-call incidents, returns.
 
@@ -70,11 +73,11 @@ Challenge. Runtime: Amazon Bedrock.
 
 | Tag | Devpost | Live demo | Open-source library |
 |---|---|---|---|
-| `amazon-v1.0` (to be tagged on 2026-10-22) | _pending_ | Deployed on AWS; URL, demo user and token in the private testing instructions (hosting is optional, D-AMZ-1) | [`aalvaropc/mcp-apps-web-host`](https://github.com/aalvaropc/mcp-apps-web-host), MIT: the MCP Apps host bridge and sandbox proxy used here (public from 2026-10-20) |
+| `amazon-v1.0` (to be tagged on 2026-10-22) | _pending_ | <https://dir4g4n7eq982.cloudfront.net/demo>, deployed on AWS; the demo user and the operator token are in the private testing instructions (hosting is optional, D-AMZ-1) | [`aalvaropc/mcp-apps-web-host`](https://github.com/aalvaropc/mcp-apps-web-host), MIT: the MCP Apps host bridge and sandbox proxy used here |
 
-The live demo shares a daily budget of 40 model calls (`LOGIOPS_DAILY_MODEL_CALLS`);
-when it is spent, replies come from the scripted replay until midnight (UTC-05:00),
-and say so.
+The deployment sets a daily budget of 40 model calls (`LOGIOPS_DAILY_MODEL_CALLS`)
+shared by the whole live demo; when it is spent, replies come from the scripted
+replay until midnight (UTC-05:00), and say so.
 
 ## For judges
 
@@ -100,12 +103,13 @@ npx @modelcontextprotocol/inspector --cli https://dir4g4n7eq982.cloudfront.net/m
 ```
 
 The first lists the 12 tools; the second returns SHIP-433's record. Without the
-header, a read tool still answers and a write tool such as `execute_approved_plan`
-returns `401` with the OAuth challenge; Inspector's web UI (`npx
-@modelcontextprotocol/inspector`) then offers to sign in, which opens Amazon
-Cognito: the client id and scopes are the public ones `GET /auth/config` reports,
-and Inspector's callback is registered. Locally, point the same commands at
-`http://127.0.0.1:8000/mcp`.
+header you are a guest: the read tools still answer, and execute, quote and book
+(`execute_approved_plan`, `quote_carrier_booking`, `book_carrier`) refuse with
+`401` and the OAuth challenge, which the CLI reports as `auth_required`. To sign
+in from Inspector's web UI (`npx @modelcontextprotocol/inspector`), enter the
+client id and the scopes that `GET /auth/config` reports in its OAuth settings;
+Inspector's callback is registered, and signing in opens Amazon Cognito.
+Locally, point the same commands at `http://127.0.0.1:8000/mcp`.
 
 ## Architecture
 
@@ -153,7 +157,7 @@ More detail in `docs/architecture.md`.
 | `LOGIOPS_MCP_LIMIT_PER_MINUTE` | MCP and memory requests per viewer per minute | `60` |
 | `LOGIOPS_SCENARIO_PACK` | path of a JSON scenario pack to register at start (see *Bring your own incidents*) | unset |
 | `LOGIOPS_OTEL` | `1` exports the agent's OpenTelemetry spans (Strands Agents) to `OTEL_EXPORTER_OTLP_ENDPOINT` when set, to the console otherwise; `/healthz` reports `telemetry` | unset |
-| `LOGIOPS_DAILY_MODEL_CALLS` | live model calls per day (UTC-05:00) for the whole demo; each request reserves its run's maximum and releases what it did not use, and a run that no longer fits answers from replay with `fallback: "daily_budget"` | `40` |
+| `LOGIOPS_DAILY_MODEL_CALLS` | live model calls per day (UTC-05:00) for the whole demo; each request reserves its run's maximum and releases what it did not use, and a run that no longer fits answers from replay with `fallback: "daily_budget"` | `150`; the AWS deployment sets `40` |
 | `AWS_REGION`, `BEDROCK_MODEL_ID` | Bedrock region and model profile | `us-east-1`, `global.anthropic.claude-sonnet-4-6` |
 | `LOGIOPS_VOICE` | `polly` (Amazon Polly) or `browser` (the browser's own voice) | `polly` with `bedrock`, `browser` with `replay` |
 | `LOGIOPS_POLLY_VOICE`, `LOGIOPS_POLLY_ENGINE` | Polly voice and engine | `Ruth`, `generative` |
@@ -489,9 +493,10 @@ receipt (`logiops/booking.py`):
 `book_carrier` is destructive, idempotent and model-only. `/demo/reset`
 forgets the bookings, and the follow-up check accepts the booking's amounts.
 
-In the demo, "book it" (or the "Book and pay" chip) reads the plan and the full
-price back before anything happens. If the plan is not approved yet, a single
-"yes" approves it and pays, because the read-back named both. The reply gives
+In the demo, "book it" reads the plan and the full price back before anything
+happens; once a plan is approved, the "Book and pay" chip does the same. If the
+plan is not approved yet, a single "yes" approves it and pays, because the
+read-back named both. The reply gives
 the written confirmation and speaks the number character by character. The
 receipt is a card on the device and a panel on the console. Other commands:
 - "no" drops the purchase;
