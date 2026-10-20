@@ -3,7 +3,7 @@ export const MCP_APP_MIME = "text/html;profile=mcp-app";
 
 export function createMcpAppHost({
   window: win = globalThis.window, sandboxOrigin, hostOrigin, proxyPath = "/mcp-app/sandbox.html", slot, mcp,
-  uriPrefix = "ui://", mime = MCP_APP_MIME, protocol = MCP_APPS_PROTOCOL, hostInfo = { name: "MCP Apps web host", version: "1.0.0" },
+  uriPrefix = "ui://", mime = MCP_APP_MIME, protocol = MCP_APPS_PROTOCOL, hostInfo = { name: "MCP Apps web host", version: "1.1.0" },
   hostContext = () => ({}), onMessage = () => false, onHide = () => {}, frameTitle = "MCP App", frameId = "mcp-app-frame",
   minHeight = 80, maxHeight = 640, teardownTimeout = 500, rejectMessage = "The host did not accept the message",
 } = {}) {
@@ -108,7 +108,10 @@ export function createMcpAppHost({
       const height = Number(msg.params?.height);
       if (Number.isFinite(height)) target.style.height = `${Math.min(Math.max(height, minHeight), maxHeight)}px`;
     } else if (msg.method === "ui/message") {
-      reply(onMessage(msg.params) ? { result: {} } : { error: { code: -32000, message: rejectMessage } });
+      const view = current;
+      Promise.resolve().then(() => onMessage(msg.params)).catch(() => false).then((accepted) => {
+        if (current === view) reply(accepted ? { result: {} } : { error: { code: -32000, message: rejectMessage } });
+      });
     } else {
       reply({ error: { code: -32601, message: "Method not supported by this host" } });
     }

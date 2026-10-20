@@ -104,6 +104,7 @@ def test_navigation_is_a_closed_command_and_noise_is_not_sent_to_the_agent():
     noise = {
         "asdf qwer": True, "hmm": True, "12345": True, "...": True, "SHIP-433 zzz": False, "thanks": False, "why?": False,
         "delays": False, "Fly the hospital order": False, "what is going on": False, "no": False, "status": False,
+        "again": True, "again?": True, "asdf again": True, "investigate": False, "recheck": False, "refresh": False,
     }
     got = json.loads(_intent(f"console.log(JSON.stringify({json.dumps(list(noise))}.map(m.isNoise)))"))
     assert dict(zip(noise, got)) == noise
@@ -418,6 +419,7 @@ def test_the_device_page_is_the_full_screen_alexa_experience():
     order = [html.index(f"/assets/{name}") for name in ("markdown.js", "intent.js", "route.js", "journey.js", "device/main.js")]
     assert order == sorted(order)
     assert "createElementNS(SVG" in render and 'viewBox: `0 0 ${journey.WIDE.width} ${journey.WIDE.height}`, role: "img"' in render
+    assert 'if (incidentBand(snapshot)?.[0] === "late") figure.classList.add("late");' in render, "a decision that leaves critical units late reads red"
     for hook in ('device("voice", "request")', 'device("voice", "error")', 'device("voice", "listen-start")',
                  'device("voice", "listen-end")', 'device("reply", text, spoken, speaking)', 'device("heard", text)',
                  'onSurface: (name, payload) => showSurface(name, payload)', 'onReadback: (pending, plan) => showSurface("confirm"',

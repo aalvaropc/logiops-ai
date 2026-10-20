@@ -10,6 +10,8 @@ test("badges and notes follow the grounding check and the budget fallback", () =
   assert.deepEqual(checkBadge({ evaluations: [{}, {}], grounded: true }), { passed: true, text: "Checked against the data after one revision" });
   assert.deepEqual(checkBadge({ evaluations: [{ issues: ["$99 is not in the data"] }], grounded: false }),
     { passed: false, text: "Did not pass the data check: $99 is not in the data" });
+  assert.equal(checkBadge({ evaluations: [{ issues: ["These times do not match the incident's data or any plan (Lima time): Oct 12, 16:00."] }], grounded: false }).text,
+    "Did not pass the data check: These times do not match the incident's data or any plan (local time): Oct 12, 16:00.");
   assert.match(checkNote({ evaluations: [{}], grounded: false }), /did not pass the automatic check/);
   assert.equal(checkNote({ evaluations: [{}], grounded: true }), null);
   assert.match(fallbackNote({ fallback: "daily_budget" }), /live model budget is used/);

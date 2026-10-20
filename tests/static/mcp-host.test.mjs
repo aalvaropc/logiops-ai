@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { moduleUrl } from "./helpers.mjs";
 
 const { createMcpAppHost, MCP_APPS_PROTOCOL } = await import(moduleUrl("app/mcp-host.js"));
+const settled = () => new Promise((resolve) => setImmediate(resolve));
 const SANDBOX = "http://localhost:8000";
 const HOST = "http://127.0.0.1:8000";
 
@@ -122,11 +123,49 @@ test("size changes are clamped and ui/message goes to the host's handler", async
   assert.equal(frame.style.height, "300px");
   fromView({ jsonrpc: "2.0", id: 7, method: "ui/message", params: { role: "user", content: { type: "text", text: "Select plan p1" } } });
   fromView({ jsonrpc: "2.0", id: 8, method: "ui/message", params: { role: "user", content: { type: "text", text: "Select plan nope" } } });
+  await settled();
   assert.deepEqual(frame.sent.map((item) => item.message), [
     { jsonrpc: "2.0", id: 7, result: {} },
     { jsonrpc: "2.0", id: 8, error: { code: -32000, message: "The host did not accept the message" } },
   ]);
   assert.equal(seen.length, 2);
+});
+
+test("ui/message may be answered later; a failing handler is a refusal, and an answer for a replaced view is dropped", async () => {
+  const waiting = [];
+  const asked = (id, text) => ({ jsonrpc: "2.0", id, method: "ui/message", params: { role: "user", content: { type: "text", text } } });
+  const { frame, fromView, host, slot } = await shown({
+    onMessage: (params) => {
+      const { text } = params.content;
+      if (text === "later") return new Promise((resolve) => waiting.push(resolve));
+      if (text === "boom") throw new Error("handler failed");
+      return Promise.resolve(text === "yes");
+    },
+  });
+  fromView(asked(1, "yes"));
+  fromView(asked(2, "boom"));
+  fromView(asked(3, "no"));
+  await settled();
+  const refused = { code: -32000, message: "The host did not accept the message" };
+  assert.deepEqual(frame.sent.map((item) => item.message).sort((a, b) => a.id - b.id), [
+    { jsonrpc: "2.0", id: 1, result: {} },
+    { jsonrpc: "2.0", id: 2, error: refused },
+    { jsonrpc: "2.0", id: 3, error: refused },
+  ]);
+  fromView(asked(4, "later"));
+  await settled();
+  assert.equal(frame.sent.length, 3, "nothing is said before the handler decides");
+  waiting.shift()(true);
+  await settled();
+  assert.deepEqual(frame.sent.at(-1).message, { jsonrpc: "2.0", id: 4, result: {} });
+  fromView(asked(5, "later"));
+  await host.show({ toolName: "investigate_incident", input: {}, result: {} });
+  const next = slot.children[0];
+  assert.notEqual(next, frame);
+  waiting.shift()(true);
+  await settled();
+  assert.equal(frame.sent.length, 4);
+  assert.equal(next.sent.length, 0, "the new view never gets the old view's answer");
 });
 
 test("host context changes reach only an initialized view", async () => {

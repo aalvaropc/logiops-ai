@@ -169,6 +169,8 @@ def test_the_view_follows_the_host_context():
     assert 'message.method === "ui/notifications/host-context-changed") applyContext(message.params)' in card
     assert "applyContext(result?.hostContext)" in card and "root.dataset.theme" in card
     assert ':root[data-theme="light"]' in card and "color-scheme: light" in card
+    light = card.split(':root[data-theme="light"] {')[1].split("}")[0]
+    assert "--accent: #0B4F9C;" in light and "--ok: #0B4F9C;" in light, "on time reads as lit in the light theme, as it does in the dark one"
     assert "var(--color-background-primary" in card and "HOST_STYLE.test(name)" in card
     assert "safeAreaInsets" in card and 'classList.toggle("compact"' in card
     assert "const PAGE = 5;" in card and "See ${hidden} more plan" in card

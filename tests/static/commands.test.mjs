@@ -53,6 +53,7 @@ function harness({ snapshot = investigated(), responses = {}, auth = { enabled: 
     savePreferences: async (update) => { events.push(`save:${JSON.stringify(update)}`); store.state.snapshot.operator_preferences = { max_cost_usd: update.max_cost_usd }; },
     linkAccount: async () => events.push("link"), signOut: () => { events.push("signOut"); store.set({ session: null }); },
     onSurface: (name) => events.push(`surface:${name}`),
+    investigate: (path, body) => { events.push(`investigate:${path}`); return request(path, "POST", body); },
   });
   const last = () => said.at(-1);
   return { commands, store, said, calls, events, purchase, last };
@@ -101,7 +102,7 @@ test("an approval is read back and only an explicit yes approves; execute refuse
   assert.deepEqual(h.store.state.pendingApproval, { planId: plans[2].id, sourceVersion: 1 });
   await h.commands.handle("yes");
   assert.ok(h.events.includes("approve:split-express"));
-  assert.equal(h.last().text, "Approved “Fulfill local stock and send the rest express” on the current data. Nothing has run yet: say “execute it” or press Execute when you're ready.");
+  assert.equal(h.last().text, "Approved “Fulfill local stock and send the rest express” on the current data. Nothing has run yet: say “execute it” when you're ready.");
   assert.equal(h.store.state.awaitingExecute, true);
   await h.commands.handle("execute the wait plan");
   assert.match(h.last().text, /The approved plan is “Fulfill local stock and send the rest express”, so nothing was executed\. Approve “Keep the delayed shipment” first/);
@@ -136,6 +137,7 @@ test("a question investigates or follows up, shows the card for a fresh investig
   const fresh = harness({ snapshot: { ...investigated(), events: [] }, responses });
   await fresh.commands.handle("What's happening with SHIP-421?");
   assert.equal(fresh.calls[0].path, "/incidents/SHIP-421/agent/investigate");
+  assert.ok(fresh.events.includes("investigate:/incidents/SHIP-421/agent/investigate"), "an investigation goes through the streaming hook");
   assert.equal(fresh.last().meta, "investigation · 2 MCP calls · replay mode · 0 tokens");
   assert.deepEqual(fresh.last().check, { passed: false, text: "Did not pass the data check: $99 is not in the data" });
   assert.ok(fresh.events.includes("showMcpApp") && fresh.events.includes("noteCheck") && fresh.events.includes("device:trace"));
@@ -145,6 +147,7 @@ test("a question investigates or follows up, shows the card for a fresh investig
   const follow = harness({ responses });
   await follow.commands.handle("Why not the cheaper one?");
   assert.equal(follow.calls[0].path, "/incidents/SHIP-421/agent/ask");
+  assert.ok(!follow.events.some((event) => event.startsWith("investigate:")), "a follow-up does not stream");
   assert.deepEqual(follow.calls[0].body.history, []);
   assert.equal(follow.last().meta, "follow-up · 0 MCP calls · replay mode · daily live budget used · 0 tokens");
   assert.ok(follow.events.includes("noteFallback") && !follow.events.includes("showMcpApp"));
@@ -227,6 +230,8 @@ test("a line with no words to act on asks again instead of calling the agent", a
   assert.equal(h.last().text, "I didn't catch that. Ask “any delays today?”, or ask what's happening with SHIP-421.");
   assert.equal(h.last().meta, "not understood");
   await h.commands.handle("12345");
+  await h.commands.handle("again?");
+  assert.equal(h.last().meta, "not understood");
   assert.equal(h.calls.length, 0);
   assert.equal(h.store.state.pendingApproval, null);
 });

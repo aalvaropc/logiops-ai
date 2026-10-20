@@ -6,7 +6,7 @@ export const BUDGET_NOTE = "Today's live model budget is used, so answers come f
 export function checkBadge(run) {
   if (!run.evaluations?.length) return null;
   if (!run.grounded) {
-    const issue = run.evaluations[run.evaluations.length - 1].issues[0] || "";
+    const issue = (run.evaluations[run.evaluations.length - 1].issues[0] || "").replace("(Lima time)", "(local time)");
     return { passed: false, text: `Did not pass the data check: ${issue}` };
   }
   return { passed: true, text: run.evaluations.length > 1 ? "Checked against the data after one revision" : "Checked against the data" };
