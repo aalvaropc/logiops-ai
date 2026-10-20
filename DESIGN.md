@@ -218,7 +218,7 @@ A near-black ground, warm headlight white for everything that is good or chosen,
 - **Spoken** (700, `--type-spoken`, 1.3): the assistant's spoken sentence in the dock, clamped to 2 lines (3 below 480px, 1 in short landscape).
 - **Lead** (600-700, `--type-lead`): hero captions, plan names, the brand.
 - **Stat** (800, `--type-stat`): queue IDs and plan costs.
-- **Body / Meta** (`--type-body`, `--type-meta`): text and secondary facts. Both drop to 15/14px between 768 and 1023px and return to 16/15px on fine-pointer desktops.
+- **Body / Meta** (`--type-body`, `--type-meta`): text and secondary facts. Both drop to 15/14px between 768 and 1023px and return to 16/15px on fine-pointer desktops. A touch screen of 1024px or more (a real Echo Show, read from arm's length) uses 18/16px, and tags 14px.
 - **Tag** (800, `--type-tag`, 0.06em, uppercase): tags, verdicts, lane keys, the lifecycle stop names (700, sentence case).
 
 ### Named Rules

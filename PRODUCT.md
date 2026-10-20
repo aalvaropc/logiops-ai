@@ -12,7 +12,7 @@ web
 illustrative, not a customer: the exceptions desk of a mid-size regional
 distributor that ships electronics and medical supplies from its hubs to
 hospitals and stores in several cities. On a bad morning several shipments
-slip at once. Today that person opens three or four systems per incident,
+slip at once. Today that person opens three systems per incident,
 phones carriers, and decides in a spreadsheet. Their job is to:
 
 - decide which exception needs them first;
@@ -68,8 +68,8 @@ Success means:
     answer that still fails is shown flagged, never hidden.
 - **The same MCP tools serve a person's assistant and an autonomous agent.**
   The server speaks MCP over Streamable HTTP, with OAuth 2.1, MCP Apps and an
-  Agent Skill. Connecting the real Alexa+ is a registration step, not a
-  rewrite.
+  Agent Skill. Connecting the real Alexa+ is mostly registration and
+  configuration (see `docs/hackathon/alexa-plus-readiness.md`), not a rewrite.
 
 ## Operating Context
 
@@ -160,22 +160,23 @@ Success means:
 
 ## Evidence on Hand
 
-- **Measured on the deployed demo (2026-10-12, live Bedrock).** The figures are
-  in the README:
-  - a grounded recommendation in 13.6 s, with 5 MCP calls;
-  - 10.0 s from the first investigation to the approval;
-  - 10.8 s to the verified execution;
-  - 12 critical units on time and 18 standard units late, for $390 extra;
+- **Measured on the deployed demo (2026-10-19, live Bedrock through Strands
+  Agents), for SHIP-433.** The figures are in the README:
+  - a grounded recommendation in 12.2 s, with 5 MCP calls in one live agent run;
+  - the tool calls streamed to the device from 2.6 s to 5.7 s, the answer at
+    12.5 s;
+  - 13.1 s from the first investigation to the verified execution;
+  - 12 critical units on time and 18 standard units 8 h late, for $390 extra;
   - a $466.10 booking charged once.
-- **Measured again on 2026-10-17.** On the deployed `b403c41`, the CloudFront
-  walkthrough answered in 13.0 s and reached the decision in 9.2 s, with axe at
-  0 on desktop and phone.
-- **Live figures.** `GET /metrics` reports these figures from the recorded
+- **Earlier runs.** 13.6 s to the recommendation on 2026-10-12; 13.0 s on
+  2026-10-17, with axe at 0 on desktop and phone.
+- **Live figures.** `GET /metrics` reports the decision and execution times,
+  the outcomes, the bookings, and the model calls and tokens from the recorded
   events.
 - **Screens.** Screenshots generated in replay are in `docs/img/`:
-  `device-home.png`, `device-incident.png`, `device-plans.png`,
-  `device-confirm.png`, `device-result.png`, `device-phone.png` and
-  `console.png`.
+  `device-home.png`, `device-agent.png`, `device-plans.png`,
+  `device-journey.png`, `device-confirm.png`, `device-result.png`,
+  `device-phone.png` and `console.png`.
 - **Scenario and decisions.**
   - The synthetic scenario is described in `docs/demo-scenario.md`.
   - Decisions with their evidence are in `docs/hackathon/decisions.md`.

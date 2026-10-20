@@ -55,7 +55,7 @@ built; see also `amazon-friction-log.md` for discrete problems. Numbers marked
 
 ## Amazon Cognito (managed login, OAuth 2.1 with PKCE)
 
-- **Used for:** sign-in on the device, the console and MCP clients; scopes `incidents.operate` and `bookings.pay` on a resource server; the API proxies the token endpoint and publishes RFC 9728 and RFC 8414 metadata itself.
+- **Used for:** sign-in on the device, the console and MCP clients; scopes `incidents.operate` and `bookings.write` on a resource server; the API proxies the token endpoint and publishes RFC 9728 and RFC 8414 metadata itself.
 - **Worked well:** the managed-login domain and the public PKCE client took one Terraform apply; `check_oauth.py` passes 4/4 against the deployment and a real sign-in was tested on 2026-10-12.
 - **Needs work:** the OIDC discovery document does not advertise PKCE and access tokens carry no `aud` (friction 2026-10-11), so an MCP client cannot trust Cognito's own metadata.
 

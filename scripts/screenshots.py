@@ -58,7 +58,14 @@ def settled(page) -> None:
     page.wait_for_timeout(1500)
 
 
+def checked(response, what: str) -> None:
+    """Raise when the request behind the response did not succeed."""
+    if response is None or not response.ok:
+        raise RuntimeError(f"{what} failed: {response.status if response else 'no response'}")
+
+
 def card_ready(page) -> None:
+    """Wait for the MCP App card to show its picked plan, or raise."""
     for _ in range(50):
         outer = next((frame for frame in page.frames if "/mcp-app/sandbox.html" in frame.url), None)
         inner = outer.child_frames[0] if outer and outer.child_frames else None
@@ -69,6 +76,18 @@ def card_ready(page) -> None:
             except Exception:
                 pass
         page.wait_for_timeout(200)
+    raise RuntimeError("the MCP App card never rendered a picked plan")
+
+
+def stage_shown(page) -> None:
+    """Raise unless the agent stage is on screen with its stations and the check."""
+    stage = page.locator("#agent-stage")
+    shown = stage.is_visible() and stage.evaluate(
+        """(root) => !root.classList.contains("leaving")
+            && root.querySelectorAll(".agent-stations li:not(.check)").length > 0
+            && root.querySelector(".agent-stations li.check") !== null""")
+    if not shown:
+        raise RuntimeError("the agent stage is not on screen with its stations and check")
 
 
 def capture(base: str, out: Path) -> list[Path]:
@@ -77,24 +96,32 @@ def capture(base: str, out: Path) -> list[Path]:
     out.mkdir(parents=True, exist_ok=True)
     shots: list[Path] = []
 
-    def shot(page, name: str, **options) -> None:
+    def shot(page, name: str, ready=None, **options) -> None:
         path = out / f"{name}.png"
         page.wait_for_timeout(400)
+        if ready:
+            ready(page)
         page.screenshot(path=str(path), **options)
         shots.append(path)
+
+    def reset(page) -> None:
+        checked(page.request.post(f"{base}/demo/reset"), "POST /demo/reset")
+
+    def visit(page, path: str) -> None:
+        checked(page.goto(f"{base}{path}"), f"GET {path}")
 
     with sync_playwright() as playwright:
         browser = playwright.chromium.launch()
         phone = browser.new_page(viewport=PHONE)
-        phone.request.post(f"{base}/demo/reset")
-        phone.goto(f"{base}/demo#SHIP-433")
+        reset(phone)
+        visit(phone, "/demo#SHIP-433")
         phone.wait_for_function("document.querySelector('#connection').textContent === 'Connected'")
         phone.wait_for_selector('[data-surface="incident"] #device-map')
         settled(phone)
         shot(phone, "device-phone")
         page = browser.new_page(viewport=DESKTOP)
-        page.request.post(f"{base}/demo/reset")
-        page.goto(f"{base}/demo")
+        reset(page)
+        visit(page, "/demo")
         page.wait_for_function("document.querySelector('#connection').textContent === 'Connected'")
         page.wait_for_selector(".session-strip")
         settled(page)
@@ -106,7 +133,7 @@ def capture(base: str, out: Path) -> list[Path]:
         page.click("#ask")
         page.wait_for_selector("#agent-stage .agent-stations li.check", timeout=30000)
         page.wait_for_timeout(500)
-        shot(page, "device-agent")
+        shot(page, "device-agent", ready=stage_shown)
         settled(page)
         card_ready(page)
         page.wait_for_timeout(600)
@@ -125,11 +152,11 @@ def capture(base: str, out: Path) -> list[Path]:
         page.wait_for_selector(".result-card .times")
         settled(page)
         shot(page, "device-result")
-        page.goto(f"{base}/console#SHIP-433")
+        visit(page, "/console#SHIP-433")
         page.wait_for_function("document.querySelector('#connection').textContent === 'Connected'")
         page.wait_for_selector("#metrics:not([hidden])")
         shot(page, "console", clip={"x": 0, "y": 0, "width": DESKTOP["width"], "height": 900})
-        page.request.post(f"{base}/demo/reset")
+        reset(page)
         browser.close()
     return shots
 
