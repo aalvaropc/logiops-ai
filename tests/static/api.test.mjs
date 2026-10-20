@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { webcrypto } from "node:crypto";
 import { moduleUrl, memoryStorage, jsonResponse, fetchScript, jwt } from "./helpers.mjs";
 
-const { createApi, createStorage, explainError, sessionFrom, tokenClaims, base64url, OAUTH_KEY, SESSION_KEY, TOKEN_KEY } = await import(moduleUrl("app/api.js"));
+const { createApi, createStorage, explainError, sessionFrom, tokenClaims, base64url, OAUTH_KEY, SESSION_KEY, TOKEN_KEY, STREAM_CUT } = await import(moduleUrl("app/api.js"));
 
 function setup({ routes = {}, token = "", session = null, auth = { enabled: false } } = {}) {
   const backing = memoryStorage();
@@ -197,16 +197,74 @@ test("a streamed investigation reports each step, then returns the same result a
   assert.equal(calls[0].init.headers.Accept, "text/event-stream");
 });
 
-test("a stream error is explained, and a stream that cannot start falls back to the plain route", async () => {
-  const failing = setup({ routes: { "/incidents/SHIP-1/agent/investigate/stream": () => sse('event: step\ndata: {"tool":"get_shipment"}\n\nevent: error\ndata: {"status":502,"detail":"boom"}\n\n') } });
-  await assert.rejects(failing.api.streamed("/incidents/SHIP-1/agent/investigate/stream", {}, () => {}), (error) => error.status === 502 && /planning service/.test(error.message));
-  assert.deepEqual(failing.phases, ["request", "error"]);
+const STREAM = "/incidents/SHIP-1/agent/investigate/stream";
+const PLAIN = "/incidents/SHIP-1/agent/investigate";
 
-  const plain = setup({ routes: {
-    "/incidents/SHIP-1/agent/investigate/stream": () => jsonResponse(404, { detail: "Not Found" }),
-    "/incidents/SHIP-1/agent/investigate": () => jsonResponse(200, { answer: "plain" }),
-  } });
-  assert.deepEqual(await plain.api.streamed("/incidents/SHIP-1/agent/investigate/stream", {}, () => {}), { answer: "plain" });
-  assert.deepEqual(plain.calls.map((call) => call.url), ["/incidents/SHIP-1/agent/investigate/stream", "/incidents/SHIP-1/agent/investigate"]);
-  assert.deepEqual(plain.phases, ["request", "done"]);
+function cancellable(status, headers = {}) {
+  const body = { cancelled: 0, cancel: async () => { body.cancelled += 1; } };
+  return { body, response: { ...jsonResponse(status, { detail: "Not Found" }, headers), body } };
+}
+
+test("a stream error is explained after the stream started, without running the investigation again", async () => {
+  const failing = setup({ routes: { [STREAM]: () => sse('event: step\ndata: {"tool":"get_shipment"}\n\nevent: error\ndata: {"status":502,"detail":"boom"}\n\n') } });
+  await assert.rejects(failing.api.streamed(STREAM, {}, () => {}), (error) => error.status === 502 && /planning service/.test(error.message));
+  assert.deepEqual(failing.phases, ["request", "error"]);
+  assert.equal(failing.calls.length, 1);
+  for (const text of ["", 'event: step\ndata: {oops\n\n', 'event: step\ndata: {"tool":"get_shipment"}\n\n']) {
+    const broken = setup({ routes: { [STREAM]: () => sse(text) } });
+    await assert.rejects(broken.api.streamed(STREAM, {}, () => {}), (error) => error.status === 502 && error.detail === STREAM_CUT);
+    assert.deepEqual(broken.phases, ["request", "error"]);
+    assert.equal(broken.calls.length, 1, "a broken stream never re-runs the investigation");
+  }
+  const json = setup({ routes: { [STREAM]: () => new Response("{}", { headers: { "content-type": "application/json" } }) } });
+  await assert.rejects(json.api.streamed(STREAM, {}, () => {}), (error) => error.status === 502);
+  assert.deepEqual(json.phases, []);
+  assert.equal(json.calls.length, 1);
+});
+
+test("only a missing stream route or a request that never left falls back to the plain route", async () => {
+  for (const status of [404, 405]) {
+    const missing = cancellable(status);
+    const plain = setup({ routes: { [STREAM]: () => missing.response, [PLAIN]: () => jsonResponse(200, { answer: "plain" }) } });
+    assert.deepEqual(await plain.api.streamed(STREAM, {}, () => {}), { answer: "plain" });
+    assert.deepEqual(plain.calls.map((call) => call.url), [STREAM, PLAIN]);
+    assert.deepEqual(plain.phases, ["request", "done"]);
+    assert.equal(missing.body.cancelled, 1);
+  }
+  const offline = setup({ routes: { [STREAM]: () => { throw new TypeError("Failed to fetch"); }, [PLAIN]: () => jsonResponse(200, { answer: "plain" }) } });
+  assert.deepEqual(await offline.api.streamed(STREAM, {}, () => {}), { answer: "plain" });
+  assert.deepEqual(offline.calls.map((call) => call.url), [STREAM, PLAIN]);
+});
+
+test("a refused stream is explained once and never re-posted", async () => {
+  const cases = [
+    [401, "Sign in to do that", { auth: { enabled: true } }],
+    [429, "per-minute question limit", {}],
+    [502, "planning service", {}],
+  ];
+  for (const [status, text, options] of cases) {
+    const refused = setup({ ...options, routes: { [STREAM]: () => jsonResponse(status, { detail: status === 429 ? "Agent rate limit" : "boom" }) } });
+    await assert.rejects(refused.api.streamed(STREAM, {}, () => {}), (error) => error.status === status && error.message.includes(text));
+    assert.equal(refused.calls.length, 1);
+    assert.deepEqual(refused.phases, []);
+  }
+});
+
+test("an expired sign-in refreshes once and streams again", async () => {
+  const fresh = jwt({ username: "judge" });
+  let attempts = 0;
+  const done = 'event: done\ndata: {"answer":"ok"}\n\n';
+  const { api, calls, phases } = setup({
+    token: "stale", session: { access: "stale", refresh: "r1", username: "judge" }, auth: { enabled: true, client_id: "c1" },
+    routes: {
+      [STREAM]: () => (++attempts === 1
+        ? jsonResponse(401, { detail: "expired" }, { "www-authenticate": 'Bearer error="invalid_token"' })
+        : sse(done)),
+      "/auth/token": jsonResponse(200, { access_token: fresh, expires_in: 3600 }),
+    },
+  });
+  assert.deepEqual(await api.streamed(STREAM, {}, () => {}), { answer: "ok" });
+  assert.deepEqual(calls.map((call) => call.url), [STREAM, "/auth/token", STREAM]);
+  assert.equal(calls[2].init.headers.Authorization, `Bearer ${fresh}`);
+  assert.deepEqual(phases, ["request", "done"]);
 });

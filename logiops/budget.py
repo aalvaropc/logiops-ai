@@ -4,7 +4,10 @@ The per-minute limits in security.py are per visitor; this one bounds what the
 whole demo can spend in a day. Each live request first reserves its run's
 maximum number of model calls in one atomic update, so requests running at the
 same time can never exceed the cap together; when the run ends, the calls it
-did not make successfully are released. When a run no longer fits, the request
+did not send are released. A call counts as soon as it is sent and is given back
+only when Bedrock itself failed, so a call cancelled in flight (a client that
+disconnects from a streamed run, or the run's deadline) stays counted, as AWS
+still bills it. When a run no longer fits, the request
 runs on the replay model and says so (`fallback: "daily_budget"`), instead of
 failing or spending more.
 
@@ -74,9 +77,10 @@ class DailyModelBudget:
 
 
 class BudgetedConverse:
-    """A live client bound to one reservation: it counts the calls that returned a response
-    (a failed call is not billed as a model answer, so an outage never looks like a used
-    budget), refuses to go past the reservation, and releases the rest when settled."""
+    """A live client bound to one reservation: it counts each call when it is sent, gives
+    it back when Bedrock failed (an outage never looks like a used budget), keeps it when
+    the call was cancelled in flight, refuses to go past the reservation, and releases the
+    rest when settled."""
 
     def __init__(self, client: Any, budget: DailyModelBudget, day: str, reserved: int) -> None:
         self.client = client
@@ -90,9 +94,12 @@ class BudgetedConverse:
     ) -> dict[str, Any]:
         if self.calls >= self.reserved:
             raise BedrockError("The run used all the model calls reserved for it")
-        response = await self.client.converse(messages, system, tools, skill=skill)
         self.calls += 1
-        return response
+        try:
+            return await self.client.converse(messages, system, tools, skill=skill)
+        except BedrockError:
+            self.calls -= 1
+            raise
 
     def settle(self) -> None:
         self.budget.release(self.day, self.reserved - self.calls)
