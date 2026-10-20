@@ -81,6 +81,27 @@ def test_failed_calls_are_released_so_an_outage_never_looks_like_a_used_budget(t
     assert budget.used() == 0
 
 
+def test_a_call_cancelled_in_flight_stays_counted(tmp_path):
+    budget = DailyModelBudget(tmp_path / "cancelled.sqlite3", limit=8)
+
+    class Slow:
+        async def converse(self, messages, system, tools, skill=None):
+            await asyncio.sleep(60)
+
+    async def run():
+        day = budget.reserve(8)
+        client = BudgetedConverse(Slow(), budget, day, 8)
+        task = asyncio.create_task(client.converse([], "", []))
+        await asyncio.sleep(0)
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+        client.settle()
+
+    asyncio.run(run())
+    assert budget.used() == 1
+
+
 class FakeBedrock(ReplayConverse):
     """Stands in for Bedrock (no AWS): the replay answers, counted like real calls."""
 

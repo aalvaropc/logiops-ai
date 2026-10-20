@@ -13,7 +13,8 @@ from mcp import ClientSession
 from mcp.client.streamable_http import streamable_http_client
 
 from logiops.api import create_app
-from logiops.oauth import OAuthSettings
+from logiops.oauth import GUEST_POSTS, OAuthSettings
+from tests.test_agent import sse_events
 
 BASE_URL = "http://127.0.0.1:8000"
 ISSUER = "https://cognito-idp.us-east-1.amazonaws.com/us-east-1_Demo123"
@@ -100,14 +101,19 @@ def test_a_guest_reads_and_is_asked_to_sign_in_for_actions(tmp_path, monkeypatch
         book = await http.post("/mcp", headers=MCP_HEADERS, json=rpc("book_carrier", {"quote_id": "Q-1", "confirmed_total_usd": 1, "idempotency_key": "abcdefgh"}))
         receipt = await http.post("/mcp", headers=MCP_HEADERS, json={"jsonrpc": "2.0", "id": 3, "method": "resources/read", "params": {"uri": "receipt://logiops/LGO-AAAAAA"}})
         investigate = await http.post("/incidents/SHIP-421/agent/investigate", json={})
+        streamed = await http.post("/incidents/SHIP-421/agent/investigate/stream", json={})
         async with streamable_http_client(f"{BASE_URL}/mcp", http_client=http) as (read_stream, write, _):
             async with ClientSession(read_stream, write) as session:
                 await session.initialize()
                 shipment = await session.call_tool("get_shipment", {"shipment_id": "SHIP-421"})
-        return read, approve, quote, execute, book, receipt, investigate, shipment
+        return read, approve, quote, execute, book, receipt, investigate, streamed, shipment
 
-    read, approve, quote, execute, book, receipt, investigate, shipment = run_app(tmp_path, work)
+    read, approve, quote, execute, book, receipt, investigate, streamed, shipment = run_app(tmp_path, work)
     assert read.status_code == 200 and investigate.status_code == 200
+    assert streamed.status_code == 200 and streamed.headers["content-type"].startswith("text/event-stream")
+    events = sse_events(streamed.text)
+    assert events[-1][0] == "done" and [kind for kind, _ in events].count("step") == len(events[-1][1]["tool_trace"])
+    assert not GUEST_POSTS.fullmatch("/incidents/SHIP-421/agent/investigate/stream/more")
     for response, scope in ((approve, OPERATE), (quote, BOOK), (execute, OPERATE), (book, BOOK), (receipt, OPERATE)):
         assert response.status_code == 401
         header = response.headers["www-authenticate"]
@@ -184,10 +190,14 @@ def test_a_public_guest_never_reaches_the_live_model(tmp_path, monkeypatch):
             raise AssertionError("a guest reached the paid model")
 
     async def work(http, _app):
-        return await http.post("/incidents/SHIP-421/agent/investigate", json={})
+        plain = await http.post("/incidents/SHIP-421/agent/investigate", json={})
+        streamed = await http.post("/incidents/SHIP-421/agent/investigate/stream", json={})
+        return plain, streamed
 
-    response = run_app(tmp_path, work, bedrock_client=Paid())
+    response, streamed = run_app(tmp_path, work, bedrock_client=Paid())
     assert response.status_code == 200 and response.json()["mode"] == "replay" and response.json()["fallback"] == "sign_in"
+    kind, done = sse_events(streamed.text)[-1]
+    assert streamed.status_code == 200 and kind == "done" and done["mode"] == "replay" and done["fallback"] == "sign_in"
 
 
 def test_the_token_endpoint_forwards_only_allowed_pkce_and_refresh_grants(tmp_path):

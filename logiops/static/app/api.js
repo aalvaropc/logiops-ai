@@ -1,6 +1,7 @@
 import { parseSse } from "./sse.js";
 
 export const TOKEN_KEY = "logiops-access-token";
+export const STREAM_CUT = "The investigation stream ended before its result";
 export const SESSION_KEY = "logiops-session";
 export const OAUTH_KEY = "logiops-oauth";
 export const SIGN_IN_PATH = "/demo";
@@ -171,6 +172,20 @@ export function createApi({ fetch: doFetch, storage, crypto: webCrypto, origin, 
     keepSession(null);
   }
 
+  function explained(status, detail, { token, session, auth }) {
+    const text = typeof detail === "string" ? detail : detail?.message || `HTTP ${status}`;
+    const error = new Error(explainError(status, text, { authEnabled: auth.enabled, signedIn: Boolean(session), hasToken: Boolean(token) }));
+    error.status = status;
+    error.detail = detail;
+    return error;
+  }
+
+  async function failure(response, credentials) {
+    let detail = `HTTP ${response.status}`;
+    try { detail = (await response.json()).detail || detail; } catch (_) { }
+    return explained(response.status, detail, credentials);
+  }
+
   async function request(path, method = "GET", body, retried = false) {
     const { token, session, auth } = current();
     const headers = {};
@@ -192,20 +207,15 @@ export function createApi({ fetch: doFetch, storage, crypto: webCrypto, origin, 
     }
     if (!response.ok) {
       if (agent) agentCall("error");
-      let detail = `HTTP ${response.status}`;
-      try { detail = (await response.json()).detail || detail; } catch (_) { }
-      const text = typeof detail === "string" ? detail : detail?.message || `HTTP ${response.status}`;
-      const error = new Error(explainError(response.status, text, { authEnabled: auth.enabled, signedIn: Boolean(session), hasToken: Boolean(token) }));
-      error.status = response.status;
-      error.detail = detail;
-      throw error;
+      throw await failure(response, { token, session, auth });
     }
     return response.json();
   }
 
-  async function streamed(path, body, onStep) {
+  async function streamed(path, body, onStep, retried = false) {
     const plain = path.replace(/\/stream$/, "");
-    const { token, session, auth } = current();
+    const credentials = current();
+    const { token, session } = credentials;
     const headers = { "Content-Type": "application/json", Accept: "text/event-stream" };
     if (token) headers.Authorization = `Bearer ${token}`;
     let response;
@@ -214,12 +224,25 @@ export function createApi({ fetch: doFetch, storage, crypto: webCrypto, origin, 
     } catch (_) {
       return request(plain, "POST", body);
     }
-    if (!response.ok || !response.body || !/text\/event-stream/.test(response.headers.get("content-type") || "")) return request(plain, "POST", body);
+    const drop = () => Promise.resolve(response.body?.cancel?.()).catch(() => {});
+    if (response.status === 404 || response.status === 405) {
+      drop();
+      return request(plain, "POST", body);
+    }
+    if (!response.ok && response.status === 401 && !retried && session
+        && /invalid_token/.test(response.headers.get("www-authenticate") || "") && await refreshSession()) {
+      drop();
+      return streamed(path, body, onStep, true);
+    }
+    if (!response.ok) throw await failure(response, credentials);
+    if (!response.body || !/text\/event-stream/.test(response.headers.get("content-type") || "")) {
+      drop();
+      throw explained(502, STREAM_CUT, credentials);
+    }
     agentCall("request", plain);
     const reader = response.body.getReader();
     const decoder = new TextDecoder();
     let buffer = "";
-    let seen = false;
     try {
       for (;;) {
         const { value, done } = await reader.read();
@@ -228,28 +251,21 @@ export function createApi({ fetch: doFetch, storage, crypto: webCrypto, origin, 
         const parsed = parseSse(buffer);
         buffer = parsed.rest;
         for (const [kind, data] of parsed.events) {
-          seen = true;
           if (kind === "step") onStep(data);
           if (kind === "done") {
             agentCall("done");
             return data;
           }
-          if (kind === "error") {
-            const error = new Error(explainError(data.status, data.detail, { authEnabled: auth.enabled, signedIn: Boolean(session), hasToken: Boolean(token) }));
-            error.status = data.status;
-            error.detail = data.detail;
-            throw error;
-          }
+          if (kind === "error") throw explained(data.status, data.detail, credentials);
         }
       }
     } catch (error) {
       agentCall("error");
-      if (seen || error.status) throw error;
-      return request(plain, "POST", body);
+      reader.cancel().catch(() => {});
+      throw error.status ? error : explained(502, STREAM_CUT, credentials);
     }
     agentCall("error");
-    if (!seen) return request(plain, "POST", body);
-    throw new Error("The investigation stream ended before its result");
+    throw explained(502, STREAM_CUT, credentials);
   }
 
   return { request, streamed, tokenGrant, loadAuth, beginSignIn, finishSignIn, refreshSession, signOut, readSession, keepSession, storedToken, storeToken, randomText };

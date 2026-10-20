@@ -447,8 +447,12 @@ def test_an_alert_elsewhere_opens_as_a_card(page, replay_server, page_errors, re
 def test_the_agent_stage_shows_the_work_before_the_answer_then_gives_way(page, replay_server, page_errors, reset_demo):
     page.goto(f"{replay_server}/demo#SHIP-433")
     expect(page.locator("#connection")).to_have_text("Connected")
+    agent_posts = []
+    page.on("request", lambda request: agent_posts.append(request.url) if request.method == "POST" and "/agent/" in request.url else None)
     page.fill("#ask-input", "What's happening with SHIP-433, and which plan should we choose?")
-    page.click("#ask")
+    with page.expect_response("**/agent/investigate/stream") as streamed:
+        page.click("#ask")
+    assert streamed.value.ok and streamed.value.headers["content-type"].startswith("text/event-stream")
     stage = page.locator("#agent-stage")
     expect(stage).to_be_visible()
     expect(page.locator("#device-spoken")).to_have_text("Asking the agent about SHIP-433…")
@@ -465,6 +469,7 @@ def test_the_agent_stage_shows_the_work_before_the_answer_then_gives_way(page, r
     expect(page.locator("#device-spoken")).to_contain_text("Fly the hospital order")
     assert not page.evaluate("document.querySelector('#chips').inert")
     expect(page.locator("#plans-agent")).to_have_text("5 MCP calls by the agent · Checked against the data · scripted model")
+    assert [url.split("/incidents/")[-1] for url in agent_posts] == ["SHIP-433/agent/investigate/stream"], "the device streamed and never fell back"
     expect(page.locator("#plans-agent .agent-dots span")).to_have_count(6)
     assert_accessible(page)
     assert page_errors == []
