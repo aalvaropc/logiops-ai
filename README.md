@@ -687,13 +687,3 @@ MIT — see [LICENSE](LICENSE).
 
 The pages use the Overpass typeface (latin subset, variable weight), under the
 SIL Open Font License 1.1: see [logiops/static/fonts/OFL.txt](logiops/static/fonts/OFL.txt).
-
-## Changes
-
-- **1.0.1** — `sandbox.html` declares `color-scheme: dark light`, so a dark view does not flash white while it loads, and its Content-Security-Policy allows `font-src data:`, so a view may inline its own font.
-- **1.0.0** — first release.
-
-## Changes
-
-- **1.0.1** — `sandbox.html` declares `color-scheme: dark light`, so a dark view does not flash white while it loads, and its Content-Security-Policy allows `font-src data:`, so a view may inline its own font.
-- **1.0.0** — first release.
