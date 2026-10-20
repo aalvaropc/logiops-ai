@@ -39,4 +39,4 @@ proposes. You approve. Code enforces it."**
   shown; open the tool list before recording. The guest step is a second
   connection without the token; "Sign in" there opens Cognito with the demo
   user (type the password off camera, or cut to the signed-in state).
-- Narration at about 150 words per minute; the text above is about 380 words.
+- Narration at about 150 words per minute; the text above is about 330 words, so there is room for the 12 s investigation and the sign-in.
