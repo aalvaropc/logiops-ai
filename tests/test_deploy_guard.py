@@ -81,6 +81,16 @@ def test_the_release_caps_live_model_calls_and_documents_it():
     assert "daily budget of 40 model calls" in readme and "mcp-apps-web-host" in readme
 
 
+def test_the_release_caps_polly_characters_and_documents_it():
+    variables = (ROOT / "infra" / "amazon" / "variables.tf").read_text()
+    assert 'variable "daily_speech_chars" {\n  type    = number\n  default = 10000\n}' in variables
+    assert "LOGIOPS_DAILY_SPEECH_CHARS = tostring(var.daily_speech_chars)" in (ROOT / "infra" / "amazon" / "config.tf").read_text()
+    reference = (ROOT / "docs" / "reference.md").read_text()
+    row = next(line for line in reference.splitlines() if line.startswith("| `LOGIOPS_DAILY_SPEECH_CHARS` |"))
+    assert row.endswith("| `30000`; the AWS deployment sets `10000` |")
+    assert "DEFAULT_DAILY_CHARS = 30_000" in (ROOT / "logiops" / "voice.py").read_text()
+
+
 def test_the_uptime_check_runs_every_check_reports_why_and_closes_its_issue():
     workflows = ROOT / ".github" / "workflows"
     uptime, ci = (workflows / "uptime.yml").read_text(), (workflows / "ci.yml").read_text()
