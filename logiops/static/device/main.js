@@ -254,6 +254,8 @@ const mcpHost = createMcpAppHost({
   hostContext, maxHeight: 2400, frameTitle: "Resolution options (MCP App)", rejectMessage: "Unknown or unavailable plan, or the device is busy",
   onMessage: (params) => selectFromApp(params),
   onHide: () => { $("mcp-app").hidden = true; $("plans").hidden = false; },
+  onReady: () => { $("plans").hidden = Boolean(state.app); },
+  onError: () => showMcpAppNote("The interactive card is unavailable. The plans are listed below."),
 });
 
 function decisionOf(snapshot) {
@@ -286,7 +288,7 @@ async function showMcpApp(run) {
   state.app = wanted;
   $("mcp-app").classList.toggle("borderless", !resource.prefersBorder);
   $("mcp-app").hidden = false;
-  $("plans").hidden = true;
+  $("plans").hidden = mcpHost.ready();
 }
 
 function hideMcpApp(reason = "hidden") {

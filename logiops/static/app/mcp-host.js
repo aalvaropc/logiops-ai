@@ -5,7 +5,8 @@ export function createMcpAppHost({
   window: win = globalThis.window, sandboxOrigin, hostOrigin, proxyPath = "/mcp-app/sandbox.html", slot, mcp,
   uriPrefix = "ui://", mime = MCP_APP_MIME, protocol = MCP_APPS_PROTOCOL, hostInfo = { name: "MCP Apps web host", version: "1.1.0" },
   hostContext = () => ({}), onMessage = () => false, onHide = () => {}, frameTitle = "MCP App", frameId = "mcp-app-frame",
-  minHeight = 80, maxHeight = 640, teardownTimeout = 500, rejectMessage = "The host did not accept the message",
+  minHeight = 80, maxHeight = 640, teardownTimeout = 500, readyTimeout = 5000,
+  onReady = () => {}, onError = () => {}, rejectMessage = "The host did not accept the message",
 } = {}) {
   const doc = win.document;
   const resources = new Map();
@@ -16,8 +17,17 @@ export function createMcpAppHost({
   async function loadResource(toolName) {
     if (!resources.has(toolName)) {
       resources.set(toolName, (async () => {
-        const listed = await mcp.request("tools/list", {});
-        const tool = listed.tools.find((item) => item.name === toolName);
+        let tool;
+        let cursor;
+        const cursors = new Set();
+        do {
+          const listed = await mcp.request("tools/list", cursor === undefined ? {} : { cursor });
+          tool = listed.tools.find((item) => item.name === toolName);
+          cursor = listed.nextCursor;
+          if (tool || cursor === undefined) break;
+          if (typeof cursor !== "string" || cursors.has(cursor)) throw new Error("Invalid or repeated tools/list cursor");
+          cursors.add(cursor);
+        } while (true);
         const uri = tool?._meta?.ui?.resourceUri ?? tool?._meta?.["ui/resourceUri"];
         if (typeof uri !== "string" || !uri.startsWith(uriPrefix)) return null;
         const read = await mcp.request("resources/read", { uri });
@@ -25,7 +35,10 @@ export function createMcpAppHost({
         if (!content || content.mimeType !== mime || typeof content.text !== "string") return null;
         const ui = content._meta?.ui || {};
         return { uri, html: content.text, csp: ui.csp || {}, prefersBorder: ui.prefersBorder !== false, invoking: tool._meta.ui?.invoking || "", invoked: tool._meta.ui?.invoked || "" };
-      })().catch((error) => { resources.delete(toolName); throw error; }));
+      })().then((resource) => {
+        if (!resource) resources.delete(toolName);
+        return resource;
+      }).catch((error) => { resources.delete(toolName); throw error; }));
     }
     return resources.get(toolName);
   }
@@ -42,15 +55,18 @@ export function createMcpAppHost({
   function teardown(reason, { invalidate = true, notify = true } = {}) {
     const view = current;
     current = null;
+    if (view) win.clearTimeout(view.readyTimer);
     if (invalidate) generation += 1;
     if (notify) onHide(reason);
     if (!view) return Promise.resolve();
     return new Promise((resolve) => {
       let finished = false;
+      let timer;
       const id = `teardown-${nextId++}`;
       const finish = () => {
         if (finished) return;
         finished = true;
+        win.clearTimeout(timer);
         win.removeEventListener("message", onReply);
         view.frame.remove();
         resolve();
@@ -61,7 +77,7 @@ export function createMcpAppHost({
       if (!view.ready) return finish();
       win.addEventListener("message", onReply);
       view.frame.contentWindow.postMessage({ jsonrpc: "2.0", id, method: "ui/resource-teardown", params: { reason } }, sandboxOrigin);
-      win.setTimeout(finish, teardownTimeout);
+      timer = win.setTimeout(finish, teardownTimeout);
     });
   }
 
@@ -78,7 +94,15 @@ export function createMcpAppHost({
     element.setAttribute("sandbox", "allow-scripts allow-same-origin");
     element.setAttribute("referrerpolicy", "no-referrer");
     element.src = `${sandboxOrigin}${proxyPath}?host=${encodeURIComponent(hostOrigin)}`;
-    current = { frame: element, input, result, resource, ready: false };
+    const view = { frame: element, input, result, resource, ready: false, readyTimer: null };
+    current = view;
+    const fail = (error) => {
+      if (current !== view || view.ready) return;
+      teardown("initialization failed");
+      onError(error);
+    };
+    element.onerror = () => fail(new Error("MCP App sandbox failed to load"));
+    view.readyTimer = win.setTimeout(() => fail(new Error("MCP App initialization timed out")), readyTimeout);
     slot.replaceChildren(element);
     return resource;
   }
@@ -101,9 +125,12 @@ export function createMcpAppHost({
     } else if (msg.method === "ui/initialize") {
       reply({ result: { protocolVersion: protocol, hostInfo, hostCapabilities: {}, hostContext: hostContext() } });
     } else if (msg.method === "ui/notifications/initialized") {
+      if (current.ready) return;
       current.ready = true;
+      win.clearTimeout(current.readyTimer);
       post({ method: "ui/notifications/tool-input", params: { arguments: current.input } });
       post({ method: "ui/notifications/tool-result", params: current.result });
+      onReady(current.resource);
     } else if (msg.method === "ui/notifications/size-changed") {
       const height = Number(msg.params?.height);
       if (Number.isFinite(height)) target.style.height = `${Math.min(Math.max(height, minHeight), maxHeight)}px`;
