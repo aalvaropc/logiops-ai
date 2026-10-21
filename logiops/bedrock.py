@@ -26,6 +26,11 @@ class BedrockError(Exception):
     pass
 
 
+class BedrockUnavailable(BedrockError):
+    """The model service itself failed: no credentials, a refused or throttled call, a timeout or a broken
+    response. Unlike the agent's own guards, an outage is answered from the replay."""
+
+
 class BedrockConverse:
     """Calls Converse with SDK retries and timeouts.
 
@@ -87,17 +92,17 @@ class BedrockConverse:
         try:
             response = await asyncio.to_thread(self._call, messages, system, tools, skill)
         except NoCredentialsError as exc:
-            raise BedrockError(
+            raise BedrockUnavailable(
                 "AWS credentials are not configured; sign in with aws login or attach an instance role"
             ) from exc
         except ClientError as exc:
             code = exc.response.get("Error", {}).get("Code", "Unknown")
-            raise BedrockError(f"Bedrock Converse failed ({code}); check model access and region") from exc
+            raise BedrockUnavailable(f"Bedrock Converse failed ({code}); check model access and region") from exc
         except (ReadTimeoutError, ConnectTimeoutError, EndpointConnectionError) as exc:
-            raise BedrockError("Bedrock request timed out or could not connect") from exc
+            raise BedrockUnavailable("Bedrock request timed out or could not connect") from exc
         except BotoCoreError as exc:
-            raise BedrockError(f"Bedrock Converse failed ({type(exc).__name__})") from exc
+            raise BedrockUnavailable(f"Bedrock Converse failed ({type(exc).__name__})") from exc
         if not isinstance(response, dict) or "stopReason" not in response:
-            raise BedrockError("Bedrock returned an invalid Converse response")
+            raise BedrockUnavailable("Bedrock returned an invalid Converse response")
         response.pop("ResponseMetadata", None)
         return response

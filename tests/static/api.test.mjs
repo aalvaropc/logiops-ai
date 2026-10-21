@@ -197,6 +197,16 @@ test("a streamed investigation reports each step, then returns the same result a
   assert.equal(calls[0].init.headers.Accept, "text/event-stream");
 });
 
+test("a restart on the replay model reaches the step handler, and the steps go on", async () => {
+  const body = 'event: step\ndata: {"tool":"get_shipment"}\n\nevent: restart\ndata: {"fallback":"model_unavailable"}\n\n'
+    + 'event: step\ndata: {"tool":"get_shipment"}\n\nevent: done\ndata: {"answer":"ok","fallback":"model_unavailable"}\n\n';
+  const { api } = setup({ routes: { "/incidents/SHIP-1/agent/investigate/stream": () => sse(body) } });
+  const seen = [];
+  const run = await api.streamed("/incidents/SHIP-1/agent/investigate/stream", {}, (step, kind) => seen.push(kind === "restart" ? kind : step.tool));
+  assert.deepEqual(seen, ["get_shipment", "restart", "get_shipment"]);
+  assert.equal(run.fallback, "model_unavailable");
+});
+
 const STREAM = "/incidents/SHIP-1/agent/investigate/stream";
 const PLAIN = "/incidents/SHIP-1/agent/investigate";
 

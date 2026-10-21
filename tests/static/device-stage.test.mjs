@@ -109,6 +109,25 @@ test("a streamed run adds what the stream missed and the check after the last li
   assert.equal(root.hidden, true);
 });
 
+test("a restart on the replay model drops the live steps and counts the new run from the start", (t) => {
+  const { stage, advance, labels, meta } = staged(t);
+  stage.ask(["Asking the agent about", "SHIP-433"]);
+  stage.step(shipment);
+  stage.step(order);
+  advance(0);
+  stage.restart();
+  advance(500);
+  assert.deepEqual(labels(), []);
+  stage.step(shipment);
+  advance(0);
+  stage.replay(run, check, caption);
+  assert.equal(meta.textContent, "Live from the MCP tool calls");
+  advance(120);
+  assert.equal(labels().length, 2);
+  advance(240);
+  assert.deepEqual(labels(), ["Shipment · SHIP-433", "Order · ORD-433-H", "Carrier quotes · 2 quotes", "Checked against the data"]);
+});
+
 test("with reduced motion the stage does not hold the answer", (t) => {
   const { stage, root, advance } = staged(t, { reduced: true });
   const replies = [];

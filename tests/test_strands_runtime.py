@@ -6,7 +6,7 @@ from types import SimpleNamespace
 import pytest
 
 from logiops.agent import _with_deadline
-from logiops.bedrock import BedrockError
+from logiops.bedrock import BedrockError, BedrockUnavailable
 from logiops.strands_runtime import ConverseModel, converse_events, run_agent, system_parts
 
 TOOLS = [
@@ -198,7 +198,7 @@ def test_the_deadline_wraps_the_run():
             client=Slow(), session=FakeSession(), tools=TOOLS, allowed=ALLOWED, shipments={"SHIP-421"}, skill="s", skill_info=SKILL,
             system="p", first_message="m", required_tool=None, max_turns=2), 0.2)
 
-    with pytest.raises(BedrockError, match="did not finish within 0.2 seconds"):
+    with pytest.raises(BedrockUnavailable, match="did not finish within 0.2 seconds"):
         asyncio.run(go())
 
 

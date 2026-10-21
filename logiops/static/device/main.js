@@ -698,7 +698,7 @@ const commands = createCommands({
   },
   onSurface: (name, payload) => showSurface(name, payload),
   approvePlan, executeApproved, savePreferences: (update) => request("/operator/preferences", "PUT", mergedPreferences(state.snapshot?.operator_preferences, update)),
-  investigate: (path, body) => streamed(`${path}/stream`, body, (step) => stage.step(step)),
+  investigate: (path, body) => streamed(`${path}/stream`, body, (step, kind) => (kind === "restart" ? stage.restart() : stage.step(step))),
   linkAccount, signOut,
 });
 

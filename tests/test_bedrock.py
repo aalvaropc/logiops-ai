@@ -6,7 +6,7 @@ import boto3
 import pytest
 from botocore.stub import Stubber
 
-from logiops.bedrock import BedrockConverse, BedrockError
+from logiops.bedrock import BedrockConverse, BedrockError, BedrockUnavailable
 
 
 MESSAGES = [
@@ -62,13 +62,13 @@ def test_converse_sends_messages_tools_and_system_prompt():
     assert "ResponseMetadata" not in result
 
 
-def test_converse_errors_only_expose_the_error_code():
+@pytest.mark.parametrize("code, status", [("AccessDeniedException", 403), ("ThrottlingException", 429)])
+def test_converse_errors_are_an_outage_that_only_exposes_the_error_code(code, status):
     client, stubber = stubbed_client()
     stubber.add_client_error(
-        "converse", service_error_code="AccessDeniedException",
-        service_message="account 123456789012 is not authorized", http_status_code=403,
+        "converse", service_error_code=code, service_message="account 123456789012 is not authorized", http_status_code=status,
     )
-    with stubber, pytest.raises(BedrockError) as raised:
+    with stubber, pytest.raises(BedrockUnavailable) as raised:
         asyncio.run(BedrockConverse(client=client).converse(MESSAGES[:1], "Investigate", TOOLS))
-    assert "AccessDeniedException" in str(raised.value)
+    assert code in str(raised.value)
     assert "123456789012" not in str(raised.value)
