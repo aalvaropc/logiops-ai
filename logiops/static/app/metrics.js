@@ -4,7 +4,9 @@ import { plural } from "./selectors.js";
 export function seconds(value) {
   if (value === null || value === undefined) return null;
   const whole = Math.round(value);
-  return whole < 60 ? `${whole} s` : `${Math.floor(whole / 60)} min ${whole % 60} s`;
+  if (whole < 60) return `${whole} s`;
+  if (whole < 3600) return `${Math.floor(whole / 60)} min ${whole % 60} s`;
+  return `${Math.floor(whole / 3600)} h ${Math.floor((whole % 3600) / 60)} min`;
 }
 
 export const EMPTY_SESSION = "No plan approved yet this session. Outcomes appear here as you decide.";
