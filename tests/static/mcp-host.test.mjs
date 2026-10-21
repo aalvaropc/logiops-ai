@@ -272,6 +272,103 @@ test("tools on later pages are discovered and cursor cycles are rejected", async
   await assert.rejects(shown({ mcp: looping }), /cursor/i);
 });
 
+test("a null or empty nextCursor ends the listing", async () => {
+  for (const nextCursor of [null, ""]) {
+    const requests = [];
+    const mcp = { request: async (method, params) => { requests.push(params); return { tools: [], nextCursor }; } };
+    const host = createMcpAppHost({ window: fakeWindow(), sandboxOrigin: SANDBOX, hostOrigin: HOST, slot: fakeSlot(), mcp });
+    assert.equal(await host.loadResource("investigate_incident"), null);
+    assert.equal(requests.length, 1);
+  }
+  const numeric = { request: async () => ({ tools: [], nextCursor: 7 }) };
+  const host = createMcpAppHost({ window: fakeWindow(), sandboxOrigin: SANDBOX, hostOrigin: HOST, slot: fakeSlot(), mcp: numeric });
+  await assert.rejects(host.loadResource("investigate_incident"), /cursor/i);
+});
+
+test("the readiness budget restarts when the sandbox page has loaded, and only once", async () => {
+  const errors = [];
+  const view = await shown({ readyTimeout: 200, onError: (error) => errors.push(error) });
+  const [mounted] = view.win.timers;
+  assert.equal(mounted.ms, 200);
+  view.frame.onload();
+  assert.equal(mounted.cancelled, true);
+  const [, loaded] = view.win.timers;
+  assert.equal(loaded.ms, 200);
+  view.frame.onload();
+  assert.equal(view.win.timers.length, 2, "a second load does not extend the budget");
+  loaded.fn();
+  assert.equal(errors.length, 1);
+  assert.match(errors[0].message, /timed out/);
+});
+
+test("a view that initializes after its sandbox loaded slowly is still reported ready", async () => {
+  const ready = [];
+  const errors = [];
+  const view = await shown({ onReady: (resource) => ready.push(resource), onError: (error) => errors.push(error) });
+  view.frame.onload();
+  view.fromView({ jsonrpc: "2.0", method: "ui/notifications/initialized" });
+  assert.equal(ready.length, 1);
+  assert.equal(view.win.timers[1].cancelled, true);
+  view.frame.onload();
+  assert.equal(view.win.timers.length, 2, "a load after initialization arms nothing");
+  assert.deepEqual(errors, []);
+});
+
+test("a readyTimeout of zero or Infinity never arms a timer", async () => {
+  for (const readyTimeout of [0, Infinity]) {
+    const errors = [];
+    const view = await shown({ readyTimeout, onError: (error) => errors.push(error) });
+    view.frame.onload();
+    assert.equal(view.win.timers.length, 0);
+    assert.equal(view.host.isShowing(), true);
+    assert.deepEqual(errors, []);
+  }
+});
+
+test("a timeout of the old view does not cancel a newer show that is still loading", async () => {
+  const view = (name) => ({ name, _meta: { ui: { resourceUri: `ui://logiops/resolution-options.${name}.html` } } });
+  let gate = null;
+  const mcp = { request: async (method, params) => {
+    if (method === "tools/list") {
+      if (gate) await gate;
+      return { tools: [view("first"), view("second")] };
+    }
+    return { contents: [{ uri: params.uri, mimeType: "text/html;profile=mcp-app", text: `<p>${params.uri}</p>` }] };
+  } };
+  const win = fakeWindow();
+  const slot = fakeSlot();
+  const errors = [];
+  const host = createMcpAppHost({ window: win, sandboxOrigin: SANDBOX, hostOrigin: HOST, slot, mcp, uriPrefix: "ui://logiops/resolution-options", onError: (error) => errors.push(error) });
+  await host.show({ toolName: "first", input: {}, result: {} });
+  const [stale] = slot.children;
+  let release;
+  gate = new Promise((resolve) => { release = resolve; });
+  const second = host.show({ toolName: "second", input: {}, result: {} });
+  win.timers[0].fn();
+  assert.equal(errors.length, 1);
+  assert.equal(stale.removed, true);
+  release();
+  assert.match((await second).uri, /second/);
+  assert.notEqual(slot.children[0], stale);
+  assert.equal(host.isShowing(), true);
+});
+
+test("a tool that declares no view is not listed again, while a missing tool is", async () => {
+  let listings = 0;
+  const mcp = { request: async (method) => {
+    if (method !== "tools/list") throw new Error(`unexpected ${method}`);
+    listings += 1;
+    return { tools: [{ name: "plain", _meta: {} }] };
+  } };
+  const host = createMcpAppHost({ window: fakeWindow(), sandboxOrigin: SANDBOX, hostOrigin: HOST, slot: fakeSlot(), mcp });
+  assert.equal(await host.loadResource("plain"), null);
+  assert.equal(await host.loadResource("plain"), null);
+  assert.equal(listings, 1);
+  assert.equal(await host.loadResource("absent"), null);
+  assert.equal(await host.loadResource("absent"), null);
+  assert.equal(listings, 3);
+});
+
 test("a missing or temporarily invalid resource is retried on the next request", async () => {
   const backing = fakeMcp();
   let available = false;

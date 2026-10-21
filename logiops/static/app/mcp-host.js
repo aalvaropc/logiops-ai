@@ -16,6 +16,7 @@ export function createMcpAppHost({
 
   async function loadResource(toolName) {
     if (!resources.has(toolName)) {
+      const lookup = { declaresNoView: false };
       resources.set(toolName, (async () => {
         let tool;
         let cursor;
@@ -24,19 +25,22 @@ export function createMcpAppHost({
           const listed = await mcp.request("tools/list", cursor === undefined ? {} : { cursor });
           tool = listed.tools.find((item) => item.name === toolName);
           cursor = listed.nextCursor;
-          if (tool || cursor === undefined) break;
+          if (tool || cursor === undefined || cursor === null || cursor === "") break;
           if (typeof cursor !== "string" || cursors.has(cursor)) throw new Error("Invalid or repeated tools/list cursor");
           cursors.add(cursor);
         } while (true);
         const uri = tool?._meta?.ui?.resourceUri ?? tool?._meta?.["ui/resourceUri"];
-        if (typeof uri !== "string" || !uri.startsWith(uriPrefix)) return null;
+        if (typeof uri !== "string" || !uri.startsWith(uriPrefix)) {
+          lookup.declaresNoView = Boolean(tool);
+          return null;
+        }
         const read = await mcp.request("resources/read", { uri });
         const content = read.contents?.[0];
         if (!content || content.mimeType !== mime || typeof content.text !== "string") return null;
         const ui = content._meta?.ui || {};
         return { uri, html: content.text, csp: ui.csp || {}, prefersBorder: ui.prefersBorder !== false, invoking: tool._meta.ui?.invoking || "", invoked: tool._meta.ui?.invoked || "" };
       })().then((resource) => {
-        if (!resource) resources.delete(toolName);
+        if (!resource && !lookup.declaresNoView) resources.delete(toolName);
         return resource;
       }).catch((error) => { resources.delete(toolName); throw error; }));
     }
@@ -98,11 +102,21 @@ export function createMcpAppHost({
     current = view;
     const fail = (error) => {
       if (current !== view || view.ready) return;
-      teardown("initialization failed");
+      teardown("initialization failed", { invalidate: false });
       onError(error);
     };
+    const arm = () => {
+      win.clearTimeout(view.readyTimer);
+      if (Number.isFinite(readyTimeout) && readyTimeout > 0) view.readyTimer = win.setTimeout(() => fail(new Error("MCP App initialization timed out")), readyTimeout);
+    };
+    let loaded = false;
     element.onerror = () => fail(new Error("MCP App sandbox failed to load"));
-    view.readyTimer = win.setTimeout(() => fail(new Error("MCP App initialization timed out")), readyTimeout);
+    element.onload = () => {
+      if (loaded || current !== view || view.ready) return;
+      loaded = true;
+      arm();
+    };
+    arm();
     slot.replaceChildren(element);
     return resource;
   }
