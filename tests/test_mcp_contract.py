@@ -56,6 +56,19 @@ def test_every_tool_declares_title_annotations_described_inputs_and_an_output_sc
     assert investigate.annotations.destructiveHint is False and investigate.meta["ui"]["resourceUri"].startswith("ui://")
 
 
+def test_every_tool_prompt_and_resource_carries_one_inline_svg_icon(tmp_path):
+    async def work(session, _initialized, _http):
+        return [*(await session.list_tools()).tools, *(await session.list_prompts()).prompts,
+                *(await session.list_resources()).resources, *(await session.list_resource_templates()).resourceTemplates]
+
+    items = _session(tmp_path, work)
+    assert len(items) == 12 + 2 + 2 + 2
+    for item in items:
+        [shown] = item.icons
+        assert shown.mimeType == "image/svg+xml" and shown.sizes == ["any"] and shown.src.startswith("data:image/svg+xml;base64,"), item.name
+    assert len({tool.icons[0].src for tool in items[:12]}) >= 6, "the tools do not all share one glyph"
+
+
 def test_structured_content_conforms_to_each_output_schema_on_every_incident(tmp_path):
     async def work(session, _initialized, http):
         schemas = {tool.name: tool.outputSchema for tool in (await session.list_tools()).tools}

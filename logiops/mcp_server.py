@@ -47,11 +47,27 @@ UI_URI = f"ui://logiops/resolution-options.{hashlib.sha256(UI_HTML.encode()).hex
 UI_INVOKING = "Calculating every feasible plan…"
 UI_INVOKED = "Plans ready to compare"
 WEBSITE_URL = "https://github.com/aalvaropc/logiops-ai"
-ICON_SVG = (
-    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" rx="14" fill="#071318"/>'
-    '<path d="M18 16h8v24h20v8H18z" fill="#72dfc7"/></svg>'
-)
-ICON = Icon(src="data:image/svg+xml;base64," + base64.b64encode(ICON_SVG.encode()).decode(), mimeType="image/svg+xml", sizes=["any"])
+
+
+def icon(path: str) -> Icon:
+    """One inline SVG glyph on the brand tile, as a data URI any MCP client can show."""
+    svg = ('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" rx="14" fill="#071318"/>'
+           f'<path d="{path}" fill="#72dfc7"/></svg>')
+    return Icon(src="data:image/svg+xml;base64," + base64.b64encode(svg.encode()).decode(), mimeType="image/svg+xml", sizes=["any"])
+
+
+ICON = icon("M18 16h8v24h20v8H18z")
+LIST = icon("M16 18h32v6H16zm0 11h32v6H16zm0 11h32v6H16z")
+SHIPMENT = icon("M12 20h26v18h8l6 8v6h-4a5 5 0 0 1-10 0H24a5 5 0 0 1-10 0h-2z")
+ORDER = icon("M14 18h36v10a4 4 0 0 0 0 8v10H14V36a4 4 0 0 0 0-8z")
+STOCK = icon("M14 34h16v16H14zm20 0h16v16H34zM24 14h16v16H24z")
+CARRIERS = icon("M14 22h26l-6-6 4-4 12 12-12 12-4-4 6-6H14zm36 20H24l6 6-4 4-12-12 12-12 4 4-6 6h26z")
+ROUTE = icon("M28 14a12 12 0 1 1 0 24 12 12 0 0 1 0-24zm0 6a6 6 0 1 0 0 12 6 6 0 0 0 0-12zm9 18 13 13-4 4-13-13z")
+STATUS = icon("M32 14a18 18 0 1 1 0 36 18 18 0 0 1 0-36zm-2 8v12l9 6 3-4-7-5V22z")
+CHECK = icon("M26 44 14 32l4-4 8 8 20-20 4 4z")
+RECEIPT = icon("M18 12h28v40l-5-4-6 4-6-4-6 4-5-4zm6 10h16v4H24zm0 8h16v4H24z")
+BELL = icon("M32 12a4 4 0 0 1 4 4v2a12 12 0 0 1 8 11v9l4 6H16l4-6v-9a12 12 0 0 1 8-11v-2a4 4 0 0 1 4-4zm-6 36h12a6 6 0 0 1-12 0z")
+DOC = icon("M18 12h18l10 10v30H18zm18 2v8h8z")
 INSTRUCTIONS = """LogiOps AI resolves synthetic logistics exceptions (late or held shipments) with a person in charge.
 Flow: list_incidents (already ordered by what needs attention first) -> read facts with get_shipment, get_order,
 get_inventory and find_alternative_carriers -> investigate_incident calculates every feasible plan from the current
@@ -151,18 +167,18 @@ def create_mcp_server(
         return UserMessage(EmbeddedResource(type="resource", resource=TextResourceContents(
             uri=SKILL_URI, mimeType=SKILL_MIME_TYPE, text=SKILL_TEXT)))
 
-    @server.tool(title="List incidents", annotations=READ)
+    @server.tool(title="List incidents", annotations=READ, icons=[LIST])
     async def list_incidents() -> IncidentList:
         """List every incident with its kind, priority, due time, status and critical units at risk, in the
         order to work them: open first, then the most critical units at risk, priority and due time."""
         return {"incidents": service.list_incidents()}
 
-    @server.tool(title="Get shipment", annotations=READ)
+    @server.tool(title="Get shipment", annotations=READ, icons=[SHIPMENT])
     async def get_shipment(shipment_id: ShipmentId) -> Shipment:
         """Read the shipment behind an incident: route, delayed ETA, its order ids and its local warehouse."""
         return shipment_view(snapshot_of(shipment_id)["state"])
 
-    @server.tool(title="Get customer order", annotations=READ)
+    @server.tool(title="Get customer order", annotations=READ, icons=[ORDER])
     async def get_order(order_id: OrderId) -> Order:
         """Read a customer order (quantity, priority, due time); order ids look like ORD-421."""
         states = [service.get(item)["state"] for item in incident_ids()]
@@ -174,7 +190,7 @@ def create_mcp_server(
         hint = orders_hint(linked) if linked else "Read the shipment first; it lists its order ids."
         raise ToolError(f"Unknown order: {order_id}. Next step: {hint}")
 
-    @server.tool(title="Get warehouse stock", annotations=READ)
+    @server.tool(title="Get warehouse stock", annotations=READ, icons=[STOCK])
     async def get_inventory(
         warehouse_id: Annotated[str, Field(description="Warehouse id from get_shipment, such as arequipa.")],
         sku: Annotated[str, Field(description="Product SKU from get_shipment, such as LAPTOP-01.")],
@@ -192,13 +208,13 @@ def create_mcp_server(
         hint = inventory_hint(candidates[0]) if len(candidates) == 1 else "Read the shipment first; it names its warehouse."
         raise ToolError(f"Unknown warehouse or SKU. Next step: {hint}")
 
-    @server.tool(title="Find alternative carriers", annotations=READ)
+    @server.tool(title="Find alternative carriers", annotations=READ, icons=[CARRIERS])
     async def find_alternative_carriers(shipment_id: ShipmentId) -> dict[str, CarrierQuote]:
         """Read alternative carrier and service quotes for the incident's route: capacity, ETA and incremental cost."""
         return snapshot_of(shipment_id)["state"]["carriers"]
 
     @server.tool(
-        title="Investigate incident and calculate plans",
+        title="Investigate incident and calculate plans", icons=[ROUTE],
         annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, idempotentHint=True, openWorldHint=False),
         meta={"ui": {"resourceUri": UI_URI, "invoking": UI_INVOKING, "invoked": UI_INVOKED}, "ui/resourceUri": UI_URI},
     )
@@ -218,13 +234,13 @@ def create_mcp_server(
             _meta={"ui": {"resourceUri": UI_URI, "invoked": UI_INVOKED}},
         )
 
-    @server.tool(title="List proactive alerts", annotations=READ)
+    @server.tool(title="List proactive alerts", annotations=READ, icons=[BELL])
     async def list_alerts() -> AlertList:
         """Read open alerts: incidents whose data changed after they were investigated, re-planned on the new data.
         Each names what changed, the plan it affects and the new pick; an alert never approves anything."""
         return {"alerts": alerts.open_alerts()}
 
-    @server.tool(title="Get execution status", annotations=READ)
+    @server.tool(title="Get execution status", annotations=READ, icons=[STATUS])
     async def get_execution_status(shipment_id: ShipmentId) -> ExecutionStatus:
         """Read the current approval, execution status, and audit event names."""
         snapshot = snapshot_of(shipment_id)
@@ -240,7 +256,7 @@ def create_mcp_server(
         }
 
     @server.tool(
-        title="Execute approved plan",
+        title="Execute approved plan", icons=[CHECK],
         annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=True, idempotentHint=True, openWorldHint=False),
         meta={"ui": {"visibility": ["model"]}},
     )
@@ -263,7 +279,7 @@ def create_mcp_server(
             raise approval_elicitation(ctx, incident, plan, source_version, "run", "No tool can approve.") from exc
 
     @server.tool(
-        title="Quote a carrier booking",
+        title="Quote a carrier booking", icons=[RECEIPT],
         annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, idempotentHint=True, openWorldHint=False),
     )
     async def quote_carrier_booking(
@@ -280,7 +296,7 @@ def create_mcp_server(
             raise fail(exc, "investigate the incident and price one of its current plans") from exc
 
     @server.tool(
-        title="Book and pay a carrier quote",
+        title="Book and pay a carrier quote", icons=[RECEIPT],
         annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=True, idempotentHint=True, openWorldHint=False),
         meta={"ui": {"visibility": ["model"]}},
     )
@@ -306,7 +322,7 @@ def create_mcp_server(
                                            "Nothing was charged.") from exc
             raise fail(exc, "ask for a new quote with quote_carrier_booking, read it back, and confirm its exact total") from exc
 
-    @server.tool(title="Get booking", annotations=READ)
+    @server.tool(title="Get booking", annotations=READ, icons=[RECEIPT])
     async def get_booking(
         number: Annotated[str, Field(description="Confirmation number, such as LGO-7K2M9Q.", min_length=3, max_length=20)],
     ) -> Booking:
@@ -317,7 +333,7 @@ def create_mcp_server(
             raise fail(exc, "use the confirmation number book_carrier returned") from exc
 
     @server.resource(
-        UI_URI, name="resolution_options", title="Resolution options",
+        UI_URI, name="resolution_options", title="Resolution options", icons=[ROUTE],
         description="Interactive comparison of the calculated plans. It can select a plan, never approve one.",
         mime_type=UI_MIME_TYPE, meta={"ui": {"prefersBorder": True, "csp": {"connectDomains": [], "resourceDomains": []}}},
     )
@@ -325,7 +341,7 @@ def create_mcp_server(
         return UI_HTML
 
     @server.resource(
-        SKILL_URI, name=SKILL_NAME, title="LogiOps exception desk (Agent Skill)",
+        SKILL_URI, name=SKILL_NAME, title="LogiOps exception desk (Agent Skill)", icons=[DOC],
         description="Agent Skill for these tools: the workflow, the rules, how to speak, and what to do when a tool fails.",
         mime_type=SKILL_MIME_TYPE,
     )
@@ -333,7 +349,7 @@ def create_mcp_server(
         return SKILL_TEXT
 
     @server.resource(
-        "incident://{shipment_id}", name="incident", title="Incident record",
+        "incident://{shipment_id}", name="incident", title="Incident record", icons=[SHIPMENT],
         description="One incident as JSON: its summary, shipment, current plans, current approval and executions.",
         mime_type="application/json",
     )
@@ -353,7 +369,7 @@ def create_mcp_server(
         }, indent=2)
 
     @server.resource(
-        "receipt://logiops/{number}", name="receipt", title="Booking receipt",
+        "receipt://logiops/{number}", name="receipt", title="Booking receipt", icons=[RECEIPT],
         description="A booking's receipt as Markdown: the price breakdown, payment and confirmation number.",
         mime_type="text/markdown",
     )
@@ -364,7 +380,7 @@ def create_mcp_server(
             raise ValueError(str(exc)) from exc
 
     @server.prompt(
-        name="morning_briefing", title="Morning briefing",
+        name="morning_briefing", title="Morning briefing", icons=[LIST],
         description="Brief me on the incident queue: what is late or held, and which incident to start with.",
     )
     def morning_briefing() -> list[UserMessage]:
@@ -376,7 +392,7 @@ def create_mcp_server(
         )]
 
     @server.prompt(
-        name="investigate_incident", title="Investigate an incident",
+        name="investigate_incident", title="Investigate an incident", icons=[ROUTE],
         description="Read an incident's facts, calculate its plans and recommend one; a person approves.",
     )
     def investigate_prompt(
