@@ -5,9 +5,10 @@ Neither way in needs an AWS account.
 - **The deployed demo**, live until judging ends (20 Nov 2026):
   <https://dir4g4n7eq982.cloudfront.net/demo> for the device and `/console` for the
   operator console.
-  - As a guest you can read and ask; the agent then runs on the scripted replay. To
-    approve, execute and book, press "Link account" and sign in with the demo user from
-    the private testing instructions.
+  - As a guest you can read and ask; the agent then runs on the scripted replay, and
+    the page says so. To use the live agent and to approve, execute and book, press
+    "Link account" and sign in with the demo user from the private testing
+    instructions.
   - Everyone who tests it shares it. If an incident was left executed or booked, say
     "reset this incident" (signed in) and it starts again. It also resets itself every
     night at 03:00 UTC-05:00.
