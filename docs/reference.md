@@ -296,7 +296,9 @@ under a CSP with no network access, relays messages, and drops the view if it
 navigates away. The host checks the proxy's origin on every message, sends
 `ui/resource-teardown` before removing the view, and shows no card at all if
 no separate sandbox origin is available. Its MCP client runs `initialize` once
-and then sends `MCP-Protocol-Version: 2025-11-25` on every request. It passes a
+and then sends `MCP-Protocol-Version: 2025-11-25` on every request: `tools/list`
+and `resources/read` for the card, and `tools/call` for `list_incidents` (the
+inbox, with `GET /incidents` only as a fallback) and `list_alerts`. It passes a
 full `hostContext` (theme, display mode, container size, locale, time
 zone, device capabilities, safe-area insets), and its "Light plans card"
 toggle, under the simulated device on a desktop screen, sends
@@ -473,7 +475,8 @@ line says the same in one breath. If no plan works any more, the alert says so.
 It scans right after `POST /demo/inventory`, and in the background every
 `LOGIOPS_ALERT_SCAN_SECONDS` (30 by default; 0 turns it off). The endpoints
 are `GET /alerts` and `POST /alerts/{id}/dismiss`, and MCP clients read the
-alerts with `list_alerts`. The demo checks every five seconds:
+alerts with `list_alerts`. The device is one of them: every ten seconds it calls
+`list_alerts` over `/mcp` (the console reads `GET /alerts`), and then:
 - an alert for the open incident is spoken and written in the conversation,
   with the new pick preselected for approval;
 - an alert for another incident lights up a bell in the top bar that opens

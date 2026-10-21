@@ -10,7 +10,7 @@ export function createMcpClient({ fetch: doFetch, getToken, clientInfo = { name:
     if (token) headers.Authorization = `Bearer ${token}`;
     if (version) headers["MCP-Protocol-Version"] = version;
     const response = await fetcher("/mcp", { method: "POST", headers, cache: "no-store", body: JSON.stringify({ jsonrpc: "2.0", ...message }) });
-    if (!response.ok) throw new Error(`MCP HTTP ${response.status}`);
+    if (!response.ok) throw Object.assign(new Error(`MCP HTTP ${response.status}`), { status: response.status });
     return response.status === 202 ? null : response.json();
   }
 
@@ -30,5 +30,11 @@ export function createMcpClient({ fetch: doFetch, getToken, clientInfo = { name:
     return body.result;
   }
 
-  return { request, protocol };
+  async function callTool(name, args = {}) {
+    const result = await request("tools/call", { name, arguments: args });
+    if (result.isError) throw new Error(result.content?.find((item) => item.type === "text")?.text || `${name} failed`);
+    return result.structuredContent;
+  }
+
+  return { request, protocol, callTool };
 }

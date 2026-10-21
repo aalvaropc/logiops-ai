@@ -279,7 +279,7 @@ def test_the_phone_dock_expands_its_reply_toggles_the_voice_and_keeps_the_shell_
     expect(page.locator(".talk")).not_to_have_class(re.compile(r"\bexpanded\b"))
     changed = page.request.post(f"{replay_server}/demo/inventory", data={"incident_id": "SHIP-421", "available": 20})
     assert changed.ok, changed.text()
-    expect(page.locator("#alerts-bell")).to_be_visible(timeout=12000)
+    expect(page.locator("#alerts-bell")).to_be_visible(timeout=20000)
     assert page.evaluate("(() => { const bar = document.querySelector('.device-bar'); return bar.scrollWidth <= bar.clientWidth; })()")
     assert page.locator(".send-label").is_hidden() and page.locator("#ask").get_attribute("aria-label") == "Send"
     assert_accessible(page)
@@ -420,6 +420,10 @@ def test_after_execution_the_queue_moves_on_and_start_over_says_what_stays(page,
 
 
 def test_an_alert_elsewhere_opens_as_a_card(page, replay_server, page_errors, reset_demo):
+    tool_calls, reads = [], []
+    page.on("request", lambda request: tool_calls.append((request.post_data_json or {}).get("params", {}).get("name"))
+            if request.method == "POST" and request.url.endswith("/mcp") else None)
+    page.on("request", lambda request: reads.append(request.url.removeprefix(replay_server)) if request.method == "GET" else None)
     page.set_viewport_size({"width": 1440, "height": 1000})
     page.goto(f"{replay_server}/demo#SHIP-421")
     expect(page.locator("#connection")).to_have_text("Connected")
@@ -431,7 +435,7 @@ def test_an_alert_elsewhere_opens_as_a_card(page, replay_server, page_errors, re
     changed = page.request.post(f"{replay_server}/demo/inventory", data={"incident_id": "SHIP-421", "available": 20})
     assert changed.ok, changed.text()
     bell = page.locator("#alerts-bell")
-    expect(bell).to_be_visible(timeout=12000)
+    expect(bell).to_be_visible(timeout=20000)
     expect(bell).to_contain_text("SHIP-421")
     bell.click()
     alert = page.locator('[data-surface="alert"]')
@@ -440,8 +444,17 @@ def test_an_alert_elsewhere_opens_as_a_card(page, replay_server, page_errors, re
     expect(alert.locator(".was-plan")).to_contain_text("Fulfill local stock and send the rest express")
     expect(alert.locator(".new-plan")).to_contain_text("Now")
     expect(page.locator("#device-spoken")).to_contain_text("Heads up on SHIP-421")
+    assert {"list_incidents", "list_alerts"} <= set(tool_calls), "the device is an MCP client: it reads its inbox and alerts with tools/call"
+    assert "/incidents" not in reads and "/alerts" not in reads
     assert_accessible(page)
     assert page_errors == []
+
+
+def test_the_device_reads_its_inbox_from_the_api_when_mcp_refuses(page, replay_server, reset_demo):
+    page.route("**/mcp", lambda route: route.fulfill(status=429, content_type="application/json", body="{}"))
+    page.goto(f"{replay_server}/demo")
+    expect(page.locator("#connection")).to_have_text("Connected")
+    expect(page.locator('[data-surface="home"] .incident-card')).to_have_count(4)
 
 
 def test_the_agent_stage_shows_the_work_before_the_answer_then_gives_way(page, replay_server, page_errors, reset_demo):

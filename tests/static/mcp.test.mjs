@@ -39,3 +39,21 @@ test("a failed negotiation is retried next time and JSON-RPC errors become excep
   await assert.rejects(client.request("tools/call", {}), /A person must approve/);
   assert.equal(attempts, 2);
 });
+
+test("a tool call returns its structured content, and a tool error or an HTTP refusal is thrown", async () => {
+  const { fetcher, calls } = fetchScript({ "/mcp": (init) => {
+    const message = JSON.parse(init.body);
+    if (message.method === "initialize") return jsonResponse(200, { jsonrpc: "2.0", id: 0, result: { protocolVersion: "2025-11-25" } });
+    if (message.method === "notifications/initialized") return { ok: true, status: 202, headers: { get: () => null }, json: async () => null };
+    if (message.params.name === "list_incidents") {
+      return jsonResponse(200, { jsonrpc: "2.0", id: 1, result: { content: [{ type: "text", text: "{}" }], structuredContent: { incidents: [{ incident_id: "SHIP-421" }] }, isError: false } });
+    }
+    if (message.params.name === "quote_carrier_booking") return jsonResponse(401, {});
+    return jsonResponse(200, { jsonrpc: "2.0", id: 1, result: { content: [{ type: "text", text: "Unknown incident: SHIP-999" }], isError: true } });
+  } });
+  const client = createMcpClient({ fetch: fetcher });
+  assert.deepEqual(await client.callTool("list_incidents"), { incidents: [{ incident_id: "SHIP-421" }] });
+  assert.deepEqual(JSON.parse(calls.at(-1).init.body), { jsonrpc: "2.0", id: 1, method: "tools/call", params: { name: "list_incidents", arguments: {} } });
+  await assert.rejects(client.callTool("get_shipment", { shipment_id: "SHIP-999" }), /Unknown incident: SHIP-999/);
+  await assert.rejects(client.callTool("quote_carrier_booking", { shipment_id: "SHIP-421" }), (error) => error.status === 401);
+});

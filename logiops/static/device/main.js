@@ -178,8 +178,10 @@ const purchase = createPurchase({
   onBooking: (booking) => showSurface("receipt", { booking }),
 });
 
+const mcpClient = createMcpClient({ getToken: () => state.token });
+
 const alerts = createAlerts({
-  request, incidentId: () => state.incidentId, isBusy: () => state.busy, isHidden: () => document.hidden,
+  request, list: () => mcpClient.callTool("list_alerts"), incidentId: () => state.incidentId, isBusy: () => state.busy, isHidden: () => document.hidden,
   onAlerts: () => renderAlertBell(),
   onAnnounce: async (alert) => {
     state.pendingApproval = null;
@@ -227,8 +229,6 @@ async function finishSignIn() {
   history.replaceState(null, "", outcome.path);
   state.signInNote = outcome.note;
 }
-
-const mcpClient = createMcpClient({ getToken: () => state.token });
 
 function cardWidth() {
   const surface = $("surface");
@@ -512,7 +512,7 @@ function noteFallback(run) {
 }
 
 async function refresh() {
-  state.inbox = (await request("/incidents")).incidents;
+  state.inbox = (await mcpClient.callTool("list_incidents").catch(() => request("/incidents"))).incidents;
   if (!state.inbox.some((item) => item.incident_id === state.incidentId)) {
     const unknown = Boolean(state.incidentId);
     state.incidentId = state.inbox[0]?.incident_id || null;
@@ -806,7 +806,7 @@ if (resumed) {
   state.token = resumed.access;
   state.approver = resumed.username || "demo-operator";
 }
-setInterval(() => { checkAlerts().catch(() => {}); }, 5000);
+setInterval(() => { checkAlerts().catch(() => {}); }, 10000);
 loadAuth().then(finishSignIn).catch(() => {}).then(() => act(async () => {}, "").catch(() => {})).then(() => {
   if (state.signInNote) say("assistant", state.signInNote);
   loadVoice();
