@@ -49,7 +49,7 @@ variable "spend_stop_usd" {
 }
 
 variable "spend_stop_email" {
-  description = "Where the spend-stop budget writes; empty creates no budget. Pass it with TF_VAR_spend_stop_email, never in a committed file."
+  description = "Where the spend-stop budget and the demo-down alarm write; empty creates neither subscription. Pass it with TF_VAR_spend_stop_email, never in a committed file."
   type        = string
   default     = ""
   sensitive   = true

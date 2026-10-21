@@ -179,6 +179,12 @@ again from `main` once the fix is merged.
   CloudFront to EC2 uses HTTP, restricted to CloudFront's origin-facing IP
   ranges. A later custom domain and origin certificate can add TLS on that
   hop.
+- A Route 53 health check calls `/healthz` through CloudFront every 30 seconds
+  from several regions (`monitor.tf`). When it has failed for three minutes, the
+  CloudWatch alarm `logiops-ai-demo-down` writes to the SNS topic
+  `logiops-ai-alerts`, and again when the demo is back. The e-mail
+  subscription is created from `TF_VAR_spend_stop_email` and must be confirmed
+  once from the message AWS sends. This does not depend on GitHub's schedule.
 - Spend is bounded in the app (`LOGIOPS_DAILY_MODEL_CALLS`, the guest share and
   each visitor's allowance, `LOGIOPS_DAILY_SPEECH_CHARS`), and `spend.tf` adds an
   account-level backstop: when the month's actual cost, credits excluded,

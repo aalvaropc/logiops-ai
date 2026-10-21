@@ -131,3 +131,13 @@ def test_an_account_level_spend_stop_cuts_bedrock_and_polly_without_committing_a
     assert re.search(r'variable "spend_stop_email" \{[^}]*default     = ""', variables)
     assert not re.search(r"[\w.+-]+@[\w-]+\.[\w.]+", spend + variables), "no address is committed"
 
+
+def test_an_aws_alarm_watches_the_demo_without_committing_an_address():
+    monitor = (ROOT / "infra" / "amazon" / "monitor.tf").read_text()
+    assert 'type              = "HTTPS"' in monitor and 'resource_path     = "/healthz"' in monitor
+    assert "fqdn              = aws_cloudfront_distribution.app.domain_name" in monitor
+    assert 'metric_name         = "HealthCheckStatus"' in monitor and 'treat_missing_data  = "breaching"' in monitor
+    assert "alarm_actions       = [aws_sns_topic.alerts.arn]" in monitor and "ok_actions          = [aws_sns_topic.alerts.arn]" in monitor
+    assert 'count     = var.spend_stop_email == "" ? 0 : 1' in monitor
+    assert not re.search(r"[\w.+-]+@[\w-]+\.[\w.]+", monitor), "no address is committed"
+
