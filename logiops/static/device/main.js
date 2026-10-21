@@ -475,7 +475,7 @@ function renderControls() {
   $("mic").disabled = !ready;
   for (const chip of document.querySelectorAll(".chip")) chip.disabled = !ready;
   for (const id of ["confirm-yes", "confirm-no", "receipt-execute"]) if ($(id)) $(id).disabled = state.busy;
-  $("account").disabled = state.busy;
+  $("account").disabled = !ready;
 }
 
 function render(snapshot) {
@@ -703,6 +703,7 @@ const commands = createCommands({
 });
 
 function handleUtterance(raw) {
+  if (!state.snapshot) return Promise.resolve();
   if (!state.busy) message("");
   return commands.handle(raw);
 }
