@@ -279,7 +279,9 @@ class LogiOpsService:
                             {"source_version": version, "plan_ids": [p["id"] for p in plans]})
             return plans
 
-    def approve(self, incident_id: str, plan_id: str, source_version: int, approved_by: str) -> dict[str, Any]:
+    def approve(
+        self, incident_id: str, plan_id: str, source_version: int, approved_by: str, *, approved_subject: str | None = None,
+    ) -> dict[str, Any]:
         if not approved_by.strip():
             raise WorkflowError("approved_by is required", 422)
         if len(approved_by.strip()) > APPROVER_MAX_LENGTH:
@@ -312,6 +314,7 @@ class LogiOpsService:
             connection.execute("UPDATE snapshot SET state_json = ? WHERE incident_id = ?", (_json(state), incident_id))
             self._event(connection, incident_id, "plan_approved", {
                 "plan_id": plan_id, "source_version": source_version, "approved_by": approved_by.strip(),
+                **({"approved_subject": approved_subject} if approved_subject is not None else {}),
             })
             return {
                 "plan_id": plan_id,
