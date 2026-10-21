@@ -179,6 +179,20 @@ again from `main` once the fix is merged.
   CloudFront to EC2 uses HTTP, restricted to CloudFront's origin-facing IP
   ranges. A later custom domain and origin certificate can add TLS on that
   hop.
+- Spend is bounded in the app (`LOGIOPS_DAILY_MODEL_CALLS`, the guest share and
+  each visitor's allowance, `LOGIOPS_DAILY_SPEECH_CHARS`), and `spend.tf` adds an
+  account-level backstop: when the month's actual cost, credits excluded,
+  reaches `spend_stop_usd` (60 by default), an AWS Budgets action attaches the
+  `spend_stop` deny policy to the instance role. Bedrock and Polly calls then
+  fail, and the app answers from its replay and the browser voice, and says so.
+  The budget is created only when `TF_VAR_spend_stop_email` is set at apply
+  time; the address is never committed. Budgets data lags by hours, so this is
+  a backstop, not the main cap.
+- The same switch by hand, effective within a minute and with no deploy:
+  `aws iam attach-role-policy --role-name "$(terraform -chdir=infra/amazon output -raw app_role_name)" --policy-arn "$(terraform -chdir=infra/amazon output -raw spend_stop_policy_arn)"`;
+  `detach-role-policy` with the same arguments undoes it (live answers return
+  after the app's five-minute rest). After the budget action fires, it stays
+  attached until detached by hand.
 
 ## Teardown
 

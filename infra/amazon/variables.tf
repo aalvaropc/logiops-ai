@@ -43,6 +43,18 @@ variable "guest_daily_model_calls" {
   default = 20
 }
 
+variable "spend_stop_usd" {
+  type    = number
+  default = 60
+}
+
+variable "spend_stop_email" {
+  description = "Where the spend-stop budget writes; empty creates no budget. Pass it with TF_VAR_spend_stop_email, never in a committed file."
+  type        = string
+  default     = ""
+  sensitive   = true
+}
+
 variable "extra_oauth_callback_urls" {
   type    = list(string)
   default = ["http://localhost:6274/oauth/callback", "http://localhost:6274/oauth/callback/debug"]
