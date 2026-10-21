@@ -179,6 +179,12 @@ again from `main` once the fix is merged.
   CloudFront to EC2 uses HTTP, restricted to CloudFront's origin-facing IP
   ranges. A later custom domain and origin certificate can add TLS on that
   hop.
+- The instance resets the demo every night at 08:11 UTC (about 03:00 UTC-05:00)
+  with its own systemd timer, `logiops-reset.timer`, which posts to
+  `127.0.0.1:8000/demo/reset` with the token from `/etc/logiops.env` (the shell
+  passes it to curl on stdin, never as an argument). The uptime workflow's
+  nightly job does the same from GitHub when GitHub runs its schedule.
+  `systemctl list-timers logiops-reset.timer` shows the next run.
 - Spend is bounded in the app (`LOGIOPS_DAILY_MODEL_CALLS`, the guest share and
   each visitor's allowance, `LOGIOPS_DAILY_SPEECH_CHARS`), and `spend.tf` adds an
   account-level backstop: when the month's actual cost, credits excluded,

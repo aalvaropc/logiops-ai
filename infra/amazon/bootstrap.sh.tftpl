@@ -53,6 +53,31 @@ ReadWritePaths=/var/lib/logiops
 WantedBy=multi-user.target
 UNIT
 
+cat > /etc/systemd/system/logiops-reset.service <<'UNIT'
+[Unit]
+Description=Reset the LogiOps AI demo to its synthetic incidents
+After=logiops.service
+
+[Service]
+Type=oneshot
+User=logiops
+Group=logiops
+EnvironmentFile=/etc/logiops.env
+ExecStart=/bin/sh -c 'printf "Authorization: Bearer %%s\\n" "$$LOGIOPS_ACCESS_TOKEN" | curl -fsS --max-time 30 --retry 3 --retry-delay 10 -o /dev/null -H @- -X POST http://127.0.0.1:8000/demo/reset'
+UNIT
+
+cat > /etc/systemd/system/logiops-reset.timer <<'UNIT'
+[Unit]
+Description=Reset the LogiOps AI demo every night, about 03:00 UTC-05:00
+
+[Timer]
+OnCalendar=*-*-* 08:11:00 UTC
+Persistent=false
+
+[Install]
+WantedBy=timers.target
+UNIT
+
 cat > /usr/local/sbin/logiops-deploy <<'DEPLOY'
 #!/usr/bin/env bash
 set -euo pipefail
@@ -131,3 +156,4 @@ exit 1
 DEPLOY
 chmod 0750 /usr/local/sbin/logiops-deploy
 systemctl daemon-reload
+systemctl enable --now logiops-reset.timer
