@@ -119,3 +119,15 @@ def test_the_demo_is_checked_hourly_and_reset_nightly_without_echoing_the_token(
     assert "-H @-" in reset and '"$BASE/demo/reset"' in reset and "inputs.base" not in reset
     assert not re.search(r"echo[^\n]*TOKEN", uptime.replace("LOGIOPS_OPERATOR_TOKEN secret is not set", ""))
 
+
+def test_an_account_level_spend_stop_cuts_bedrock_and_polly_without_committing_an_address():
+    infra = ROOT / "infra" / "amazon"
+    spend, variables = (infra / "spend.tf").read_text(), (infra / "variables.tf").read_text()
+    assert '"bedrock:InvokeModel", "bedrock:InvokeModelWithResponseStream", "polly:SynthesizeSpeech"' in spend and 'Effect   = "Deny"' in spend
+    assert 'action_type        = "APPLY_IAM_POLICY"' in spend and 'approval_model     = "AUTOMATIC"' in spend
+    assert "include_credit = false" in spend and "roles      = [aws_iam_role.app.name]" in spend
+    assert '"iam:PolicyARN" = aws_iam_policy.spend_stop.arn' in spend, "the budget role can attach only the deny policy"
+    assert 'variable "spend_stop_usd" {\n  type    = number\n  default = 60\n}' in variables
+    assert re.search(r'variable "spend_stop_email" \{[^}]*default     = ""', variables)
+    assert not re.search(r"[\w.+-]+@[\w-]+\.[\w.]+", spend + variables), "no address is committed"
+

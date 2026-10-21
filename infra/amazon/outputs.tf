@@ -46,3 +46,11 @@ output "memory_id" {
 output "config_parameter_path" {
   value = var.config_parameter_path
 }
+
+output "spend_stop_policy_arn" {
+  value = aws_iam_policy.spend_stop.arn
+}
+
+output "app_role_name" {
+  value = aws_iam_role.app.name
+}
