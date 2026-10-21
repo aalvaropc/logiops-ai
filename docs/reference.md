@@ -45,6 +45,7 @@ safely, and each feature with its endpoints. For the design, see
 | `LOGIOPS_OTEL` | `1` exports the agent's OpenTelemetry spans (Strands Agents) to `OTEL_EXPORTER_OTLP_ENDPOINT` when set, to the console otherwise; `/healthz` reports `telemetry` | unset |
 | `LOGIOPS_DAILY_MODEL_CALLS` | live model calls per day (UTC-05:00) for the whole demo; each request reserves its run's maximum and releases what it did not use, and a run that no longer fits answers from replay with `fallback: "daily_budget"` | `150`; the AWS deployment sets `40` |
 | `LOGIOPS_GUEST_DAILY_MODEL_CALLS` | the part of the daily budget a guest on the public deployment may use live; a guest's run must fit both this share and the daily budget, and once the share is used the guest runs on replay with `fallback: "guest_budget"`; `0` keeps every guest on replay (`fallback: "sign_in"`) | `0`; the AWS deployment sets `20` |
+| `LOGIOPS_GUEST_VIEWER_DAILY_MODEL_CALLS` | each guest visitor's own daily allowance within the guest share (keyed by a hash of the visitor's address), so one visitor cannot use up the share for everyone; past it, that visitor runs on replay with `fallback: "guest_budget"` | `9` (one investigation) |
 | `AWS_REGION`, `BEDROCK_MODEL_ID` | Bedrock region and model profile | `us-east-1`, `global.anthropic.claude-sonnet-4-6` |
 | `LOGIOPS_VOICE` | `polly` (Amazon Polly) or `browser` (the browser's own voice) | `polly` with `bedrock`, `browser` with `replay` |
 | `LOGIOPS_POLLY_VOICE`, `LOGIOPS_POLLY_ENGINE` | Polly voice and engine | `Ruth`, `generative` |
@@ -378,9 +379,10 @@ by the three `LOGIOPS_COGNITO_*` settings; without them nothing changes.
 - **Guests.** Without a token a visitor can read, ask the agent and use the
   read tools, hear every reply with Polly and receive the alert card. On the
   public deployment a guest's agent runs live while the day's guest share of
-  model calls lasts (`LOGIOPS_GUEST_DAILY_MODEL_CALLS`), then on the replay
-  model with `fallback: "guest_budget"`; with no share, always on the replay
-  (`fallback: "sign_in"`). Approving,
+  model calls lasts (`LOGIOPS_GUEST_DAILY_MODEL_CALLS`) and the visitor's own
+  allowance within it (`LOGIOPS_GUEST_VIEWER_DAILY_MODEL_CALLS`, about one
+  investigation a day), then on the replay model with `fallback:
+  "guest_budget"`; with no share, always on the replay (`fallback: "sign_in"`). Approving,
   executing, changing data, booking (and the MCP tools
   `execute_approved_plan`, `quote_carrier_booking`, `book_carrier`,
   `get_booking`) answer `401` with `WWW-Authenticate: Bearer

@@ -61,13 +61,14 @@ def router(ctx: Context) -> APIRouter:
         maximum calls from the daily budget and releases what it did not use; when the run no longer
         fits, it runs on the replay model with fallback "daily_budget". For REST_SECONDS after the model
         service failed, live requests run on the replay model with fallback "model_unavailable". A guest
-        on the public deployment runs live only while the day's guest share lasts (fallback
-        "guest_budget" once it is used); with no guest share, a guest always runs on the replay model,
-        with fallback "sign_in"."""
+        on the public deployment runs live only while the day's guest share and the visitor's own daily
+        allowance within it last (fallback "guest_budget" once either is used); with no guest share, a
+        guest always runs on the replay model, with fallback "sign_in"."""
         mode = os.environ.get("LOGIOPS_AGENT_MODE", "bedrock")
         if mode not in ("bedrock", "replay"):
             raise BedrockError("LOGIOPS_AGENT_MODE must be bedrock or replay")
         guest = public and request is not None and actor_of(request).kind == "guest"
+        viewer = getattr(request.state, "viewer", None) if guest else None
         if guest and not budget.guest_limit:
             yield ReplayConverse(), "replay", "sign_in"
         elif custom and not guest:
@@ -76,10 +77,10 @@ def router(ctx: Context) -> APIRouter:
             yield ReplayConverse(), "replay", None
         elif time.monotonic() < outage["until"]:
             yield ReplayConverse(), "replay", UNAVAILABLE
-        elif (day := budget.reserve(max_calls, guest=guest)) is None:
+        elif (day := budget.reserve(max_calls, guest=guest, viewer=viewer)) is None:
             yield ReplayConverse(), "replay", GUEST_FALLBACK if guest and budget.used() + max_calls <= budget.limit else FALLBACK
         else:
-            client = BudgetedConverse(custom or bedrock, budget, day, max_calls, guest=guest)
+            client = BudgetedConverse(custom or bedrock, budget, day, max_calls, guest=guest, viewer=viewer)
             try:
                 yield client, "custom" if custom else "bedrock", None
             finally:

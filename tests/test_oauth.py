@@ -213,6 +213,22 @@ def test_a_public_guest_runs_live_from_the_guest_share_and_then_on_the_replay(tm
     assert operator["mode"] == "custom" and "fallback" not in operator and Counting.calls > live
 
 
+def test_one_guest_cannot_use_up_the_guest_share_for_everyone(tmp_path, monkeypatch):
+    monkeypatch.setenv("LOGIOPS_PUBLIC", "1")
+    monkeypatch.setenv("LOGIOPS_ACCESS_TOKEN", "p" * 40)
+    monkeypatch.setenv("LOGIOPS_PUBLIC_HOST", "demo.example.com")
+    monkeypatch.setenv("LOGIOPS_GUEST_DAILY_MODEL_CALLS", "30")
+
+    async def work(http, app):
+        first = (await http.post("/incidents/SHIP-421/agent/investigate", json={})).json()
+        second = (await http.post("/incidents/SHIP-433/agent/investigate", json={})).json()
+        return first, second
+
+    first, second = run_app(tmp_path, work, bedrock_client=ReplayConverse())
+    assert first["mode"] == "custom" and "fallback" not in first
+    assert (second["mode"], second["fallback"]) == ("replay", "guest_budget"), "the visitor's own allowance is used, the share is not"
+
+
 def test_a_public_guest_never_reaches_the_live_model(tmp_path, monkeypatch):
     monkeypatch.setenv("LOGIOPS_PUBLIC", "1")
     monkeypatch.setenv("LOGIOPS_ACCESS_TOKEN", "p" * 40)

@@ -115,9 +115,25 @@ def test_a_guest_run_holds_calls_in_both_pools_and_releases_both(tmp_path):
     assert budget.reserve(3, guest=True) and budget.used() == 10 and budget.used(guest=True) == 4
 
 
+def test_each_visitor_has_their_own_allowance_within_the_guest_share(tmp_path):
+    budget = DailyModelBudget(tmp_path / "viewers.sqlite3", limit=40, guest_limit=20, guest_viewer_limit=9)
+    day = budget.reserve(9, guest=True, viewer="203.0.113.7")
+    assert day and budget.used(guest=True, viewer="203.0.113.7") == 9
+    assert budget.reserve(9, guest=True, viewer="203.0.113.7") is None, "one visitor cannot use up the share"
+    assert budget.used() == 9 and budget.used(guest=True) == 9, "a refused hold leaves the other pools alone"
+    assert budget.reserve(9, guest=True, viewer="198.51.100.4") and budget.used(guest=True) == 18
+    budget.release(day, 5, guest=True, viewer="203.0.113.7")
+    assert budget.used(guest=True, viewer="203.0.113.7") == 4 and budget.used(guest=True) == 13 and budget.used() == 13
+    assert budget.reserve(4, guest=True, viewer="203.0.113.7") and budget.used(guest=True, viewer="203.0.113.7") == 8
+
+
 def test_the_guest_share_reads_its_limit_from_env(tmp_path, monkeypatch):
     monkeypatch.setenv("LOGIOPS_GUEST_DAILY_MODEL_CALLS", "12")
     assert DailyModelBudget.from_env(tmp_path / "g.sqlite3").guest_limit == 12
+    assert DailyModelBudget.from_env(tmp_path / "g.sqlite3").guest_viewer_limit == 9
+    monkeypatch.setenv("LOGIOPS_GUEST_VIEWER_DAILY_MODEL_CALLS", "4")
+    assert DailyModelBudget.from_env(tmp_path / "g.sqlite3").guest_viewer_limit == 4
+    monkeypatch.delenv("LOGIOPS_GUEST_VIEWER_DAILY_MODEL_CALLS")
     monkeypatch.delenv("LOGIOPS_GUEST_DAILY_MODEL_CALLS")
     assert DailyModelBudget.from_env(tmp_path / "g2.sqlite3").guest_limit == 0
     monkeypatch.setenv("LOGIOPS_GUEST_DAILY_MODEL_CALLS", "lots")

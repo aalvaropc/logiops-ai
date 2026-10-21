@@ -17,7 +17,7 @@ test("badges and notes follow the grounding check and the budget fallback", () =
   assert.match(fallbackNote({ fallback: "daily_budget" }), /live model budget is used/);
   assert.match(fallbackNote({ fallback: "model_unavailable" }), /live model is unavailable right now/);
   assert.match(fallbackNote({ fallback: "sign_in" }), /You're a guest, so answers come from the scripted replay\. Press Link account/);
-  assert.match(fallbackNote({ fallback: "guest_budget" }), /guest share of live answers is used/);
+  assert.match(fallbackNote({ fallback: "guest_budget" }), /live answers open to guests today are used/);
   assert.equal(fallbackNote({ fallback: "something_else" }), null);
   assert.equal(fallbackNote({}), null);
 });
