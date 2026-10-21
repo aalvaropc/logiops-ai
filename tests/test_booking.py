@@ -2,7 +2,7 @@
 
 import asyncio
 import re
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 
 import httpx
@@ -96,6 +96,21 @@ def test_paying_charges_the_quoted_total_once(tmp_path):
     with pytest.raises(WorkflowError, match="already booked"):
         bookings.quote("SHIP-421", None, OPERATOR)
     assert bookings.for_incident("SHIP-421") == [booking] and bookings.get(booking["number"].lower()) == booking
+
+
+def test_a_booking_from_before_a_date_refresh_is_found_by_number_but_not_shown_on_the_fresh_incident(tmp_path):
+    path = tmp_path / "booking.sqlite3"
+    day = [date(2026, 10, 12)]
+    service = LogiOpsService(path, scenario_day=lambda: day[0])
+    bookings = BookingStore(path, service)
+    approved(service)
+    quote = bookings.quote("SHIP-421", None, OPERATOR)
+    booking = bookings.confirm(quote["quote_id"], "147.50", "key-00000001", OPERATOR)
+    assert bookings.for_incident("SHIP-421") == [booking] and 147.5 in bookings.figures("SHIP-421")["dollars"]
+    day[0] = date(2026, 10, 15)
+    service.list_incidents()
+    assert bookings.for_incident("SHIP-421") == [] and bookings.figures("SHIP-421") == {"dollars": []}
+    assert bookings.get(booking["number"]) == booking
 
 
 @pytest.mark.parametrize("amount", ["147.49", 147.51, 0, "120"])

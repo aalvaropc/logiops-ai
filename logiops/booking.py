@@ -28,7 +28,7 @@ from .identity import Actor
 from .presentation import LIMA
 from .scenario import SHIPMENT_SOURCE
 from .service import LogiOpsService, WorkflowError
-from .storage import connect
+from .storage import connect, of_current_seed
 
 SERVICE_FEE_CENTS = 500
 
@@ -293,21 +293,25 @@ class BookingStore:
         return json.loads(row[0])
 
     def for_incident(self, incident_id: str) -> list[dict[str, Any]]:
+        """The incident's bookings as it is now; a booking from before a reset or a date refresh is still found by
+        its number, but no longer shown on the fresh incident."""
+        snapshot = self.service.get(incident_id)
         with self._connection() as connection:
             rows = connection.execute(
                 "SELECT booking_json FROM bookings WHERE incident_id = ? ORDER BY created_at", (incident_id,)).fetchall()
-        return [json.loads(row[0]) for row in rows]
+        return [item for item in (json.loads(row[0]) for row in rows) if of_current_seed(snapshot, item["plan_id"])]
 
     def figures(self, incident_id: str) -> dict[str, list[float]]:
-        """The dollar amounts of the incident's quotes and bookings, for the grounding check."""
+        """The dollar amounts of the incident's current quotes and bookings, for the grounding check."""
+        snapshot = self.service.get(incident_id)
         with self._connection() as connection:
             rows = connection.execute(
                 "SELECT quote_json FROM booking_quotes WHERE incident_id = ? UNION ALL "
                 "SELECT booking_json FROM bookings WHERE incident_id = ?", (incident_id, incident_id)).fetchall()
         amounts = set()
-        for row in rows:
-            item = json.loads(row[0])
-            amounts |= {float(item[key]) for key in ("base_usd", "service_fee_usd", "tax_usd", "total_usd")}
+        for item in (json.loads(row[0]) for row in rows):
+            if of_current_seed(snapshot, item["plan_id"]):
+                amounts |= {float(item[key]) for key in ("base_usd", "service_fee_usd", "tax_usd", "total_usd")}
         return {"dollars": sorted(amounts)}
 
     def clear(self, incident_id: str | None = None) -> None:
