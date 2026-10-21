@@ -142,8 +142,8 @@ What stays, what changes, in the order a real desk would need it:
    approving and paying. The operator token is for the demo only.
 4. **Alexa+.** The device page simulates the Alexa+ experience; the server
    speaks MCP (tools, prompts, resources, MCP Apps, Agent Skill, URL elicitation,
-   OAuth 2.1), so connecting Alexa+ is mostly registration and configuration
-   when the developer tools open, not a rewrite (see `docs/hackathon/alexa-plus-readiness.md`).
+   OAuth 2.1), the protocols Alexa+ add-ons are built on; what we expect is left once the
+   partner-only developer tools open is in `docs/hackathon/alexa-plus-readiness.md`.
 5. **Scale and operations.** SQLite becomes Postgres behind the same service
    layer; the one EC2 instance becomes a container service behind the same
    CloudFront distribution; `LOGIOPS_OTEL=1` ships the agent's spans to the

@@ -1,8 +1,21 @@
 # Testing instructions for judges
 
-No AWS account and no hosted demo are needed (see `decisions.md` D-AMZ-1). Everything
-below runs on a clean machine in replay mode, which drives the same MCP tools, plan
-calculation, approval and audit trail with a scripted model and zero tokens.
+Neither way in needs an AWS account.
+
+- **The deployed demo**, live until judging ends (20 Nov 2026):
+  <https://dir4g4n7eq982.cloudfront.net/demo> for the device and `/console` for the
+  operator console.
+  - As a guest you can read and ask; the agent then runs on the scripted replay. To
+    approve, execute and book, press "Link account" and sign in with the demo user from
+    the private testing instructions.
+  - Everyone who tests it shares it. If an incident was left executed or booked, say
+    "reset this incident" (signed in) and it starts again. It also resets itself every
+    night at 03:00 UTC-05:00.
+  - Live model answers share a daily budget. When it is spent, or the model service is
+    unavailable, answers come from the scripted replay and the page says so.
+- **Your own machine**, in replay mode, which drives the same MCP tools, plan
+  calculation, approval and audit trail with a scripted model and zero tokens. Both
+  options are below.
 
 ## Option 1: Docker (one command)
 
@@ -30,6 +43,8 @@ lists the 12 tools from a standard client; `--method tools/call --tool-name get_
 returns one record. Against the deployed demo, add `--header "Authorization: Bearer <token>"`. Without it you are a
 guest: execute, quote and book answer `401` with the OAuth challenge (the CLI reports `auth_required`); to sign in from
 Inspector's web UI, enter the client id and scopes from `GET /auth/config` in its OAuth settings.
+The device is an MCP client too: in the browser's network panel, its posts to `/mcp` are `initialize`,
+`tools/list`, `resources/read` for the plans card and `tools/call` for `list_incidents` and `list_alerts`.
 
 1. **MCP check.** `uv run python scripts/check_mcp.py http://127.0.0.1:8000/mcp`
    performs `initialize`, `tools/list`, `tools/call(get_shipment)` and
@@ -205,5 +220,7 @@ Run `aws login --region us-east-1` and start the server without
 `LOGIOPS_AGENT_MODE`; the meta line under each reply then says `bedrock mode` and
 shows real token counts. The live demo shares a daily budget of model calls: if a busy
 day has used it, replies say "replay mode · daily live budget used" and a note above the
-conversation explains it; live answers return after midnight (UTC-05:00). The hosted deployment on AWS is listed in the
-submission's testing instructions, together with its access token.
+conversation explains it; live answers return after midnight (UTC-05:00). If the model
+service fails, replies say "live model unavailable" and come from the replay for five
+minutes. The deployed demo's address is at the top; the demo user and the operator
+token are in the private testing instructions.

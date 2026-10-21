@@ -11,6 +11,8 @@ The narration and timings are in `video-script.md`. This list covers the setup.
 - [ ] Resolution 1920×1080, browser zoom 100%, notifications off, clock and e-mail not visible. The device fits the screen; the console is the second tab.
 - [ ] No access token, e-mail address, account id or key visible on screen at any point. The token goes into the console's Developer drawer before recording starts, or sign in with the demo user beforehand.
 - [ ] "Reset all incidents and preferences" (console, Developer drawer) just before each take, and `DELETE /memory` or "forget me" so the welcome-back line is the one you expect.
+- [ ] The opening shot passes over the "Alexa+ simulated" label in the device's top bar, with the caption "Simulated Alexa+ experience · self-hosted MCP server · Streamable HTTP · MCP 2025-11-25" ready in the editor.
+- [ ] No music, or only music you have the rights to; no third-party logos or footage on screen.
 - [ ] SHIP-421 investigated and approved before the take (the stock change at 1:36 needs an approved plan to invalidate), then back to home, where the take starts, with no preference saved.
 
 ## The real take (costs a few cents)
@@ -28,5 +30,8 @@ The narration and timings are in `video-script.md`. This list covers the setup.
 ## After recording
 
 - [ ] Under 3:00. Public on YouTube or Vimeo. English narration or captions.
+- [ ] Uploaded on 22 Oct in the morning, not at the last minute: uploads take longer than expected.
+- [ ] The first 14 seconds say it is a simulated Alexa+ experience and name the self-hosted MCP server, Streamable HTTP and the spec version.
 - [ ] Watch it once with the sound off to check nothing sensitive appears.
 - [ ] `POST /demo/reset` on the deployment.
+- [ ] From the deadline (23 Oct, 12:00 PT) until the winners are announced (3 Dec), nothing in the video, the repositories or the materials changes.

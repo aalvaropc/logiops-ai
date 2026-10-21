@@ -4,15 +4,18 @@ Each question: answer + source + date. "Ask" means the official rules and FAQ do
 settle it; the drafted question is ready to send to the organizers.
 
 1. **Is the submission editable after the deadline?**
-   Ask (not settled by the rules text we have, checked 2026-10-06). Draft: "Can a
-   Devpost submission be edited after 23 Oct 12:00 PT, for example to fix a link or a
-   video, and does an edit after the deadline disqualify it?" Until answered, assume
-   it cannot be edited: submit one day early (target 22 Oct).
+   Answered: no. The hackathon update "Final stretch" (checked 2026-10-21): "Once the
+   deadline passes, submissions are locked. Please do not edit your code repo, video,
+   or any project materials from the deadline until after the winner announcement."
+   Nothing changes from 23 Oct 12:00 PT to 3 Dec; see `decisions.md` (D-AMZ-22).
 
 2. **How does a self-hosted MCP server connect to Alexa+, and how do judges
    test it?**
-   Answered: it doesn't. Those developer tools are partner-only. See
-   `decisions.md` (D2).
+   Answered: it doesn't. Those developer tools are partner-only, and the organizers
+   confirmed on the forum that hackathon participants cannot get access. The FAQ says a
+   web page that acts as an actual MCP client (initialize, tools/list, tools/call over
+   Streamable HTTP) satisfies the simulated-experience path; the device does exactly
+   that. See `decisions.md` (D2, D-AMZ-23).
 
 3. **Where exactly are Product Feedback and Friction Logs submitted?**
    Ask. The rules require the feedback; the form fields are only visible when
@@ -26,10 +29,13 @@ settle it; the drafted question is ready to send to the organizers.
    answered: use the default branch and tag `amazon-v1.0` on the same commit.
 
 5. **Does this track require a live demo/endpoint during judging?**
-   Answered: no. See `decisions.md` (D-AMZ-1).
+   Answered: yes. The FAQ said a locally runnable repo is enough, but a later organizer
+   answer on the forum (checked 2026-10-21) says the MCP server "needs to be live and
+   accessible till the end of the judging period" (20 Nov). Another answer: replay mode
+   by default is fine, but a judge must not be required to paste in their own token.
+   See `decisions.md` (D-AMZ-21).
 
 6. **If the repo stays private, does `testing@devpost.com` have a GitHub
    username to invite?**
-   Ask. Moot if the repository is public at submission time, which is the cheapest
-   way to close it. Otherwise invite `testing@devpost.com` and the six reviewers
-   named in the rules; invitations can expire, so re-check before the deadline.
+   Moot: the repository and the library have been public, with an MIT license
+   detected at the top, since 20 Oct.
