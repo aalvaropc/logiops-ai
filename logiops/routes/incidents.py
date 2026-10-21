@@ -82,8 +82,14 @@ def router(ctx: Context) -> APIRouter:
         return {"plans": plans, "source_version": plans[0]["source_version"]}
 
     @routes.post("/incidents/{incident_id}/approvals")
-    async def approve(incident_id: str, request: ApprovalRequest) -> dict[str, Any]:
-        return service.approve(incident_id, request.plan_id, request.source_version, request.approved_by)
+    async def approve(incident_id: str, request: ApprovalRequest, http_request: Request) -> dict[str, Any]:
+        actor = actor_of(http_request)
+        identified = actor.kind == "user" or bool(ctx.access_token) or ctx.public
+        approved_by = actor.name if actor.kind == "user" else actor.subject if identified else request.approved_by
+        return service.approve(
+            incident_id, request.plan_id, request.source_version, approved_by,
+            approved_subject=actor.subject if identified else None,
+        )
 
     @routes.post("/incidents/{incident_id}/execute")
     async def execute(incident_id: str, request: ExecutionRequest) -> dict[str, Any]:
