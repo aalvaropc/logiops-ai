@@ -21,8 +21,9 @@ uses boto3 and does not need the CLI.
    access to `global.anthropic.claude-sonnet-4-6` with
    `bash scripts/test_bedrock.sh`.
 2. Review expected charges in AWS Pricing Calculator and the existing budget
-   alerts. EC2, EBS, and public IPv4 have ongoing hourly/monthly charges;
-   CloudFront, S3, and Bedrock add usage charges.
+   alerts. EC2, EBS, public IPv4, the Route 53 health check and the CloudWatch
+   alarm have ongoing hourly/monthly charges; CloudFront, S3, and Bedrock add
+   usage charges.
 3. Run `terraform -chdir=infra/amazon init` (the provider lock file is
    committed), then
    `terraform -chdir=infra/amazon plan -out=demo.tfplan` and inspect every

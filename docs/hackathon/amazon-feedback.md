@@ -26,7 +26,12 @@ that follow from them, with priorities, are in `feature-requests.md`.
   distribution, the MCP Apps sandbox origin; **Amazon S3** holds private
   releases; **AWS Systems Manager** installs them with no SSH and stores the
   token and settings; **AWS IAM** scopes the instance role to exactly these.
-- **AWS Budgets** and the Billing console watch the spend.
+- **AWS Budgets** and the Billing console watch the spend, and a budget action
+  cuts Bedrock and Polly at the account level if a month's actual cost passes
+  US$60.
+- **Amazon Route 53** checks the demo through CloudFront every 30 seconds, and
+  an **Amazon CloudWatch** alarm e-mails through **Amazon SNS** when it is down
+  and again when it is back.
 - Everything is defined in Terraform (`infra/amazon/`).
 
 ## Amazon Bedrock — Converse API with tool use
@@ -279,13 +284,33 @@ that follow from them, with priorities, are in `feature-requests.md`.
 ## AWS Budgets and the Billing console
 
 - **Used for:** budgets of US$50 and US$100 with e-mail alerts, plus a
-  zero-spend alert.
+  zero-spend alert. Since 2026-10-21 a budget action also stops the demo's
+  spend: at US$60 of actual monthly cost, credits excluded, it attaches a deny
+  policy for Bedrock and Polly to the instance role (`infra/amazon/spend.tf`).
 - **Worked well:** set up in minutes; the zero-spend alert fired within hours of
-  the first Bedrock calls.
+  the first Bedrock calls. The action is plain Terraform, and its execution role
+  can be limited with an `iam:PolicyARN` condition to the one policy it may
+  attach.
 - **Needs work:** alert e-mails require verification through an easy-to-miss
   banner, and the region selector is locked on global consoles with no
-  explanation (friction 2026-10-02).
+  explanation (friction 2026-10-02). A budget action requires at least one
+  subscriber even when its only job is the automatic action.
 - **Onboarding:** minutes, once the verification e-mail was found.
+- **Would use it again:** yes.
+
+## Amazon Route 53 health checks, CloudWatch alarms and SNS
+
+- **Used for:** knowing when the deployed demo is down without depending on
+  GitHub's scheduler: an HTTPS health check on `/healthz` through CloudFront
+  every 30 seconds, a CloudWatch alarm on `HealthCheckStatus` after three failed
+  minutes, and an SNS e-mail on failure and on recovery (`infra/amazon/monitor.tf`,
+  2026-10-21).
+- **Worked well:** four Terraform resources; minutes after the apply, all 16
+  health checkers reported HTTP 200 and the alarm was OK.
+- **Needs work:** `terraform apply` reports the e-mail subscription as created
+  while it is still `PendingConfirmation`; no alarm reaches anyone until the
+  link in AWS's e-mail is followed, and nothing in the apply output says so.
+- **Onboarding:** minutes.
 - **Would use it again:** yes.
 
 ## Model Context Protocol — official Python SDK
