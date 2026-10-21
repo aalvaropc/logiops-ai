@@ -199,7 +199,7 @@ function renderAccount() {
   const button = $("account");
   button.hidden = !state.auth.enabled;
   button.classList.toggle("signed-in", Boolean(state.session));
-  button.textContent = state.session ? state.session.username : "Guest";
+  button.textContent = state.session ? state.session.username : "Link account";
   button.setAttribute("aria-label", state.session ? `Signed in as ${state.session.username}; sign out` : "Guest, read only; link your account");
 }
 async function loadAuth() {

@@ -373,9 +373,10 @@ by the three `LOGIOPS_COGNITO_*` settings; without them nothing changes.
 
   The signed-in user's name is recorded on quotes and bookings.
 - **Guests.** Without a token a visitor can read, ask the agent and use the
-  read tools. On the public deployment the agent then runs on the replay model
+  read tools, hear every reply with Polly and receive the alert card. On the
+  public deployment the agent then runs on the replay model
   (`fallback: "sign_in"`), so a guest never spends a model call. Approving,
-  executing, changing data, speaking with Polly, booking (and the MCP tools
+  executing, changing data, booking (and the MCP tools
   `execute_approved_plan`, `quote_carrier_booking`, `book_carrier`,
   `get_booking`) answer `401` with `WWW-Authenticate: Bearer
   resource_metadata="…", scope="…"`. A token without the scope gets `403

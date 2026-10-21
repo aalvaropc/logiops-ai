@@ -306,6 +306,7 @@ def test_the_demo_is_an_inbox_of_incidents():
     assert "DEFAULT_INCIDENT" not in device and "state.inbox[0]?.incident_id" in device
     assert "intent.mentionedIncident(text," in _static("app", "commands.js")
     assert 'mcpClient.callTool("list_incidents").catch(() => request("/incidents"))' in device
+    assert 'state.session ? state.session.username : "Link account"' in device
     assert 'list: () => mcpClient.callTool("list_alerts")' in device
     assert 'request("/incidents")).incidents' in script and "callTool" not in script
 
