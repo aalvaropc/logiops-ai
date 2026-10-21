@@ -26,6 +26,7 @@ def pack_incident(**changes):
     {"inventory": []},
     {"carriers": []},
     {"options": [None]},
+    {"shipment.original_eta": "2026-10-12-05:00"},
 ])
 def test_nested_bad_types_do_not_register_any_part_of_a_pack(change):
     good = pack_incident()

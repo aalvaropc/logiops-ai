@@ -194,7 +194,7 @@ def reset_registry() -> None:
 
 
 def _timestamp(value: Any) -> bool:
-    if not isinstance(value, str) or not value.endswith("-05:00"):
+    if not isinstance(value, str) or not ISO_TIMESTAMP.match(value) or not value.endswith("-05:00"):
         return False
     try:
         datetime.fromisoformat(value)
