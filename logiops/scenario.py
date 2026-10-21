@@ -203,7 +203,7 @@ def _timestamp(value: Any) -> bool:
     return True
 
 
-def _problems(definition: Any) -> list[dict[str, str]]:
+def _problems(definition: Any, incidents: dict[str, dict[str, Any]], kind_labels: dict[str, str]) -> list[dict[str, str]]:
     found: list[dict[str, str]] = []
     incident = str(definition.get("id", "?")) if isinstance(definition, dict) else "?"
 
@@ -215,12 +215,12 @@ def _problems(definition: Any) -> list[dict[str, str]]:
     incident_id = definition.get("id")
     if not isinstance(incident_id, str) or not INCIDENT_ID_PATTERN.fullmatch(incident_id):
         bad("id", "an incident id looks like SHIP-470")
-    elif incident_id in INCIDENTS:
+    elif incident_id in incidents:
         bad("id", f"{incident_id} is already registered")
     kind = definition.get("kind")
     if not isinstance(kind, str) or not KIND_PATTERN.fullmatch(kind):
         bad("kind", "a kind is lowercase letters, such as port_strike")
-    elif kind not in KIND_LABELS and not isinstance(definition.get("kind_label"), str):
+    elif kind not in kind_labels and (not isinstance(definition.get("kind_label"), str) or not definition["kind_label"].strip()):
         bad("kind_label", f"a new kind ({kind}) needs a kind_label")
     if not isinstance(definition.get("title"), str) or not definition["title"].strip():
         bad("title", "a title is required")
@@ -241,7 +241,7 @@ def _problems(definition: Any) -> list[dict[str, str]]:
         bad("orders", "at least one order is required")
         orders = []
     seen_orders: set[str] = set()
-    registered_orders = {order["id"] for item in INCIDENTS.values() for order in item["orders"]}
+    registered_orders = {order["id"] for item in incidents.values() for order in item["orders"]}
     for index, order in enumerate(orders):
         path = f"orders[{index}]"
         if not isinstance(order, dict):
@@ -260,7 +260,7 @@ def _problems(definition: Any) -> list[dict[str, str]]:
             bad(f"{path}.quantity", "quantity must be a positive whole number")
         if not isinstance(order.get("customer"), str) or not order["customer"].strip():
             bad(f"{path}.customer", "customer is required")
-        if order.get("priority") not in PRIORITY_RANK:
+        if not isinstance(order.get("priority"), str) or order["priority"] not in PRIORITY_RANK:
             bad(f"{path}.priority", "priority is critical or standard")
         for field in ("due_eta", "placed_at"):
             if not _timestamp(order.get(field)):
@@ -330,7 +330,7 @@ def _problems(definition: Any) -> list[dict[str, str]]:
                 bad(f"{path}.sources", "sources is a non-empty list, or an object with critical and standard lists")
                 continue
             for source in group:
-                if source not in sources:
+                if not isinstance(source, str) or source not in sources:
                     bad(f"{path}.sources", f"unknown source {source!r}; use delayed-shipment, a <warehouse>-stock or a carrier")
         if "use_all" in option and not isinstance(option["use_all"], bool):
             bad(f"{path}.use_all", "use_all is true or false")
@@ -344,18 +344,7 @@ def _problems(definition: Any) -> list[dict[str, str]]:
 
 def register_incident(definition: dict[str, Any]) -> str:
     """Validate one incident in pack form and add it to the registry; returns its id."""
-    problems = _problems(definition)
-    if problems:
-        raise ScenarioPackError(problems)
-    incident_id = definition["id"]
-    stored = {key: deepcopy(value) for key, value in definition.items() if key not in ("id", "options", "kind_label")}
-    stored.setdefault("inventory", {})
-    stored.setdefault("carriers", {})
-    INCIDENTS[incident_id] = stored
-    PLAYBOOKS[incident_id] = deepcopy(definition["options"])
-    if definition["kind"] not in KIND_LABELS:
-        KIND_LABELS[definition["kind"]] = definition["kind_label"]
-    return incident_id
+    return register_pack({"version": PACK_VERSION, "incidents": [definition]})[0]
 
 
 def register_pack(pack: Any) -> list[str]:
@@ -363,18 +352,27 @@ def register_pack(pack: Any) -> list[str]:
     if not isinstance(pack, dict) or pack.get("version") != PACK_VERSION or not isinstance(pack.get("incidents"), list):
         raise ScenarioPackError([{"incident": "?", "path": "", "message": f'a pack is {{"version": {PACK_VERSION}, "incidents": [...]}}'}])
     problems: list[dict[str, str]] = []
-    before = (dict(INCIDENTS), dict(PLAYBOOKS), dict(KIND_LABELS))
+    incidents, playbooks, kind_labels = dict(INCIDENTS), dict(PLAYBOOKS), dict(KIND_LABELS)
     registered: list[str] = []
     for definition in pack["incidents"]:
-        try:
-            registered.append(register_incident(definition))
-        except ScenarioPackError as exc:
-            problems.extend(exc.errors)
+        errors = _problems(definition, incidents, kind_labels)
+        if errors:
+            problems.extend(errors)
+            continue
+        incident_id = definition["id"]
+        stored = {key: deepcopy(value) for key, value in definition.items() if key not in ("id", "options", "kind_label")}
+        stored.setdefault("inventory", {})
+        stored.setdefault("carriers", {})
+        incidents[incident_id] = stored
+        playbooks[incident_id] = deepcopy(definition["options"])
+        if definition["kind"] not in kind_labels:
+            kind_labels[definition["kind"]] = definition["kind_label"]
+        registered.append(incident_id)
     if problems:
-        for registry, saved in ((INCIDENTS, before[0]), (PLAYBOOKS, before[1]), (KIND_LABELS, before[2])):
-            registry.clear()
-            registry.update(saved)
         raise ScenarioPackError(problems)
+    INCIDENTS.update(incidents)
+    PLAYBOOKS.update(playbooks)
+    KIND_LABELS.update(kind_labels)
     return registered
 
 
