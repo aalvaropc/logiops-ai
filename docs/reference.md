@@ -186,7 +186,13 @@ with a clear error after 50 seconds so it always answers before CloudFront's
 60-second origin timeout. Live calls share a daily budget for the whole demo
 (`LOGIOPS_DAILY_MODEL_CALLS`): when a run no longer fits, the response says
 `mode: replay` with `fallback: "daily_budget"`, and the page says so until
-midnight (UTC-05:00).
+midnight (UTC-05:00). When the model service itself fails (no credentials, a
+refused or throttled call, a timeout, or the 50-second limit), the failure is
+recorded as `agent_run_failed` and the same job is answered again from the
+replay with `fallback: "model_unavailable"`, which the page also says; for five
+minutes after that, live requests go straight to the replay. The agent's own
+guards (a disallowed tool, too many turns, a missing plan) still fail the
+request.
 
 ## Follow-up questions
 

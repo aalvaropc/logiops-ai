@@ -66,6 +66,14 @@ export function createStage({ root, surface, quiet = [], document: doc = globalT
     live += 1;
   }
 
+  function restart() {
+    if (root.hidden || root.dataset.phase !== "asking") return;
+    reset();
+    stations.replaceChildren();
+    live = 0;
+    nextAt = 0;
+  }
+
   function clear() {
     reset();
     root.hidden = true;
@@ -115,5 +123,5 @@ export function createStage({ root, surface, quiet = [], document: doc = globalT
     }, 0);
   }
 
-  return { ask, tick, step, replay, settle, clear, whenGone };
+  return { ask, tick, step, restart, replay, settle, clear, whenGone };
 }

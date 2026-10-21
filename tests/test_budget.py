@@ -1,6 +1,7 @@
 """A daily cap on live model calls, shared by every visitor (review, 2026-10-08)."""
 
 import asyncio
+import json
 from datetime import datetime
 
 import httpx
@@ -8,7 +9,7 @@ import pytest
 
 import logiops.api as api_module
 from logiops.api import create_app
-from logiops.bedrock import BedrockError
+from logiops.bedrock import BedrockError, BedrockUnavailable
 from logiops.budget import BudgetedConverse, DailyModelBudget
 from logiops.replay import ReplayConverse
 from logiops.scenario import LIMA
@@ -145,6 +146,79 @@ def test_a_used_budget_falls_back_to_the_replay_and_says_so(tmp_path, monkeypatc
     assert first["mode"] == briefing["mode"] == "replay" and first["fallback"] == briefing["fallback"] == "daily_budget"
     assert recorded["mode"] == "replay" and recorded["fallback"] == "daily_budget"
     assert first["recommended_plan_id"].startswith("SHIP-421:") and "Recommended plan" not in first["answer"]
+
+
+class FlakyBedrock(ReplayConverse):
+    """Answers the first `answers` calls, then fails the way the service does: throttled, refused or timed out."""
+
+    answers = 2
+    calls = 0
+    error: BedrockError = BedrockUnavailable("Bedrock Converse failed (ThrottlingException); check model access and region")
+
+    async def converse(self, messages, system, tools, skill=None):
+        FlakyBedrock.calls += 1
+        if FlakyBedrock.calls > FlakyBedrock.answers:
+            raise FlakyBedrock.error
+        return await super().converse(messages, system, tools, skill)
+
+
+def _flaky(tmp_path, monkeypatch, error):
+    monkeypatch.setenv("LOGIOPS_AGENT_MODE", "bedrock")
+    monkeypatch.setenv("LOGIOPS_DAILY_MODEL_CALLS", "150")
+    monkeypatch.setattr(api_module, "BedrockConverse", FlakyBedrock)
+    monkeypatch.setattr(FlakyBedrock, "calls", 0)
+    monkeypatch.setattr(FlakyBedrock, "error", error)
+    return create_app(tmp_path / "outage.sqlite3")
+
+
+def sse_kinds(text):
+    return [line.removeprefix("event: ") for line in text.splitlines() if line.startswith("event: ")]
+
+
+def test_an_outage_answers_every_job_from_the_replay_and_says_so(tmp_path, monkeypatch):
+    app = _flaky(tmp_path, monkeypatch, FlakyBedrock.error)
+
+    async def run():
+        async with app.router.lifespan_context(app):
+            async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as http:
+                streamed = (await http.post("/incidents/SHIP-421/agent/investigate/stream", json={})).text
+                calls = FlakyBedrock.calls
+                plain = (await http.post("/incidents/SHIP-433/agent/investigate", json={})).json()
+                ask = (await http.post("/incidents/SHIP-421/agent/ask", json={"question": "How much is the reroute?", "history": []})).json()
+                briefing = (await http.post("/agent/briefing", json={})).json()
+                events = (await http.get("/incidents/SHIP-421")).json()["events"]
+        return streamed, calls, plain, ask, briefing, events
+
+    streamed, calls, plain, ask, briefing, events = asyncio.run(run())
+    kinds = sse_kinds(streamed)
+    restart = kinds.index("restart")
+    assert restart > 0 and set(kinds[:restart]) == {"step"} and "step" in kinds[restart:] and kinds[-1] == "done"
+    done = json.loads(streamed.rsplit("data: ", 1)[1])
+    assert (done["mode"], done["fallback"]) == ("replay", "model_unavailable") and done["recommended_plan_id"].startswith("SHIP-421:")
+    assert calls == 3 and FlakyBedrock.calls == 3, "after an outage the next jobs go straight to the replay"
+    assert all((item["mode"], item["fallback"]) == ("replay", "model_unavailable") for item in (plain, ask, briefing))
+    assert DailyModelBudget(tmp_path / "outage.sqlite3", limit=150).used() == 2, "the failed call is given back"
+    failed = [event["data"] for event in events if event["name"] == "agent_run_failed"]
+    completed = [event["data"] for event in events if event["name"] == "agent_investigation_completed"]
+    assert [(item["job"], item["mode"], item["fallback"]) for item in failed] == [("investigate", "bedrock", "model_unavailable")]
+    assert [(item["mode"], item["fallback"]) for item in completed] == [("replay", "model_unavailable")]
+
+
+def test_the_agent_guards_still_fail_the_request_instead_of_falling_back(tmp_path, monkeypatch):
+    app = _flaky(tmp_path, monkeypatch, BedrockError("Bedrock requested a disallowed tool: execute_approved_plan"))
+
+    async def run():
+        async with app.router.lifespan_context(app):
+            async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as http:
+                response = await http.post("/incidents/SHIP-421/agent/investigate", json={})
+                events = (await http.get("/incidents/SHIP-421")).json()["events"]
+        return response, events
+
+    response, events = asyncio.run(run())
+    assert response.status_code == 502 and "disallowed tool" in response.json()["detail"]
+    [failed] = [event["data"] for event in events if event["name"] == "agent_run_failed"]
+    assert failed["mode"] == "bedrock" and "fallback" not in failed
+    assert not [event for event in events if event["name"] == "agent_investigation_completed"]
 
 
 def test_an_invalid_mode_is_rejected_even_with_a_custom_client(tmp_path, monkeypatch):

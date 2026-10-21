@@ -2,6 +2,9 @@ import { plural } from "./selectors.js";
 
 export const CHECK_FAILED_NOTE = "This answer did not pass the automatic check against the incident's data. The plan cards are calculated by code; rely on them.";
 export const BUDGET_NOTE = "Today's live model budget is used, so answers come from the scripted replay until midnight (UTC-05:00).";
+export const MODEL_NOTE = "The live model is unavailable right now, so this answer comes from the scripted replay.";
+const FALLBACK_NOTES = { daily_budget: BUDGET_NOTE, model_unavailable: MODEL_NOTE };
+const FALLBACK_SUMMARIES = { daily_budget: " · daily live budget used", model_unavailable: " · live model unavailable" };
 
 export function checkBadge(run) {
   if (!run.evaluations?.length) return null;
@@ -17,12 +20,12 @@ export function checkNote(run) {
 }
 
 export function fallbackNote(run) {
-  return run.fallback === "daily_budget" ? BUDGET_NOTE : null;
+  return FALLBACK_NOTES[run.fallback] ?? null;
 }
 
 export function traceSummary(run) {
   const tokens = (run.usage?.inputTokens || 0) + (run.usage?.outputTokens || 0);
-  const fallback = run.fallback === "daily_budget" ? " · daily live budget used" : "";
+  const fallback = FALLBACK_SUMMARIES[run.fallback] ?? "";
   return `${run.tool_trace.length} ${plural(run.tool_trace.length, "MCP call")} · ${run.mode} mode${fallback} · ${tokens} tokens${run.truncated ? " · truncated" : ""}`;
 }
 

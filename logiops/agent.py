@@ -13,7 +13,7 @@ from mcp import ClientSession
 from mcp.client.streamable_http import streamable_http_client
 from pydantic import AnyUrl
 
-from .bedrock import BedrockError
+from .bedrock import BedrockError, BedrockUnavailable
 from .evaluator import check_facts, check_recommendation
 from .scenario import incident_ids
 from .skill import SKILL_NAME, SKILL_URI
@@ -210,7 +210,7 @@ async def _with_deadline(coroutine: Any, deadline_seconds: float) -> dict[str, A
         async with asyncio.timeout(deadline_seconds):
             return await coroutine
     except TimeoutError as exc:
-        raise BedrockError(f"Agent did not finish within {deadline_seconds:g} seconds; try again") from exc
+        raise BedrockUnavailable(f"Agent did not finish within {deadline_seconds:g} seconds; try again") from exc
     except BaseExceptionGroup as group:
         found = _bedrock_error(group)
         if found is not None:

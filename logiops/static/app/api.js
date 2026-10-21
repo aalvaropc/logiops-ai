@@ -251,7 +251,7 @@ export function createApi({ fetch: doFetch, storage, crypto: webCrypto, origin, 
         const parsed = parseSse(buffer);
         buffer = parsed.rest;
         for (const [kind, data] of parsed.events) {
-          if (kind === "step") onStep(data);
+          if (kind === "step" || kind === "restart") onStep(data, kind);
           if (kind === "done") {
             agentCall("done");
             return data;
