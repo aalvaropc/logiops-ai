@@ -31,6 +31,7 @@ def pack_incident(**changes):
 def test_nested_bad_types_do_not_register_any_part_of_a_pack(change):
     good = pack_incident()
     bad = pack_incident(id="SHIP-471", **change)
+    bad["orders"][0]["id"] = "ORD-471"
     before = deepcopy((INCIDENTS, PLAYBOOKS, KIND_LABELS))
     try:
         with pytest.raises(ScenarioPackError):
