@@ -6,8 +6,8 @@ Neither way in needs an AWS account.
   <https://dir4g4n7eq982.cloudfront.net/demo> for the device and `/console` for the
   operator console.
   - As a guest you can read, ask and hear the replies with Amazon Polly. A guest share
-    of the day's live model calls is open to you (20 of 40); once it is used, the agent
-    runs on the scripted replay, and the page says so. To approve, execute and book,
+    of the day's live model calls is open (20 of 40), about one live investigation per
+    visitor; after that, the agent runs on the scripted replay, and the page says so. To approve, execute and book,
     and to use the live agent beyond that share, press "Link account" and sign in with
     the demo user from the private testing instructions.
   - Everyone who tests it shares it. If an incident was left executed or booked, say

@@ -82,6 +82,7 @@ def install_security(
         if sandbox_host and request.headers.get("host", "").split(":")[0].lower() == sandbox_host and path != SANDBOX_PATH:
             return JSONResponse(status_code=404, content={"detail": "Not found"})
         key = client_key(request, trust_cloudfront=trust_cloudfront)
+        request.state.viewer = key
         if oauth and (path in OAUTH_PATHS or path.startswith("/.well-known/")):
             if path == "/auth/token" and not mcp_limiter.allow(key):
                 return JSONResponse(status_code=429, content={"error": "slow_down"})

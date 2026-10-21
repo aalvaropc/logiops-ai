@@ -4,7 +4,7 @@ export const CHECK_FAILED_NOTE = "This answer did not pass the automatic check a
 export const BUDGET_NOTE = "Today's live model budget is used, so answers come from the scripted replay until midnight (UTC-05:00).";
 export const MODEL_NOTE = "The live model is unavailable right now, so this answer comes from the scripted replay.";
 export const GUEST_NOTE = "You're a guest, so answers come from the scripted replay. Press Link account to use the live agent on Amazon Bedrock.";
-export const GUEST_BUDGET_NOTE = "Today's guest share of live answers is used, so answers come from the scripted replay. Press Link account to use the live agent on Amazon Bedrock.";
+export const GUEST_BUDGET_NOTE = "The live answers open to guests today are used, so answers come from the scripted replay. Press Link account to use the live agent on Amazon Bedrock.";
 const FALLBACK_NOTES = { daily_budget: BUDGET_NOTE, model_unavailable: MODEL_NOTE, sign_in: GUEST_NOTE, guest_budget: GUEST_BUDGET_NOTE };
 const FALLBACK_SUMMARIES = {
   daily_budget: " · daily live budget used", model_unavailable: " · live model unavailable", sign_in: " · guest on the replay", guest_budget: " · guest share used",
