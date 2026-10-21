@@ -41,7 +41,7 @@ def test_the_instance_reads_only_allowed_settings_from_ssm():
     template = (ROOT / "infra" / "amazon" / "bootstrap.sh.tftpl").read_text()
     assert "aws ssm get-parameters-by-path --region '${aws_region}' --path '${config_path}/'" in template
     allowed = ("LOGIOPS_COGNITO_ISSUER|LOGIOPS_COGNITO_DOMAIN|LOGIOPS_COGNITO_CLIENT_ID|LOGIOPS_MEMORY_ID|"
-               "LOGIOPS_POLLY_VOICE|LOGIOPS_POLLY_ENGINE|LOGIOPS_DAILY_SPEECH_CHARS|LOGIOPS_DAILY_MODEL_CALLS)")
+               "LOGIOPS_POLLY_VOICE|LOGIOPS_POLLY_ENGINE|LOGIOPS_DAILY_SPEECH_CHARS|LOGIOPS_DAILY_MODEL_CALLS|LOGIOPS_GUEST_DAILY_MODEL_CALLS)")
     assert allowed in template and "LOGIOPS_ACCESS_TOKEN|" not in template and "LOGIOPS_PUBLIC|" not in template
     assert """if [[ "$value" =~ ^[A-Za-z0-9:/._-]+$ ]]; then printf""" in template
     policy = (ROOT / "infra" / "amazon" / "main.tf").read_text()
@@ -80,12 +80,18 @@ def test_the_release_caps_live_model_calls_and_documents_it():
     assert row.endswith("| `150`; the AWS deployment sets `40` |")
     assert "DEFAULT_DAILY_CALLS = 150" in (ROOT / "logiops" / "budget.py").read_text()
     assert "daily budget of 40 model calls" in readme and "mcp-apps-web-host" in readme
+    assert 'variable "guest_daily_model_calls" {\n  type    = number\n  default = 20\n}' in variables
+    assert re.search(r"LOGIOPS_GUEST_DAILY_MODEL_CALLS\s+= tostring\(var\.guest_daily_model_calls\)", (ROOT / "infra" / "amazon" / "config.tf").read_text())
+    guests = next(line for line in reference.splitlines() if line.startswith("| `LOGIOPS_GUEST_DAILY_MODEL_CALLS` |"))
+    assert guests.endswith("| `0`; the AWS deployment sets `20` |")
+    assert "DEFAULT_GUEST_CALLS = 0" in (ROOT / "logiops" / "budget.py").read_text()
+    assert "20 of those calls are a guest share" in readme
 
 
 def test_the_release_caps_polly_characters_and_documents_it():
     variables = (ROOT / "infra" / "amazon" / "variables.tf").read_text()
     assert 'variable "daily_speech_chars" {\n  type    = number\n  default = 10000\n}' in variables
-    assert "LOGIOPS_DAILY_SPEECH_CHARS = tostring(var.daily_speech_chars)" in (ROOT / "infra" / "amazon" / "config.tf").read_text()
+    assert re.search(r"LOGIOPS_DAILY_SPEECH_CHARS\s+= tostring\(var\.daily_speech_chars\)", (ROOT / "infra" / "amazon" / "config.tf").read_text())
     reference = (ROOT / "docs" / "reference.md").read_text()
     row = next(line for line in reference.splitlines() if line.startswith("| `LOGIOPS_DAILY_SPEECH_CHARS` |"))
     assert row.endswith("| `30000`; the AWS deployment sets `10000` |")

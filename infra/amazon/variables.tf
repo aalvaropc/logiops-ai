@@ -38,6 +38,11 @@ variable "daily_speech_chars" {
   default = 10000
 }
 
+variable "guest_daily_model_calls" {
+  type    = number
+  default = 20
+}
+
 variable "extra_oauth_callback_urls" {
   type    = list(string)
   default = ["http://localhost:6274/oauth/callback", "http://localhost:6274/oauth/callback/debug"]

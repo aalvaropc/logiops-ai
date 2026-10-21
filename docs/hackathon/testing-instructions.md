@@ -5,13 +5,14 @@ Neither way in needs an AWS account.
 - **The deployed demo**, live until judging ends (20 Nov 2026):
   <https://dir4g4n7eq982.cloudfront.net/demo> for the device and `/console` for the
   operator console.
-  - As a guest you can read, ask and hear the replies with Amazon Polly; the agent
-    then runs on the scripted replay, and the page says so. To use the live agent and
-    to approve, execute and book, press "Link account" and sign in with the demo user
-    from the private testing instructions.
+  - As a guest you can read, ask and hear the replies with Amazon Polly. A guest share
+    of the day's live model calls is open to you (20 of 40); once it is used, the agent
+    runs on the scripted replay, and the page says so. To approve, execute and book,
+    and to use the live agent beyond that share, press "Link account" and sign in with
+    the demo user from the private testing instructions.
   - Everyone who tests it shares it. If an incident was left executed or booked, say
     "reset this incident" (signed in) and it starts again. It also resets itself every
-    night at 03:00 UTC-05:00.
+    night at about 03:00 UTC-05:00.
   - Live model answers share a daily budget. When it is spent, or the model service is
     unavailable, answers come from the scripted replay and the page says so.
 - **Your own machine**, in replay mode, which drives the same MCP tools, plan
@@ -176,7 +177,8 @@ The device is an MCP client too: in the browser's network panel, its posts to `/
    instructions can be pasted in the console's Developer drawer instead:
    - sign in with the demo user from the private testing instructions;
    - you come back signed in, with your name as the approver;
-   - a spend cap you save now is yours alone, and approving, executing and booking work.
+   - a spend cap you save now belongs to the demo user, apart from guests and the
+     operator token, and approving, executing and booking work.
 
    Over MCP, `/.well-known/oauth-protected-resource/mcp` points any OAuth-capable client
    (PKCE S256) at the same Cognito sign-in. There is no dynamic client registration, so

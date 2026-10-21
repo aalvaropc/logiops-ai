@@ -21,7 +21,7 @@ from ..agent import (
 )
 from ..strands_runtime import OnStep
 from ..bedrock import BedrockError, BedrockUnavailable
-from ..budget import FALLBACK, BudgetedConverse
+from ..budget import FALLBACK, GUEST_FALLBACK, BudgetedConverse
 from ..evaluator import figures_in
 from ..identity import actor_of, profile_of
 from ..preferences import preference_for, with_preference_figures
@@ -61,24 +61,27 @@ def router(ctx: Context) -> APIRouter:
         maximum calls from the daily budget and releases what it did not use; when the run no longer
         fits, it runs on the replay model with fallback "daily_budget". For REST_SECONDS after the model
         service failed, live requests run on the replay model with fallback "model_unavailable". A guest
-        on the public deployment always runs on the replay model, with fallback "sign_in"."""
+        on the public deployment runs live only while the day's guest share lasts (fallback
+        "guest_budget" once it is used); with no guest share, a guest always runs on the replay model,
+        with fallback "sign_in"."""
         mode = os.environ.get("LOGIOPS_AGENT_MODE", "bedrock")
         if mode not in ("bedrock", "replay"):
             raise BedrockError("LOGIOPS_AGENT_MODE must be bedrock or replay")
-        if public and request is not None and actor_of(request).kind == "guest":
+        guest = public and request is not None and actor_of(request).kind == "guest"
+        if guest and not budget.guest_limit:
             yield ReplayConverse(), "replay", "sign_in"
-        elif custom:
+        elif custom and not guest:
             yield custom, "custom", None
         elif mode == "replay":
             yield ReplayConverse(), "replay", None
         elif time.monotonic() < outage["until"]:
             yield ReplayConverse(), "replay", UNAVAILABLE
-        elif (day := budget.reserve(max_calls)) is None:
-            yield ReplayConverse(), "replay", FALLBACK
+        elif (day := budget.reserve(max_calls, guest=guest)) is None:
+            yield ReplayConverse(), "replay", GUEST_FALLBACK if guest and budget.used() + max_calls <= budget.limit else FALLBACK
         else:
-            client = BudgetedConverse(bedrock, budget, day, max_calls)
+            client = BudgetedConverse(custom or bedrock, budget, day, max_calls, guest=guest)
             try:
-                yield client, "bedrock", None
+                yield client, "custom" if custom else "bedrock", None
             finally:
                 client.settle()
 

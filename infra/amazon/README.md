@@ -59,8 +59,12 @@ directory:
   `demo-web` (no secret). Its callbacks are `/demo`, `http://localhost:8000/demo`
   and MCP Inspector's.
 - `config.tf`: the app settings as SSM parameters under `/logiops-ai/config/`
-  (issuer, domain, client id, memory id, 40 model calls and 10,000 Polly
-  characters a day).
+  (issuer, domain, client id, memory id, 40 model calls a day of which 20 are
+  the guest share, and 10,000 Polly characters a day). The instance's
+  `logiops-deploy` script only copies the keys it knows into `/etc/logiops.env`;
+  that list comes from the bootstrap template at first boot, and `user_data` is
+  ignored afterwards, so a new key needs `terraform apply -replace=aws_instance.app`
+  or the same one-line edit of `/usr/local/sbin/logiops-deploy` over SSM.
 - `main.tf`: the instance role gains `polly:SynthesizeSpeech`, the memory's
   event and record actions on that one memory ARN, and
   `ssm:GetParametersByPath` on the config path.
