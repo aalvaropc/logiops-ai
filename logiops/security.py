@@ -12,6 +12,7 @@ from fastapi.responses import JSONResponse
 
 from .agent import INTERNAL_HEADER
 from .identity import OPERATOR
+from .mcp_transport import McpRequestGuard
 from .oauth import GUEST, InvalidToken, OAuthSettings, base_url, challenge, needed_scope, scope_name, verify_async
 
 
@@ -126,7 +127,7 @@ def install_security(
                                         headers={"WWW-Authenticate": challenge(base, need, error="insufficient_scope")})
         request.state.actor = actor
         internal = _constant_time_equal(request.headers.get(INTERNAL_HEADER, ""), internal_key)
-        if (path.startswith("/mcp") or path.startswith("/memory")) and not internal and not mcp_limiter.allow(key):
+        if (path.startswith("/memory") or (path.startswith("/mcp") and path not in ("/mcp", "/mcp/"))) and not internal and not mcp_limiter.allow(key):
             return JSONResponse(status_code=429, content={"detail": "MCP rate limit exceeded"})
         if path == "/voice/speech" and not speech_limiter.allow(key):
             return JSONResponse(status_code=429, content={"detail": "Speech rate limit exceeded", "fallback": "browser"})
@@ -138,3 +139,13 @@ def install_security(
         response = await call_next(request)
         response.headers.setdefault("Cache-Control", "no-store")
         return response
+
+    def allow_mcp(request: Request) -> bool:
+        return _constant_time_equal(request.headers.get(INTERNAL_HEADER, ""), internal_key) or mcp_limiter.allow(
+            client_key(request, trust_cloudfront=trust_cloudfront))
+
+    app.add_middleware(
+        McpRequestGuard, allow=allow_mcp,
+        inspect_body=lambda request: bool(oauth or not access_token or _constant_time_equal(
+            request.headers.get("authorization", ""), f"Bearer {access_token}")),
+    )
