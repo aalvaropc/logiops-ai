@@ -1,6 +1,9 @@
 name: ci
 
 on:
+  schedule:
+    - cron: "27 7 * * *"
+  workflow_dispatch:
   pull_request:
     # "edited" re-runs the base check when someone changes a PR's base branch.
     types: [opened, synchronize, reopened, edited]
@@ -10,11 +13,16 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   pr-targets-main:
     # Stacked PRs merged into each other never reached main (2026-10-07). Every PR goes to main.
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-24.04
+    timeout-minutes: 15
     steps:
       - name: The pull request must target main
         env:
@@ -27,28 +35,36 @@ jobs:
 
   test:
     runs-on: ubuntu-24.04
+    timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-node@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
         with:
           node-version: "22"
-      - uses: astral-sh/setup-uv@v10.2.0
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7
         with:
           python-version: "3.12"
+          version: "0.11.8"
           enable-cache: true
       - run: uv sync --frozen --extra dev
       - run: uv run pytest -q
 
   browser:
     runs-on: ubuntu-24.04
+    timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v7
-      - uses: astral-sh/setup-uv@v10.2.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7
         with:
           python-version: "3.12"
+          version: "0.11.8"
           enable-cache: true
       - run: uv sync --frozen --extra dev --extra browser
-      - uses: actions/cache@v6
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
           path: ~/.cache/ms-playwright
           key: playwright-${{ runner.os }}-${{ hashFiles('uv.lock') }}
@@ -58,7 +74,7 @@ jobs:
         env:
           LOGIOPS_BROWSER: "1"
       - if: failure()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           name: browser-failures
           path: test-results
@@ -66,20 +82,26 @@ jobs:
 
   gitleaks:
     runs-on: ubuntu-24.04
+    timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
+          persist-credentials: false
           fetch-depth: 0
       - name: Scan the full history for secrets
-        run: docker run --rm -v "$PWD:/repo" -e GIT_CONFIG_COUNT=1 -e GIT_CONFIG_KEY_0=safe.directory -e GIT_CONFIG_VALUE_0=/repo ghcr.io/gitleaks/gitleaks:v8.30.1 git --redact --no-banner -v /repo
+        run: docker run --rm -v "$PWD:/repo" -e GIT_CONFIG_COUNT=1 -e GIT_CONFIG_KEY_0=safe.directory -e GIT_CONFIG_VALUE_0=/repo ghcr.io/gitleaks/gitleaks@sha256:c00b6bd0aeb3071cbcb79009cb16a60dd9e0a7c60e2be9ab65d25e6bc8abbb7f git --redact --no-banner -v /repo
 
   docker:
     runs-on: ubuntu-24.04
+    timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v7
-      - uses: astral-sh/setup-uv@v10.2.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7
         with:
           python-version: "3.12"
+          version: "0.11.8"
       - run: docker build -t logiops-ai .
       - run: docker run -d --name logiops -e LOGIOPS_AGENT_LIMIT_PER_MINUTE=60 -p 127.0.0.1:8000:8000 logiops-ai
       - name: Health
@@ -100,3 +122,40 @@ jobs:
           curl --fail --silent -H 'Host: localhost:8000' http://127.0.0.1:8000/mcp-app/sandbox.html | grep -q sandbox-proxy-ready
       - if: failure()
         run: docker logs logiops
+
+  dependency-audit:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7
+        with:
+          python-version: "3.12"
+          version: "0.11.8"
+      - run: uv run --no-project python scripts/audit_dependencies.py
+
+  terraform:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd
+        with:
+          terraform_version: "1.15.1"
+          terraform_wrapper: false
+      - run: terraform -chdir=infra/amazon fmt -check
+      - run: terraform -chdir=infra/amazon init -backend=false -input=false
+      - run: terraform -chdir=infra/amazon validate
+
+  workflows:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - run: docker run --rm -v "$PWD:/repo" -w /repo rhysd/actionlint@sha256:b1934ee5f1c509618f2508e6eb47ee0d3520686341fec936f3b79331f9315667 -color
