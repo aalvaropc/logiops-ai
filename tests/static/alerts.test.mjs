@@ -33,6 +33,17 @@ test("a check announces the open incident's alert after dismissing it, and keeps
   assert.equal(calls.length, 2, "nothing is fetched while the page is busy");
 });
 
+test("the alerts can be read through another source, while dismissing stays on the API", async () => {
+  const calls = [];
+  const alerts = createAlerts({
+    request: async (path, method) => { calls.push(`${method || "GET"} ${path}`); return {}; },
+    list: async () => { calls.push("tools/call list_alerts"); return { alerts: [alertFor("SHIP-421")] }; },
+    incidentId: () => "SHIP-421", onAnnounce: async () => {},
+  });
+  await alerts.check();
+  assert.deepEqual(calls, ["tools/call list_alerts", "POST /alerts/SHIP-421-v2/dismiss"]);
+});
+
 test("failures leave the alerts as they were", async () => {
   let fail = true;
   const alerts = createAlerts({

@@ -145,7 +145,7 @@ def test_the_api_alerts_right_after_a_stock_change_and_reset_forgets(tmp_path, m
     assert missing.status_code == 404
 
 
-def test_mcp_lists_alerts_that_match_the_output_schema(tmp_path, monkeypatch):
+def test_mcp_lists_alerts_and_incidents_that_match_the_schema_and_the_api(tmp_path, monkeypatch):
     monkeypatch.setenv("LOGIOPS_ALERT_SCAN_SECONDS", "0")
 
     async def run():
@@ -161,12 +161,15 @@ def test_mcp_lists_alerts_that_match_the_output_schema(tmp_path, monkeypatch):
                         await session.initialize()
                         tool = next(item for item in (await session.list_tools()).tools if item.name == "list_alerts")
                         result = await session.call_tool("list_alerts", {})
-                        return tool, result
+                        inbox = await session.call_tool("list_incidents", {})
+                rest = (await http.get("/alerts")).json(), (await http.get("/incidents")).json()
+                return tool, result, inbox, rest
 
-    tool, result = asyncio.run(run())
+    tool, result, inbox, (alerts, incidents) = asyncio.run(run())
     assert tool.annotations.readOnlyHint is True
     jsonschema.validate(result.structuredContent, tool.outputSchema)
     assert {alert["incident_id"] for alert in result.structuredContent["alerts"]} == {"SHIP-421", "SHIP-460"}
+    assert result.structuredContent == alerts and inbox.structuredContent == incidents, "the device reads the same data over MCP"
 
 
 def test_the_background_watcher_finds_changes_made_elsewhere(tmp_path, monkeypatch):

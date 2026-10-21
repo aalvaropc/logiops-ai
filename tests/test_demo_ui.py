@@ -305,6 +305,9 @@ def test_the_demo_is_an_inbox_of_incidents():
     assert "aria-pressed" not in (root / "device" / "queue.js").read_text() and ".incident-card[aria-pressed" not in (root / "device.css").read_text()
     assert "DEFAULT_INCIDENT" not in device and "state.inbox[0]?.incident_id" in device
     assert "intent.mentionedIncident(text," in _static("app", "commands.js")
+    assert 'mcpClient.callTool("list_incidents").catch(() => request("/incidents"))' in device
+    assert 'list: () => mcpClient.callTool("list_alerts")' in device
+    assert 'request("/incidents")).incidents' in script and "callTool" not in script
 
 
 def test_the_inbox_and_the_greeting_name_the_critical_units_at_risk():

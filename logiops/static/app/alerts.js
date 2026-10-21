@@ -6,7 +6,7 @@ export function bellText(alerts, incidentId) {
   return { count, incidentId: first, text: `${count} alert${count === 1 ? "" : "s"} · ${first}`, label: `${count} proactive alert${count === 1 ? "" : "s"}; open ${first}` };
 }
 
-export function createAlerts({ request, incidentId, isBusy = () => false, isHidden = () => false, onAlerts = () => {}, onAnnounce }) {
+export function createAlerts({ request, list = () => request("/alerts"), incidentId, isBusy = () => false, isHidden = () => false, onAlerts = () => {}, onAnnounce }) {
   let alerts = [];
 
   async function announce(alert) {
@@ -24,7 +24,7 @@ export function createAlerts({ request, incidentId, isBusy = () => false, isHidd
   async function check() {
     if (isBusy() || isHidden()) return alerts;
     try {
-      alerts = (await request("/alerts")).alerts;
+      alerts = (await list()).alerts;
     } catch (_) {
       return alerts;
     }

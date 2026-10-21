@@ -132,6 +132,9 @@ testing instructions to act as the operator.
  +------------------------------------------------------------------------------+
 ```
 
+- The device is itself an MCP client over Streamable HTTP: `initialize`,
+  `tools/list`, `tools/call` (its inbox and alerts) and `resources/read` (the
+  plans card).
 - The agent gets read and investigation tools only, and loads the
   [Agent Skill](skills/logiops-exception-desk/SKILL.md) over MCP at the start of
   every run.

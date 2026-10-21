@@ -32,7 +32,7 @@ def free_port() -> int:
 def start_server(db_path: Path) -> tuple[subprocess.Popen, str]:
     port = free_port()
     env = {name: value for name, value in os.environ.items() if not name.startswith(("LOGIOPS_", "AWS_"))}
-    env.update(LOGIOPS_AGENT_MODE="replay", LOGIOPS_AGENT_LIMIT_PER_MINUTE="60", LOGIOPS_DB_PATH=str(db_path))
+    env.update(LOGIOPS_AGENT_MODE="replay", LOGIOPS_AGENT_LIMIT_PER_MINUTE="60", LOGIOPS_MCP_LIMIT_PER_MINUTE="600", LOGIOPS_DB_PATH=str(db_path))
     process = subprocess.Popen([sys.executable, "-m", "uvicorn", "logiops.api:app", "--host", "127.0.0.1", "--port", str(port)],
                                cwd=ROOT, env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     url = f"http://127.0.0.1:{port}"
