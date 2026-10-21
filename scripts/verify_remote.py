@@ -11,12 +11,25 @@ import argparse
 import os
 import secrets
 import time
+from contextlib import contextmanager
 from pathlib import Path
 
 import httpx
 
 
 LOCAL_SECRET = Path(__file__).resolve().parents[1] / ".secrets" / "access-token"
+
+
+@contextmanager
+def verification_state(client):
+    try:
+        client.post("/demo/reset").raise_for_status()
+        yield
+    finally:
+        try:
+            client.delete("/memory").raise_for_status()
+        finally:
+            client.post("/demo/reset").raise_for_status()
 
 
 def main() -> None:
@@ -35,9 +48,7 @@ def main() -> None:
         base_url=args.base_url.rstrip("/"),
         headers={"Authorization": f"Bearer {token}"},
         timeout=125,
-    ) as client:
-        reset = client.post("/demo/reset")
-        reset.raise_for_status()
+    ) as client, verification_state(client):
         inbox = client.get("/incidents")
         inbox.raise_for_status()
         if len(inbox.json()["incidents"]) != 4:
@@ -125,7 +136,6 @@ def main() -> None:
             raise RuntimeError(f"The memory ({recalled.get('backend')}) did not recall the turn just written")
         forgotten = client.delete("/memory").json()
         print(f"Memory on {recalled['backend']}: recalled the turn, then forgot {forgotten['forgotten']} item(s)")
-        client.post("/demo/reset").raise_for_status()
 
 
 if __name__ == "__main__":

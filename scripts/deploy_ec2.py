@@ -20,7 +20,7 @@ ROOT = Path(__file__).resolve().parents[1]
 INFRA = ROOT / "infra" / "amazon"
 
 
-def package() -> tuple[Path, str]:
+def package(commit: str | None = None) -> tuple[Path, str]:
     files = [
         ROOT / "pyproject.toml",
         ROOT / "uv.lock",
@@ -39,6 +39,11 @@ def package() -> tuple[Path, str]:
                 info.size = len(data)
                 info.mode = 0o644
                 info.mtime = 0
+                archive.addfile(info, io.BytesIO(data))
+            if commit is not None:
+                data = (json.dumps({"commit": commit}, sort_keys=True) + "\n").encode()
+                info = tarfile.TarInfo("release.json")
+                info.size, info.mode, info.mtime = len(data), 0o644, 0
                 archive.addfile(info, io.BytesIO(data))
     digest = hashlib.sha256(output.read_bytes()).hexdigest()
     final = output.with_name(f"logiops-ai-{digest}.tar.gz")
@@ -104,8 +109,14 @@ def main() -> None:
     parser.add_argument("--package-only", action="store_true")
     parser.add_argument("--allow-unmerged", action="store_true", help="deploy a checkout that is not origin/main")
     args = parser.parse_args()
-    archive, digest = package()
+    if release_dirty():
+        raise SystemExit("The working tree has uncommitted changes; build a release from a clean commit.")
+    head = git("rev-parse", "HEAD")
+    archive, digest = package(head)
+    manifest = archive.with_suffix(".manifest.json")
+    manifest.write_text(json.dumps({"commit": head, "sha256": digest, "archive": archive.name}, indent=2) + "\n")
     print(f"Release: {archive} (sha256 {digest})")
+    print(f"Commit: {head}; manifest: {manifest}")
     if args.package_only:
         return
     git("fetch", "--quiet", "origin", "main")

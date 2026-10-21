@@ -1,0 +1,67 @@
+#!/usr/bin/env bash
+set -euo pipefail
+install -d -m 0755 /usr/local/lib/logiops
+cat > /usr/local/lib/logiops/sqlite_backup.py <<'PYTHON'
+${backup_code}
+PYTHON
+chmod 0644 /usr/local/lib/logiops/sqlite_backup.py
+
+cat > /usr/local/sbin/logiops-backup <<'BACKUP'
+#!/usr/bin/env bash
+set -euo pipefail
+label="$${1:-daily}"
+[[ "$label" =~ ^(daily|predeploy)$ ]] || exit 2
+exec 9>/run/logiops-backup.lock
+flock -x -w 150 9
+mountpoint -q /var/lib/logiops
+test -f /var/lib/logiops/logiops.sqlite3
+umask 077
+directory=$(mktemp -d /tmp/logiops-backup.XXXXXX)
+trap 'rm -rf "$directory"' EXIT
+timeout 120 /usr/bin/python3.12 /usr/local/lib/logiops/sqlite_backup.py backup /var/lib/logiops/logiops.sqlite3 "$directory/snapshot.sqlite3"
+key="snapshots/$(date -u +%F)/$label-$(date -u +%H%M%S)-$${directory##*.}.sqlite3"
+uri="s3://${backup_bucket}/$key"
+aws s3 cp --region '${aws_region}' "$directory/snapshot.sqlite3" "$uri" --sse AES256 --only-show-errors
+aws s3 cp --region '${aws_region}' "$uri" "$directory/restored.sqlite3" --only-show-errors
+cmp "$directory/snapshot.sqlite3" "$directory/restored.sqlite3"
+timeout 120 /usr/bin/python3.12 /usr/local/lib/logiops/sqlite_backup.py verify "$directory/restored.sqlite3"
+printf 'Verified SQLite backup and temporary restore: %s\n' "$uri"
+BACKUP
+chmod 0750 /usr/local/sbin/logiops-backup
+
+cat > /usr/local/sbin/logiops-deploy <<'DEPLOY'
+${deployment_script}
+DEPLOY
+chmod 0750 /usr/local/sbin/logiops-deploy
+
+cat > /etc/systemd/system/logiops-backup.service <<'UNIT'
+[Unit]
+Description=Verified online SQLite backup to private S3
+After=network-online.target logiops.service
+RequiresMountsFor=/var/lib/logiops
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/logiops-backup daily
+TimeoutStartSec=420
+UNIT
+
+cat > /etc/systemd/system/logiops-backup.timer <<'UNIT'
+[Unit]
+Description=Daily LogiOps SQLite recovery point
+
+[Timer]
+OnCalendar=*-*-* 07:45:00 UTC
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+UNIT
+
+install -d -m 0755 /etc/systemd/system/logiops-reset.service.d
+cat > /etc/systemd/system/logiops-reset.service.d/pause.conf <<'UNIT'
+[Unit]
+ConditionPathExists=!/etc/logiops-reset-paused
+UNIT
+systemctl daemon-reload
+systemctl enable --now logiops-backup.timer
