@@ -2,9 +2,12 @@
 
 What Alexa+ expects from a self-hosted MCP server, what LogiOps AI already does, how
 it was verified, and what is left when the Alexa+ developer tools open to the public.
-The device page (`/demo`) simulates the Alexa+ experience over the same server; the
-server itself speaks MCP and OAuth 2.1, so connecting Alexa+ is mostly registration
-and configuration, not a rewrite; what is left is listed below.
+The device page (`/demo`) simulates the Alexa+ experience over the same server, as the
+hackathon rules allow for participants without access to those tools. The server itself
+speaks the protocols Alexa+ add-ons are built on: MCP over Streamable HTTP, OAuth 2.1,
+MCP Apps and an Agent Skill. We expect connecting Alexa+ to be mainly registration and
+configuration rather than a rewrite, but we could not verify it: the Alexa+ developer
+tools are partner-only. What we expect is left is listed below.
 
 | Alexa+ expectation | LogiOps AI today | Verified by |
 |---|---|---|

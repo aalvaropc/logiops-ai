@@ -50,8 +50,9 @@ def test_the_hackathon_package_is_complete_and_prioritised():
                  "amazon-feedback.md", "amazon-friction-log.md", "testing-instructions.md", "decisions.md", "submission-fields.md"):
         assert (hackathon / name).is_file(), name
     requests = (hackathon / "feature-requests.md").read_text()
-    rows = [line for line in requests.splitlines() if line.startswith(("| P1", "| P2", "| P3"))]
-    assert len(rows) >= 10 and all(line.split("|")[1].strip() in ("P1", "P2", "P3") for line in rows)
+    rows = [line for line in requests.splitlines() if line.startswith("| ") and not line.startswith(("| Priority", "|---"))]
+    assert len(rows) >= 10 and all(line.split("|")[1].strip() in ("Critical", "Important", "Nice-to-have") for line in rows)
+    assert not re.search(r"\bP[123]\b", requests)
     feedback = (hackathon / "amazon-feedback.md").read_text()
     for section in ("## Strands Agents", "## Amazon Polly", "## Amazon Cognito", "## Amazon Bedrock AgentCore Memory"):
         assert section in feedback, section

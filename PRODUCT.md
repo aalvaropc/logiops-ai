@@ -68,8 +68,9 @@ Success means:
     answer that still fails is shown flagged, never hidden.
 - **The same MCP tools serve a person's assistant and an autonomous agent.**
   The server speaks MCP over Streamable HTTP, with OAuth 2.1, MCP Apps and an
-  Agent Skill. Connecting the real Alexa+ is mostly registration and
-  configuration (see `docs/hackathon/alexa-plus-readiness.md`), not a rewrite.
+  Agent Skill, the protocols Alexa+ add-ons are built on. What we expect is left to
+  connect the real Alexa+ is in `docs/hackathon/alexa-plus-readiness.md`; it could not
+  be verified, because the Alexa+ developer tools are partner-only.
 
 ## Operating Context
 
@@ -165,7 +166,8 @@ Success means:
   - a grounded recommendation in 12.2 s, with 5 MCP calls in one live agent run;
   - the tool calls streamed to the device from 2.6 s to 5.7 s, the answer at
     12.5 s;
-  - 13.1 s from the first investigation to the verified execution;
+  - 13.1 s from the first investigation to the verified execution, in a scripted
+    walkthrough with no human pause;
   - 12 critical units on time and 18 standard units 8 h late, for $390 extra;
   - a $466.10 booking charged once.
 - **Earlier runs.** 13.6 s to the recommendation on 2026-10-12; 13.0 s on

@@ -54,7 +54,7 @@ carrier outage SHIP-433:
 |---|---|
 | Question to grounded recommendation | 12.2 s, 5 MCP calls, one live agent run |
 | Tool calls streamed to the device | first at 2.6 s, last at 5.7 s; the answer at 12.5 s |
-| First investigation to verified execution | 13.1 s |
+| First investigation to verified execution | 13.1 s in a scripted walkthrough, with no human pause |
 | Outcome | 12 critical units on time, 18 standard units 8 h late, $390 extra |
 | Booking | $466.10 with tax, charged once |
 | Cost of the run | about US$0.04 of Bedrock usage |
