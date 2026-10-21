@@ -1,9 +1,11 @@
 # LogiOps AI
 
-**An operations desk you talk to.** Ask about a late shipment: an AI agent reads
-the orders, stock and carrier quotes through MCP tools, code prices every
-feasible plan, and the agent recommends one. You approve with one "yes"; the
-system executes the plan once and verifies the result.
+**An operations desk you talk to**, on a simulated Alexa+ device over a real
+self-hosted MCP server (Streamable HTTP, spec 2025-11-25, with an Agent Skill and
+MCP Apps). Ask about a late shipment: an AI agent reads the orders, stock and
+carrier quotes through MCP tools, code prices every feasible plan, and the agent
+recommends one. You approve with one "yes"; the system executes the plan once
+and verifies the result.
 
 **The agent proposes. You approve. Code enforces it.**
 
@@ -156,9 +158,20 @@ Source mini challenges.
 |---|---|---|---|
 | `amazon-v1.0` (to be tagged on 2026-10-22) | _pending_ | <https://dir4g4n7eq982.cloudfront.net/demo> | [`aalvaropc/mcp-apps-web-host`](https://github.com/aalvaropc/mcp-apps-web-host), MIT |
 
-The live demo shares a daily budget of 40 model calls; when it is spent, replies
-come from the scripted replay until midnight (UTC-05:00), and say so. The
-operator token is in the private testing instructions. For judges:
+| Requirement | Where it is |
+|---|---|
+| Alexa+: a self-hosted MCP server, spec 2025-11-25, Streamable HTTP | [`logiops/mcp_server.py`](logiops/mcp_server.py), served at `/mcp` |
+| Alexa+: an Agent Skill | [`skills/logiops-exception-desk/SKILL.md`](skills/logiops-exception-desk/SKILL.md), served as an MCP resource and loaded by the agent |
+| Alexa+: a simulated experience whose page is an MCP client | `/demo`; its MCP client is [`logiops/static/app/mcp.js`](logiops/static/app/mcp.js) |
+| Alexa+ creative uses: MCP Apps, state across sessions, purchasing | [the reference](docs/reference.md#interactive-plan-card-mcp-apps) |
+| AWS Builder: Bedrock, Strands Agents, AgentCore Memory, Polly, Cognito | [`docs/architecture.md`](docs/architecture.md), [`infra/amazon/`](infra/amazon/README.md), [product feedback](docs/hackathon/amazon-feedback.md) |
+| Open Source: a new MIT library made during the hackathon | [`aalvaropc/mcp-apps-web-host`](https://github.com/aalvaropc/mcp-apps-web-host) |
+| Product feedback, friction log, feature requests | [`docs/hackathon/`](docs/hackathon/amazon-feedback.md) |
+
+The live demo stays up until judging ends (20 Nov 2026). It shares a
+daily budget of 40 model calls; when it is spent, or the model service is down,
+replies come from the scripted replay and say so. The operator token is in the
+private testing instructions. For judges:
 [testing instructions](docs/hackathon/testing-instructions.md),
 [decisions](docs/hackathon/decisions.md) and
 [Alexa+ readiness](docs/hackathon/alexa-plus-readiness.md).
