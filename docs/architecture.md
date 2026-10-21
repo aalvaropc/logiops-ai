@@ -118,9 +118,13 @@ execution through REST or MCP.
   CloudFront to EC2 currently uses HTTP, with bearer authentication on every
   route except the page, its assets, the sandbox proxy, the API docs and the
   health check.
+- **AWS Budgets, Route 53, CloudWatch and SNS:** a budget action cuts Bedrock
+  and Polly at the account level if a month's actual cost passes US$60, and a
+  Route 53 health check with a CloudWatch alarm e-mails through SNS when the
+  demo is down.
 
 These resources are defined in `infra/amazon/` and were provisioned on 2026-10-06
-and 2026-10-11.
+and 2026-10-11; the spend stop and the alarm were added on 2026-10-21.
 
 ## Production path
 

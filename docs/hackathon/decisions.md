@@ -57,7 +57,7 @@ bottom.
 - [x] Everything on `main` (PR #9, 2026-10-07). From then on every change is its own pull request to `main` (CI job `pr-targets-main`).
 - [x] `scripts/clean_room.sh main` passes on a clean clone (tests, Docker build, `check_mcp.py`, `rehearse_api.py`): 2026-10-13 on `3a49be3`, 385 passed.
 - [x] `gitleaks git` over the full history reports no leaks: run locally over every branch on 2026-10-20 before the repository went public, and in CI on every pull request since.
-- [ ] Test count recorded on the commit to tag. Last count on `main` (2026-10-21): 419 pytest, 95 node and 23 browser walkthroughs. Earlier: 385 passed (plus 8 browser walkthroughs) on `3a49be3`, deployed as D3 on 2026-10-13 and verified live (`check_oauth.py` 4/4, `check_mcp.py`, `verify_remote.py`, device and console walkthrough on CloudFront).
+- [ ] Test count recorded on the commit to tag. Last count on `main` (2026-10-21): 429 pytest, 95 node and 23 browser walkthroughs. Earlier: 385 passed (plus 8 browser walkthroughs) on `3a49be3`, deployed as D3 on 2026-10-13 and verified live (`check_oauth.py` 4/4, `check_mcp.py`, `verify_remote.py`, device and console walkthrough on CloudFront).
 - [ ] The README's submission table lists the repository, the tag and the video (the open-source library and the tag name are in; the Devpost link and the video come with the tag).
 - [x] Repository public, with the MIT license detected in the About section (2026-10-20).
 - [ ] Tag `amazon-v1.0` on that commit and a GitHub Release created.
