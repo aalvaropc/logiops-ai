@@ -59,7 +59,8 @@ directory:
   `demo-web` (no secret). Its callbacks are `/demo`, `http://localhost:8000/demo`
   and MCP Inspector's.
 - `config.tf`: the app settings as SSM parameters under `/logiops-ai/config/`
-  (issuer, domain, client id, memory id, daily model calls).
+  (issuer, domain, client id, memory id, 40 model calls and 10,000 Polly
+  characters a day).
 - `main.tf`: the instance role gains `polly:SynthesizeSpeech`, the memory's
   event and record actions on that one memory ARN, and
   `ssm:GetParametersByPath` on the config path.

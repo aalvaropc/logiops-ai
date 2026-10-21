@@ -47,7 +47,7 @@ safely, and each feature with its endpoints. For the design, see
 | `AWS_REGION`, `BEDROCK_MODEL_ID` | Bedrock region and model profile | `us-east-1`, `global.anthropic.claude-sonnet-4-6` |
 | `LOGIOPS_VOICE` | `polly` (Amazon Polly) or `browser` (the browser's own voice) | `polly` with `bedrock`, `browser` with `replay` |
 | `LOGIOPS_POLLY_VOICE`, `LOGIOPS_POLLY_ENGINE` | Polly voice and engine | `Ruth`, `generative` |
-| `LOGIOPS_DAILY_SPEECH_CHARS` | characters Polly may synthesize per day (UTC-05:00) for the whole demo; repeated lines come from the cache and cost nothing | `30000` |
+| `LOGIOPS_DAILY_SPEECH_CHARS` | characters Polly may synthesize per day (UTC-05:00) for the whole demo; repeated lines come from the cache and cost nothing | `30000`; the AWS deployment sets `10000` |
 | `LOGIOPS_TAX_RATE`, `LOGIOPS_TAX_NAME` | the sales tax added to a booking's carrier cost and service fee (a rate from 0 up to 1) and the name it carries on quotes and receipts; a bad rate stops the start | `0.18`, `Tax` |
 | `LOGIOPS_COGNITO_ISSUER`, `LOGIOPS_COGNITO_DOMAIN`, `LOGIOPS_COGNITO_CLIENT_ID` | turn on OAuth 2.1 sign-in: the user pool's issuer URL, its hosted domain, and the public PKCE app client (`LOGIOPS_COGNITO_EXTRA_CLIENT_IDS` allows more clients) | off |
 | `LOGIOPS_MEMORY_ID` | the Amazon Bedrock AgentCore Memory that keeps conversations across sessions; without it they are kept in SQLite | SQLite |
