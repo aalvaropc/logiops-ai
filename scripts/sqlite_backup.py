@@ -27,7 +27,7 @@ def copy_database(source, destination):
     os.close(descriptor)
     try:
         with closing(connect_readonly(source)) as reader, closing(sqlite3.connect(temporary)) as writer:
-            reader.backup(writer, pages=256, sleep=0.05)
+            reader.backup(writer)
         check(temporary)
         os.replace(temporary, destination)
     finally:

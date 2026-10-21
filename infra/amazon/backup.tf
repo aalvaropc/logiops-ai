@@ -35,6 +35,12 @@ resource "aws_s3_bucket_lifecycle_configuration" "backups" {
     noncurrent_version_expiration { noncurrent_days = 7 }
     abort_incomplete_multipart_upload { days_after_initiation = 1 }
   }
+  rule {
+    id     = "expired-delete-markers"
+    status = "Enabled"
+    filter { prefix = "snapshots/" }
+    expiration { expired_object_delete_marker = true }
+  }
   depends_on = [aws_s3_bucket_versioning.backups]
 }
 
@@ -58,7 +64,7 @@ resource "aws_iam_role_policy" "backups" {
     Version = "2012-10-17"
     Statement = [{
       Effect   = "Allow"
-      Action   = ["s3:PutObject", "s3:GetObject"]
+      Action   = ["s3:PutObject", "s3:GetObject", "s3:AbortMultipartUpload"]
       Resource = ["${aws_s3_bucket.backups.arn}/snapshots/*"]
     }]
   })

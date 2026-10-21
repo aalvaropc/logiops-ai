@@ -17,7 +17,15 @@ mountpoint -q /var/lib/logiops
 test -f /var/lib/logiops/logiops.sqlite3
 umask 077
 directory=$(mktemp -d /tmp/logiops-backup.XXXXXX)
-trap 'rm -rf "$directory"' EXIT
+# A read-only SQLite connection can leave root-owned -wal/-shm files when the
+# service is stopped; hand them back so logiops can open the database.
+database=/var/lib/logiops/logiops.sqlite3
+restore_owner() {
+  for sidecar in "$database-wal" "$database-shm"; do
+    if test -e "$sidecar"; then chown --reference="$database" "$sidecar"; fi
+  done
+}
+trap 'rm -rf "$directory"; restore_owner' EXIT
 timeout 120 /usr/bin/python3.12 /usr/local/lib/logiops/sqlite_backup.py backup /var/lib/logiops/logiops.sqlite3 "$directory/snapshot.sqlite3"
 key="snapshots/$(date -u +%F)/$label-$(date -u +%H%M%S)-$${directory##*.}.sqlite3"
 uri="s3://${backup_bucket}/$key"
@@ -58,10 +66,31 @@ Persistent=true
 WantedBy=timers.target
 UNIT
 
-install -d -m 0755 /etc/systemd/system/logiops-reset.service.d
-cat > /etc/systemd/system/logiops-reset.service.d/pause.conf <<'UNIT'
-[Unit]
-ConditionPathExists=!/etc/logiops-reset-paused
-UNIT
 systemctl daemon-reload
 systemctl enable --now logiops-backup.timer
+
+cat > /usr/local/sbin/logiops-reset-gate <<'GATE'
+#!/usr/bin/env bash
+set -euo pipefail
+marker=/etc/logiops-reset-paused
+max_age=108000
+test -e "$marker" || exit 0
+age=$(( $(date +%s) - $(stat -c %Y "$marker") ))
+if (( age >= 0 && age < max_age )); then
+  echo "Reset skipped: paused $age seconds ago; the pause ends after $max_age seconds"
+  exit 1
+fi
+echo "Pause marker is older than $max_age seconds; resetting. Touch $marker to pause again."
+GATE
+chmod 0755 /usr/local/sbin/logiops-reset-gate
+
+# The nightly reset is the only scheduled one. A pause skips it for 30 hours at
+# most, and a missing reset unit fails this installation instead of passing.
+test -f /etc/systemd/system/logiops-reset.service || { echo 'logiops-reset.service is not installed; the nightly reset would never run' >&2; exit 1; }
+install -d -m 0755 /etc/systemd/system/logiops-reset.service.d
+cat > /etc/systemd/system/logiops-reset.service.d/pause.conf <<'UNIT'
+[Service]
+ExecCondition=/usr/local/sbin/logiops-reset-gate
+UNIT
+systemctl daemon-reload
+[[ "$(systemctl show --property=ExecCondition --value logiops-reset.service)" == *logiops-reset-gate* ]] || { echo 'The reset pause gate is not active' >&2; exit 1; }

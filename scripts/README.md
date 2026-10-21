@@ -10,6 +10,11 @@
 - `deploy_ec2.py` — packages the pinned app and browser demo, uploads the
   archive to S3, and deploys it to EC2 through Systems Manager.
   `--package-only` validates the archive without AWS access.
+  It stops if the pre-deploy SQLite backup fails; `--accept-no-recovery-point`
+  is the emergency override.
+- `install_recovery.py` — renders the SQLite backup, deploy hook and reset-pause
+  setup into a Systems Manager parameters file for an existing instance.
+  `docs/release-recovery.md` has the steps.
 - `verify_remote.py` — resets the demo, checks the inbox, and runs the
   complete synthetic Bedrock, approval, and execution flow on SHIP-421 against
   the HTTPS demo endpoint.

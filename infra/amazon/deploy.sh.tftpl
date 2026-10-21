@@ -29,8 +29,24 @@ if ! test -f "$release/.ready"; then
 fi
 
 if test -f /var/lib/logiops/logiops.sqlite3; then
-  test -x /usr/local/sbin/logiops-backup
-  /usr/local/sbin/logiops-backup predeploy
+  backed_up=''
+  if test -x /usr/local/sbin/logiops-backup; then
+    for attempt in 1 2 3; do
+      if /usr/local/sbin/logiops-backup predeploy; then backed_up=1; break; fi
+      echo "Pre-deploy backup attempt $attempt of 3 failed" >&2
+      if [ "$attempt" -lt 3 ]; then sleep 10; fi
+    done
+  else
+    echo 'logiops-backup is not installed; run scripts/install_recovery.py first' >&2
+  fi
+  if test -z "$backed_up"; then
+    if [ "$${LOGIOPS_ACCEPT_NO_RECOVERY_POINT:-}" = 'yes' ]; then
+      echo 'WARNING: deploying without a verified pre-deploy backup (LOGIOPS_ACCEPT_NO_RECOVERY_POINT=yes)' >&2
+    else
+      echo 'Deployment stopped before changing the release: no verified pre-deploy backup. See journalctl -u logiops-backup.service; for an emergency deploy rerun with --accept-no-recovery-point.' >&2
+      exit 1
+    fi
+  fi
 fi
 
 token=$(aws ssm get-parameter --region '${aws_region}' --name '${token_param}' --with-decryption --query Parameter.Value --output text)

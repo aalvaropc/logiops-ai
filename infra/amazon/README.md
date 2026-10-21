@@ -183,9 +183,11 @@ again from `main` once the fix is merged.
 - The instance resets the demo every night at 08:11 UTC (about 03:00 UTC-05:00)
   with its own systemd timer, `logiops-reset.timer`, which posts to
   `127.0.0.1:8000/demo/reset` with the token from `/etc/logiops.env` (the shell
-  passes it to curl on stdin, never as an argument). The uptime workflow's
-  nightly job does the same from GitHub when GitHub runs its schedule.
-  `systemctl list-timers logiops-reset.timer` shows the next run.
+  passes it to curl on stdin, never as an argument). This timer is the only
+  scheduled reset; the uptime workflow resets only when dispatched by hand. A
+  recording pause (`/etc/logiops-reset-paused`) lasts 30 hours at most, see
+  `docs/release-recovery.md`. `systemctl list-timers logiops-reset.timer` shows
+  the next run.
 - A Route 53 health check calls `/healthz` through CloudFront every 30 seconds
   from several regions (`monitor.tf`). When it has failed for three minutes, the
   CloudWatch alarm `logiops-ai-demo-down` writes to the SNS topic

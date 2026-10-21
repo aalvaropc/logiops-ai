@@ -26,3 +26,8 @@ Validation passed: Terraform formatting and schema checks, rendered shell
 syntax and ShellCheck, a consistent backup while WAL contains committed and
 uncommitted writes, temporary restoration, failed-backup preservation, cleanup
 after verification failures, and repeatable archive metadata.
+
+A later change adds a delete-marker cleanup rule to the lifecycle resource and
+`s3:AbortMultipartUpload` to the role policy. Both live inside resources already
+in the table, so the plan stays at 7 creates by construction, but it was not
+generated again: re-plan before applying.

@@ -14,10 +14,13 @@ the same commit must produce the same archive hash.
 
 Review `terraform plan` before applying it. The recovery addition creates a
 private encrypted S3 bucket, seven-day snapshot expiration, version cleanup,
-TLS-only bucket policy, and an instance-role policy limited to snapshot reads
-and writes. S3 expires current snapshots after seven days; noncurrent versions
-can remain for seven additional days. It must not replace the instance, EBS
-volume, identity pool, or either CloudFront distribution.
+TLS-only bucket policy, and an instance-role policy limited to snapshot reads,
+writes, and aborting an unfinished upload. S3 expires current snapshots after
+seven days, which leaves a delete marker over the old version; that version is
+removed seven days later and the then-empty delete marker is removed by its own
+lifecycle rule, so a snapshot is recoverable for about fourteen days. It must
+not replace the instance, EBS volume, identity pool, or either CloudFront
+distribution.
 
 ## Install on an existing instance after the approved apply
 
@@ -36,8 +39,13 @@ a new instance; it does not restart the running application.
 
 Run `/usr/local/sbin/logiops-backup predeploy` through SSM and retain its S3 URI,
 checksum, and successful restore result before deploying the reviewed archive.
-The deployment hook repeats this check before changing the release symlink.
-An existing database without a working backup hook blocks deployment.
+The deployment hook repeats this check before changing the release symlink,
+trying up to three times ten seconds apart. If it still fails, the deployment
+stops with the reason and the release is unchanged; so does a host without the
+hook, and `deploy_ec2.py` refuses to start in that case. Only for an emergency,
+`python scripts/deploy_ec2.py --accept-no-recovery-point` deploys anyway and the
+instance logs a warning. Installing the hook also fails, visibly, if
+`logiops-reset.service` is missing, because the nightly reset would never run.
 
 ## Recovery behavior
 
@@ -60,9 +68,12 @@ before resuming normal operation. A live restore requires a separate approval.
 ## Recordings and verification
 
 The instance timer is the only scheduled demo reset. GitHub's reset is manual.
-Before recording, create `/etc/logiops-reset-paused` through SSM and stop
-`logiops-reset.timer`; the drop-in condition also blocks accidental service
-starts. After recording, remove the marker and start the timer. The timer uses
+Before recording, run `touch /etc/logiops-reset-paused` through SSM. The reset
+unit checks the marker through `logiops-reset-gate` and skips while the marker
+is younger than 30 hours; an older marker is ignored and the reset runs, so a
+forgotten pause costs one night at most. Touch the marker again to extend it,
+and remove it after recording. The skipped run is in
+`journalctl -u logiops-reset.service` ("Reset skipped"). The timer uses
 `Persistent=false`, so it does not replay a missed reset.
 
 `scripts/verify_remote.py` spends one live investigation and a short speech call.
