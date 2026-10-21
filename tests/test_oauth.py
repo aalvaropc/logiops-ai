@@ -102,14 +102,19 @@ def test_a_guest_reads_and_is_asked_to_sign_in_for_actions(tmp_path, monkeypatch
         receipt = await http.post("/mcp", headers=MCP_HEADERS, json={"jsonrpc": "2.0", "id": 3, "method": "resources/read", "params": {"uri": "receipt://logiops/LGO-AAAAAA"}})
         investigate = await http.post("/incidents/SHIP-421/agent/investigate", json={})
         streamed = await http.post("/incidents/SHIP-421/agent/investigate/stream", json={})
+        speech = await http.post("/voice/speech", json={"text": "One moment."})
+        dismiss = await http.post("/alerts/SHIP-421-v9/dismiss")
         async with streamable_http_client(f"{BASE_URL}/mcp", http_client=http) as (read_stream, write, _):
             async with ClientSession(read_stream, write) as session:
                 await session.initialize()
                 shipment = await session.call_tool("get_shipment", {"shipment_id": "SHIP-421"})
-        return read, approve, quote, execute, book, receipt, investigate, streamed, shipment
+        return read, approve, quote, execute, book, receipt, investigate, streamed, speech, dismiss, shipment
 
-    read, approve, quote, execute, book, receipt, investigate, streamed, shipment = run_app(tmp_path, work)
+    read, approve, quote, execute, book, receipt, investigate, streamed, speech, dismiss, shipment = run_app(tmp_path, work)
     assert read.status_code == 200 and investigate.status_code == 200
+    assert speech.status_code in (200, 503) and dismiss.status_code == 404, "a guest hears the replies and gets the alert card"
+    assert GUEST_POSTS.fullmatch("/voice/speech") and GUEST_POSTS.fullmatch("/alerts/SHIP-421-v2/dismiss")
+    assert not GUEST_POSTS.fullmatch("/alerts") and not GUEST_POSTS.fullmatch("/alerts/SHIP-421-v2/dismiss/all")
     assert streamed.status_code == 200 and streamed.headers["content-type"].startswith("text/event-stream")
     events = sse_events(streamed.text)
     assert events[-1][0] == "done" and [kind for kind, _ in events].count("step") == len(events[-1][1]["tool_trace"])

@@ -44,7 +44,7 @@ GUEST = Actor("guest", "guest", "Guest")
 ISSUER = re.compile(r"^https://cognito-idp\.[a-z0-9-]+\.amazonaws\.com/[A-Za-z0-9_-]+$")
 DOMAIN = re.compile(r"^https://[a-z0-9.-]+$")
 MCP_TOOLS = {"execute_approved_plan": OPERATE, "get_booking": OPERATE, "quote_carrier_booking": BOOK, "book_carrier": BOOK}
-GUEST_POSTS = re.compile(r"^/(?:mcp/?|agent/briefing|incidents/[^/]+/(?:investigate|agent/investigate(?:/stream)?|agent/ask))$")
+GUEST_POSTS = re.compile(r"^/(?:mcp/?|agent/briefing|voice/speech|alerts/[^/]+/dismiss|incidents/[^/]+/(?:investigate|agent/investigate(?:/stream)?|agent/ask))$")
 BOOKING_PATHS = re.compile(r"^/(?:incidents/[^/]+/bookings/quote|quotes/[^/]+/confirm)$")
 
 
