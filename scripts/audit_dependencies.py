@@ -1,11 +1,12 @@
 import json
 import subprocess
 import tempfile
-from datetime import date
+from datetime import date, timedelta
 from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
+MAX_EXCEPTION_DAYS = 90
 
 
 def problems(report, exceptions, today=None):
@@ -17,9 +18,13 @@ def problems(report, exceptions, today=None):
             errors.append(f"Exception needs a reason and advisory URL: {item}")
         elif date.fromisoformat(item["expires"]) <= today:
             errors.append(f"Expired exception: {item['id']}")
+        elif date.fromisoformat(item["expires"]) > today + timedelta(days=MAX_EXCEPTION_DAYS):
+            errors.append(f"Exception {item['id']} expires more than {MAX_EXCEPTION_DAYS} days from now")
         else:
             allowed.add((item["package"], item["version"], item["id"]))
     for dependency in report["dependencies"]:
+        if "skip_reason" in dependency:
+            errors.append(f"{dependency['name']} was not audited: {dependency['skip_reason']}")
         for vulnerability in dependency.get("vulns", []):
             ids = {vulnerability["id"], *vulnerability.get("aliases", [])}
             if not any((dependency["name"], dependency["version"], identifier) in allowed for identifier in ids):
