@@ -1,5 +1,6 @@
 """Only main is deployed, and every pull request targets main."""
 
+import re
 from pathlib import Path
 
 import scripts.deploy_ec2 as deploy
@@ -100,3 +101,15 @@ def test_the_uptime_check_runs_every_check_reports_why_and_closes_its_issue():
     assert "if: ${{ failure() }}" in uptime and "if: ${{ success() }}" in uptime and 'gh issue close "$number"' in uptime
     assert "select(.title == env.TITLE)" in uptime and "--label uptime" in uptime
     assert "ubuntu-latest" not in uptime + ci
+
+
+def test_the_demo_is_checked_hourly_and_reset_nightly_without_echoing_the_token():
+    uptime = (ROOT / ".github" / "workflows" / "uptime.yml").read_text()
+    assert '- cron: "17 * * * *"' in uptime and '- cron: "7 8 * * *"' in uptime
+    assert "if: ${{ github.event.schedule != '7 8 * * *' && !inputs.reset }}" in uptime
+    assert "if: ${{ github.event.schedule == '7 8 * * *' || inputs.reset }}" in uptime
+    assert uptime.count("secrets.LOGIOPS_OPERATOR_TOKEN") == 1 and "TOKEN: ${{ secrets.LOGIOPS_OPERATOR_TOKEN }}" in uptime
+    reset = uptime.split("\n  reset:\n", 1)[1]
+    assert "-H @-" in reset and '"$BASE/demo/reset"' in reset and "inputs.base" not in reset
+    assert not re.search(r"echo[^\n]*TOKEN", uptime.replace("LOGIOPS_OPERATOR_TOKEN secret is not set", ""))
+
