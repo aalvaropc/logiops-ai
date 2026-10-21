@@ -157,8 +157,8 @@ async def needed_scope(request: Request) -> str | None:
             if isinstance(message, dict) and message.get("method") == "tools/call" and isinstance(message.get("params"), dict)
         ] + [
             OPERATE for message in messages
-            if isinstance(message, dict) and message.get("method") == "resources/read"
-            and receipt_uri((message.get("params") or {}).get("uri", ""))
+            if isinstance(message, dict) and message.get("method") == "resources/read" and isinstance(message.get("params"), dict)
+            and receipt_uri(message["params"].get("uri", ""))
         ]
         return BOOK if BOOK in found else (OPERATE if OPERATE in found else None)
     if path.startswith("/bookings/"):
