@@ -110,6 +110,13 @@ an OAuth 2.1 challenge (Amazon Cognito). Add
 `--header "Authorization: Bearer <token>"` with the operator token from the
 testing instructions to act as the operator.
 
+It also works in an AI assistant that hosts MCP Apps. Added to Claude as a
+custom connector (URL `https://dir4g4n7eq982.cloudfront.net/mcp`, no sign-in),
+"What's happening with SHIP-433? Show me the plans" reads the shipment, asks
+before running `investigate_incident` (it records plans, so it is not
+read-only), and renders the same plans card inside the chat, where it can
+select a plan but never approve one.
+
 ## How it works
 
 ```text
