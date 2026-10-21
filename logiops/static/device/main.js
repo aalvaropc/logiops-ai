@@ -10,6 +10,7 @@ import { createPurchase, dollars } from "../app/purchase.js";
 import { createAlerts, bellText } from "../app/alerts.js";
 import { createCommands, approvalReadback } from "../app/commands.js";
 import { createStore } from "../app/store.js";
+import { createStartup } from "../app/startup.js";
 import {
   visibleVersion, visibleApproval, visiblePlans, latestAgentEvent, namedPlanKinds, plural,
   recommendedPlan as pickRecommended, planFromUtterance as pickFromUtterance, TIME_ZONE,
@@ -203,7 +204,9 @@ function renderAccount() {
   button.setAttribute("aria-label", state.session ? `Signed in as ${state.session.username}; sign out` : "Guest, read only; link your account");
 }
 async function loadAuth() {
-  state.auth = await api.loadAuth();
+  const auth = await api.loadAuth();
+  if (auth.unavailable) throw new Error("The sign-in settings could not be read.");
+  state.auth = auth;
   if (!state.auth.enabled) keepSession(null);
   renderAccount();
 }
@@ -475,7 +478,8 @@ function renderControls() {
   $("mic").disabled = !ready;
   for (const chip of document.querySelectorAll(".chip")) chip.disabled = !ready;
   for (const id of ["confirm-yes", "confirm-no", "receipt-execute"]) if ($(id)) $(id).disabled = state.busy;
-  $("account").disabled = !ready;
+  $("account").disabled = state.busy;
+  $("retry").disabled = state.busy;
 }
 
 function render(snapshot) {
@@ -703,7 +707,10 @@ const commands = createCommands({
 });
 
 function handleUtterance(raw) {
-  if (!state.snapshot) return Promise.resolve();
+  if (!state.snapshot) {
+    if (String(raw ?? "").trim()) message("LogiOps isn't connected yet. Try again in a moment.");
+    return Promise.resolve();
+  }
   if (!state.busy) message("");
   return commands.handle(raw);
 }
@@ -762,7 +769,22 @@ window.addEventListener("hashchange", () => {
   const id = hashIncident();
   if (id && id !== state.incidentId) selectIncident(id).catch(() => {});
 });
-$("account").addEventListener("click", () => handleUtterance(state.session ? "sign out" : "link my account"));
+$("account").addEventListener("click", () => {
+  if (state.snapshot) {
+    handleUtterance(state.session ? "sign out" : "link my account");
+  } else if (state.session) {
+    signOut();
+    message("Signed out on this page. You're a guest again.", true);
+  } else {
+    linkAccount().catch((error) => message(error.message || String(error)));
+  }
+});
+let retryHadFocus = false;
+$("retry").addEventListener("click", () => {
+  if (state.busy) return;
+  retryHadFocus = document.activeElement === $("retry");
+  startup.start();
+});
 $("alerts-bell").addEventListener("click", async () => {
   const alert = alerts.elsewhere();
   if (!alert || state.busy) return;
@@ -808,7 +830,24 @@ if (resumed) {
   state.approver = resumed.username || "demo-operator";
 }
 setInterval(() => { checkAlerts().catch(() => {}); }, 10000);
-loadAuth().then(finishSignIn).catch(() => {}).then(() => act(async () => {}, "").catch(() => {})).then(() => {
+let authLoaded = false;
+
+async function connect() {
+  $("connection").textContent = "Connecting";
+  $("connection").className = "connection";
+  if (!authLoaded) {
+    try {
+      await loadAuth();
+      authLoaded = true;
+      await finishSignIn();
+    } catch (_) {
+      // Without the sign-in settings the page still works as a guest; the first snapshot decides whether it is connected.
+    }
+  }
+  await act(async () => {}, "");
+}
+
+function afterConnected() {
   if (state.signInNote) say("assistant", state.signInNote);
   loadVoice();
   recallMemory();
@@ -818,4 +857,28 @@ loadAuth().then(finishSignIn).catch(() => {}).then(() => act(async () => {}, "")
     say("assistant", `A booking is waiting for “${parked.quote.plan_label}” on ${parked.incidentId} (${dollars(parked.quote.total_usd)}). `
       + "Say “resume” to hear the price again, or “no” to drop it. Nothing was charged.");
   }
-}).catch(() => {});
+}
+
+const startup = createStartup({
+  attempt: connect,
+  retryable: (error) => error.status !== 401,
+  onFailure: (error, { retryIn }) => {
+    $("retry").hidden = false;
+    if (error.status === 401) {
+      if (state.auth.enabled) $("account").focus();
+      return;
+    }
+    $("connection").textContent = "Offline";
+    $("connection").className = "connection error";
+    const reason = error instanceof TypeError ? "I couldn't reach LogiOps." : error.message || String(error);
+    message(`${reason} ${retryIn ? "Trying again shortly." : "Press Retry to try again."}`);
+  },
+  onSuccess: (recovered) => {
+    $("retry").hidden = true;
+    if (recovered) message("Connected.", true);
+    if (retryHadFocus) $("ask-input").focus({ preventScroll: true });
+    retryHadFocus = false;
+    afterConnected();
+  },
+});
+startup.start();

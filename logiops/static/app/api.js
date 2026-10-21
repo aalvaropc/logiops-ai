@@ -109,9 +109,9 @@ export function createApi({ fetch: doFetch, storage, crypto: webCrypto, origin, 
   async function loadAuth() {
     try {
       const response = await fetcher("/auth/config", { cache: "no-store" });
-      return response.ok ? await response.json() : { enabled: false };
+      return response.ok ? await response.json() : { enabled: false, unavailable: true };
     } catch (_) {
-      return { enabled: false };
+      return { enabled: false, unavailable: true };
     }
   }
 
