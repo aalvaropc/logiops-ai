@@ -111,9 +111,9 @@ def test_the_uptime_check_runs_every_check_reports_why_and_closes_its_issue():
 
 def test_the_demo_is_checked_hourly_and_reset_nightly_without_echoing_the_token():
     uptime = (ROOT / ".github" / "workflows" / "uptime.yml").read_text()
-    assert '- cron: "17 * * * *"' in uptime and '- cron: "7 8 * * *"' in uptime
-    assert "if: ${{ github.event.schedule != '7 8 * * *' && !inputs.reset }}" in uptime
-    assert "if: ${{ github.event.schedule == '7 8 * * *' || inputs.reset }}" in uptime
+    assert '- cron: "43 * * * *"' in uptime and '- cron: "11 8 * * *"' in uptime
+    assert "if: ${{ github.event.schedule != '11 8 * * *' && !inputs.reset }}" in uptime
+    assert "if: ${{ github.event.schedule == '11 8 * * *' || inputs.reset }}" in uptime
     assert uptime.count("secrets.LOGIOPS_OPERATOR_TOKEN") == 1 and "TOKEN: ${{ secrets.LOGIOPS_OPERATOR_TOKEN }}" in uptime
     reset = uptime.split("\n  reset:\n", 1)[1]
     assert "-H @-" in reset and '"$BASE/demo/reset"' in reset and "inputs.base" not in reset
