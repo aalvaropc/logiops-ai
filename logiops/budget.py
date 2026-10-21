@@ -14,6 +14,11 @@ failing or spending more.
 Calls are counted, not tokens: the cap is a simple, predictable bound (an
 investigation is at most 9 calls, its revision included), not an exact bill. SDK retries inside one
 call are not counted separately.
+
+A guest's run on the public deployment must also fit a smaller guest share of the
+day (LOGIOPS_GUEST_DAILY_MODEL_CALLS, 0 by default), held in a second row, so a
+judge who never signs in still meets the live agent while the share lasts and
+signed-in people keep the rest.
 """
 
 from __future__ import annotations
@@ -28,15 +33,21 @@ from .scenario import LIMA
 from .storage import connect
 
 DEFAULT_DAILY_CALLS = 150
+DEFAULT_GUEST_CALLS = 0
 FALLBACK = "daily_budget"
+GUEST_FALLBACK = "guest_budget"
+HOLD = "UPDATE model_budget SET calls = calls + ? WHERE day = ? AND calls + ? <= ?"
 SCHEMA = "CREATE TABLE IF NOT EXISTS model_budget (day TEXT PRIMARY KEY, calls INTEGER NOT NULL)"
 
 
 class DailyModelBudget:
-    def __init__(self, db_path: str | Path, limit: int, clock: Callable[[], datetime] | None = None) -> None:
+    def __init__(
+        self, db_path: str | Path, limit: int, clock: Callable[[], datetime] | None = None, guest_limit: int = DEFAULT_GUEST_CALLS,
+    ) -> None:
         self.db_path = Path(db_path)
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         self.limit = limit
+        self.guest_limit = guest_limit
         self._clock = clock or (lambda: datetime.now(LIMA))
         with connect(self.db_path) as connection:
             connection.execute(SCHEMA)
@@ -44,36 +55,43 @@ class DailyModelBudget:
     @classmethod
     def from_env(cls, db_path: str | Path) -> "DailyModelBudget":
         try:
-            return cls(db_path, int(os.environ.get("LOGIOPS_DAILY_MODEL_CALLS", DEFAULT_DAILY_CALLS)))
+            return cls(db_path, int(os.environ.get("LOGIOPS_DAILY_MODEL_CALLS", DEFAULT_DAILY_CALLS)),
+                       guest_limit=int(os.environ.get("LOGIOPS_GUEST_DAILY_MODEL_CALLS", DEFAULT_GUEST_CALLS)))
         except ValueError as exc:
-            raise RuntimeError("LOGIOPS_DAILY_MODEL_CALLS must be an integer") from exc
+            raise RuntimeError("LOGIOPS_DAILY_MODEL_CALLS and LOGIOPS_GUEST_DAILY_MODEL_CALLS must be integers") from exc
 
     def today(self) -> str:
         return self._clock().astimezone(LIMA).date().isoformat()
 
-    def used(self, day: str | None = None) -> int:
-        """Calls used or reserved on a day (today by default)."""
+    def _pools(self, day: str, guest: bool) -> list[tuple[str, int]]:
+        return [(day, self.limit)] + ([(f"{day}#guest", self.guest_limit)] if guest else [])
+
+    def used(self, day: str | None = None, guest: bool = False) -> int:
+        """Calls used or reserved on a day (today by default), from the guest share when `guest`."""
+        key = (day or self.today()) + ("#guest" if guest else "")
         with connect(self.db_path) as connection:
-            row = connection.execute("SELECT calls FROM model_budget WHERE day = ?", (day or self.today(),)).fetchone()
+            row = connection.execute("SELECT calls FROM model_budget WHERE day = ?", (key,)).fetchone()
         return row[0] if row else 0
 
-    def reserve(self, calls: int) -> str | None:
-        """Hold `calls` of today's budget in one atomic update. Returns the day they were held on
-        (to release unused calls later, even after midnight), or None when they no longer fit."""
+    def reserve(self, calls: int, guest: bool = False) -> str | None:
+        """Hold `calls` of today's budget, and of the guest share too when `guest`, in one transaction.
+        Returns the day they were held on (to release unused calls later, even after midnight), or
+        None when they no longer fit in either; nothing is held then."""
         day = self.today()
         with connect(self.db_path) as connection:
-            connection.execute("INSERT INTO model_budget (day, calls) VALUES (?, 0) ON CONFLICT(day) DO NOTHING", (day,))
-            held = connection.execute(
-                "UPDATE model_budget SET calls = calls + ? WHERE day = ? AND calls + ? <= ?",
-                (calls, day, calls, self.limit),
-            ).rowcount
-        return day if held else None
+            for key, limit in self._pools(day, guest):
+                connection.execute("INSERT INTO model_budget (day, calls) VALUES (?, 0) ON CONFLICT(day) DO NOTHING", (key,))
+                if not connection.execute(HOLD, (calls, key, calls, limit)).rowcount:
+                    connection.rollback()
+                    return None
+        return day
 
-    def release(self, day: str, calls: int) -> None:
-        """Give back calls a run reserved but did not make."""
+    def release(self, day: str, calls: int, guest: bool = False) -> None:
+        """Give back calls a run reserved but did not make, to every pool they were held in."""
         if calls > 0:
             with connect(self.db_path) as connection:
-                connection.execute("UPDATE model_budget SET calls = MAX(0, calls - ?) WHERE day = ?", (calls, day))
+                connection.executemany("UPDATE model_budget SET calls = MAX(0, calls - ?) WHERE day = ?",
+                                       [(calls, key) for key, _ in self._pools(day, guest)])
 
 
 class BudgetedConverse:
@@ -82,11 +100,12 @@ class BudgetedConverse:
     the call was cancelled in flight, refuses to go past the reservation, and releases the
     rest when settled."""
 
-    def __init__(self, client: Any, budget: DailyModelBudget, day: str, reserved: int) -> None:
+    def __init__(self, client: Any, budget: DailyModelBudget, day: str, reserved: int, guest: bool = False) -> None:
         self.client = client
         self.budget = budget
         self.day = day
         self.reserved = reserved
+        self.guest = guest
         self.calls = 0
 
     async def converse(
@@ -102,4 +121,4 @@ class BudgetedConverse:
             raise
 
     def settle(self) -> None:
-        self.budget.release(self.day, self.reserved - self.calls)
+        self.budget.release(self.day, self.reserved - self.calls, guest=self.guest)

@@ -169,8 +169,9 @@ Source mini challenges.
 | Product feedback, friction log, feature requests | [`docs/hackathon/`](docs/hackathon/amazon-feedback.md) |
 
 The live demo stays up until judging ends (20 Nov 2026). It shares a
-daily budget of 40 model calls; when it is spent, or the model service is down,
-replies come from the scripted replay and say so. The operator token is in the
+daily budget of 40 model calls, and 20 of those calls are a guest share, so a
+judge meets the live agent without signing in; when a share is spent, or the
+model service is down, replies come from the scripted replay and say so. The operator token is in the
 private testing instructions. For judges:
 [testing instructions](docs/hackathon/testing-instructions.md),
 [decisions](docs/hackathon/decisions.md) and

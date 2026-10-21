@@ -44,6 +44,7 @@ safely, and each feature with its endpoints. For the design, see
 | `LOGIOPS_SCENARIO_PACK` | path of a JSON scenario pack to register at start (see *Bring your own incidents*) | unset |
 | `LOGIOPS_OTEL` | `1` exports the agent's OpenTelemetry spans (Strands Agents) to `OTEL_EXPORTER_OTLP_ENDPOINT` when set, to the console otherwise; `/healthz` reports `telemetry` | unset |
 | `LOGIOPS_DAILY_MODEL_CALLS` | live model calls per day (UTC-05:00) for the whole demo; each request reserves its run's maximum and releases what it did not use, and a run that no longer fits answers from replay with `fallback: "daily_budget"` | `150`; the AWS deployment sets `40` |
+| `LOGIOPS_GUEST_DAILY_MODEL_CALLS` | the part of the daily budget a guest on the public deployment may use live; a guest's run must fit both this share and the daily budget, and once the share is used the guest runs on replay with `fallback: "guest_budget"`; `0` keeps every guest on replay (`fallback: "sign_in"`) | `0`; the AWS deployment sets `20` |
 | `AWS_REGION`, `BEDROCK_MODEL_ID` | Bedrock region and model profile | `us-east-1`, `global.anthropic.claude-sonnet-4-6` |
 | `LOGIOPS_VOICE` | `polly` (Amazon Polly) or `browser` (the browser's own voice) | `polly` with `bedrock`, `browser` with `replay` |
 | `LOGIOPS_POLLY_VOICE`, `LOGIOPS_POLLY_ENGINE` | Polly voice and engine | `Ruth`, `generative` |
@@ -186,7 +187,9 @@ with a clear error after 50 seconds so it always answers before CloudFront's
 60-second origin timeout. Live calls share a daily budget for the whole demo
 (`LOGIOPS_DAILY_MODEL_CALLS`): when a run no longer fits, the response says
 `mode: replay` with `fallback: "daily_budget"`, and the page says so until
-midnight (UTC-05:00). When the model service itself fails (no credentials, a
+midnight (UTC-05:00). A guest's run must also fit the day's guest share; when
+only that share is used, the response says `fallback: "guest_budget"`. When the
+model service itself fails (no credentials, a
 refused or throttled call, a timeout, or the 50-second limit), the failure is
 recorded as `agent_run_failed` and the same job is answered again from the
 replay with `fallback: "model_unavailable"`, which the page also says; for five
@@ -374,8 +377,10 @@ by the three `LOGIOPS_COGNITO_*` settings; without them nothing changes.
   The signed-in user's name is recorded on quotes and bookings.
 - **Guests.** Without a token a visitor can read, ask the agent and use the
   read tools, hear every reply with Polly and receive the alert card. On the
-  public deployment the agent then runs on the replay model
-  (`fallback: "sign_in"`), so a guest never spends a model call. Approving,
+  public deployment a guest's agent runs live while the day's guest share of
+  model calls lasts (`LOGIOPS_GUEST_DAILY_MODEL_CALLS`), then on the replay
+  model with `fallback: "guest_budget"`; with no share, always on the replay
+  (`fallback: "sign_in"`). Approving,
   executing, changing data, booking (and the MCP tools
   `execute_approved_plan`, `quote_carrier_booking`, `book_carrier`,
   `get_booking`) answer `401` with `WWW-Authenticate: Bearer

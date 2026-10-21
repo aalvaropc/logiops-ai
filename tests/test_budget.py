@@ -103,6 +103,28 @@ def test_a_call_cancelled_in_flight_stays_counted(tmp_path):
     assert budget.used() == 1
 
 
+def test_a_guest_run_holds_calls_in_both_pools_and_releases_both(tmp_path):
+    budget = DailyModelBudget(tmp_path / "pool.sqlite3", limit=10, guest_limit=4)
+    day = budget.reserve(3, guest=True)
+    assert day and budget.used() == 3 and budget.used(guest=True) == 3
+    assert budget.reserve(2, guest=True) is None and budget.used() == 3, "a refused guest hold leaves the shared row alone"
+    assert budget.reserve(6) and budget.used() == 9 and budget.used(guest=True) == 3
+    budget.release(day, 2, guest=True)
+    assert budget.used() == 7 and budget.used(guest=True) == 1
+    assert budget.reserve(4, guest=True) is None and budget.used() == 7, "the day's cap still binds a guest"
+    assert budget.reserve(3, guest=True) and budget.used() == 10 and budget.used(guest=True) == 4
+
+
+def test_the_guest_share_reads_its_limit_from_env(tmp_path, monkeypatch):
+    monkeypatch.setenv("LOGIOPS_GUEST_DAILY_MODEL_CALLS", "12")
+    assert DailyModelBudget.from_env(tmp_path / "g.sqlite3").guest_limit == 12
+    monkeypatch.delenv("LOGIOPS_GUEST_DAILY_MODEL_CALLS")
+    assert DailyModelBudget.from_env(tmp_path / "g2.sqlite3").guest_limit == 0
+    monkeypatch.setenv("LOGIOPS_GUEST_DAILY_MODEL_CALLS", "lots")
+    with pytest.raises(RuntimeError, match="LOGIOPS_GUEST_DAILY_MODEL_CALLS"):
+        DailyModelBudget.from_env(tmp_path / "g3.sqlite3")
+
+
 class FakeBedrock(ReplayConverse):
     """Stands in for Bedrock (no AWS): the replay answers, counted like real calls."""
 

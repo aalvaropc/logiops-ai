@@ -17,6 +17,7 @@ test("badges and notes follow the grounding check and the budget fallback", () =
   assert.match(fallbackNote({ fallback: "daily_budget" }), /live model budget is used/);
   assert.match(fallbackNote({ fallback: "model_unavailable" }), /live model is unavailable right now/);
   assert.match(fallbackNote({ fallback: "sign_in" }), /You're a guest, so answers come from the scripted replay\. Press Link account/);
+  assert.match(fallbackNote({ fallback: "guest_budget" }), /guest share of live answers is used/);
   assert.equal(fallbackNote({ fallback: "something_else" }), null);
   assert.equal(fallbackNote({}), null);
 });
@@ -28,6 +29,7 @@ test("summaries count calls, tokens and units", () => {
   assert.equal(traceSummary({ tool_trace: [1, 2], mode: "replay", fallback: "model_unavailable", usage: {} }),
     "2 MCP calls · replay mode · live model unavailable · 0 tokens");
   assert.equal(traceSummary({ tool_trace: [1], mode: "replay", fallback: "sign_in", usage: {} }), "1 MCP call · replay mode · guest on the replay · 0 tokens");
+  assert.equal(traceSummary({ tool_trace: [1], mode: "replay", fallback: "guest_budget", usage: {} }), "1 MCP call · replay mode · guest share used · 0 tokens");
   const snapshot = { state: { shipment: { units_on_delayed_route: 8 } } };
   const execution = { fulfillments: [{ units: 12 }], incremental_cost_usd: 120, notifications: [1, 2], projected_customer_delay_hours: 0 };
   assert.equal(executionSummary(snapshot, execution), "Verified: 20 units accounted for · $120 extra · 2 simulated notifications. Customer delay: 0h (projected).");

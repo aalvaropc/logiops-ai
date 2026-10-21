@@ -13,6 +13,7 @@ from mcp import ClientSession
 from mcp.client.streamable_http import streamable_http_client
 
 from logiops.api import create_app
+from logiops.replay import ReplayConverse
 from logiops.oauth import GUEST_POSTS, OAuthSettings
 from tests.test_agent import sse_events
 
@@ -183,6 +184,33 @@ def test_the_static_operator_token_still_works_and_keys_are_cached(tmp_path):
     static, users, unknown = run_app(tmp_path, work, oauth=settings(fetch_jwks=jwks), access_token=operator)
     assert static.status_code == 200 and all(item.status_code == 200 for item in users)
     assert all(item.status_code == 401 for item in unknown) and jwks.calls == 1
+
+
+def test_a_public_guest_runs_live_from_the_guest_share_and_then_on_the_replay(tmp_path, monkeypatch):
+    monkeypatch.setenv("LOGIOPS_PUBLIC", "1")
+    monkeypatch.setenv("LOGIOPS_ACCESS_TOKEN", "p" * 40)
+    monkeypatch.setenv("LOGIOPS_PUBLIC_HOST", "demo.example.com")
+    monkeypatch.setenv("LOGIOPS_GUEST_DAILY_MODEL_CALLS", "9")
+
+    class Counting(ReplayConverse):
+        calls = 0
+
+        async def converse(self, messages, system, tools, skill=None):
+            Counting.calls += 1
+            return await super().converse(messages, system, tools, skill)
+
+    async def work(http, _app):
+        first = (await http.post("/incidents/SHIP-421/agent/investigate", json={})).json()
+        live = Counting.calls
+        streamed = await http.post("/incidents/SHIP-433/agent/investigate/stream", json={})
+        operator = (await http.post("/incidents/SHIP-452/agent/investigate", json={}, headers=bearer("p" * 40))).json()
+        return first, live, streamed, operator
+
+    first, live, streamed, operator = run_app(tmp_path, work, bedrock_client=Counting())
+    assert first["mode"] == "custom" and "fallback" not in first and live >= 1, "the first guest of the day meets the live agent"
+    kind, done = sse_events(streamed.text)[-1]
+    assert kind == "done" and (done["mode"], done["fallback"]) == ("replay", "guest_budget"), "the share is used, the day's budget is not"
+    assert operator["mode"] == "custom" and "fallback" not in operator and Counting.calls > live
 
 
 def test_a_public_guest_never_reaches_the_live_model(tmp_path, monkeypatch):
