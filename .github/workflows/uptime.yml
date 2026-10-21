@@ -2,8 +2,8 @@ name: uptime
 
 on:
   schedule:
-    - cron: "17 * * * *"
-    - cron: "7 8 * * *"
+    - cron: "43 * * * *"
+    - cron: "11 8 * * *"
   workflow_dispatch:
     inputs:
       base:
@@ -20,7 +20,7 @@ permissions:
 
 jobs:
   demo:
-    if: ${{ github.event.schedule != '7 8 * * *' && !inputs.reset }}
+    if: ${{ github.event.schedule != '11 8 * * *' && !inputs.reset }}
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions:
@@ -104,7 +104,7 @@ jobs:
           if [ -n "$number" ]; then gh issue close "$number" --comment "Recovered: every check passed on $BASE. Run: $RUN"; fi
 
   reset:
-    if: ${{ github.event.schedule == '7 8 * * *' || inputs.reset }}
+    if: ${{ github.event.schedule == '11 8 * * *' || inputs.reset }}
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions:
