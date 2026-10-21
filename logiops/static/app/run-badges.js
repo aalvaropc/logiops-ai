@@ -3,8 +3,9 @@ import { plural } from "./selectors.js";
 export const CHECK_FAILED_NOTE = "This answer did not pass the automatic check against the incident's data. The plan cards are calculated by code; rely on them.";
 export const BUDGET_NOTE = "Today's live model budget is used, so answers come from the scripted replay until midnight (UTC-05:00).";
 export const MODEL_NOTE = "The live model is unavailable right now, so this answer comes from the scripted replay.";
-const FALLBACK_NOTES = { daily_budget: BUDGET_NOTE, model_unavailable: MODEL_NOTE };
-const FALLBACK_SUMMARIES = { daily_budget: " · daily live budget used", model_unavailable: " · live model unavailable" };
+export const GUEST_NOTE = "You're a guest, so answers come from the scripted replay. Press Link account to use the live agent on Amazon Bedrock.";
+const FALLBACK_NOTES = { daily_budget: BUDGET_NOTE, model_unavailable: MODEL_NOTE, sign_in: GUEST_NOTE };
+const FALLBACK_SUMMARIES = { daily_budget: " · daily live budget used", model_unavailable: " · live model unavailable", sign_in: " · guest on the replay" };
 
 export function checkBadge(run) {
   if (!run.evaluations?.length) return null;
