@@ -131,3 +131,11 @@ def test_an_account_level_spend_stop_cuts_bedrock_and_polly_without_committing_a
     assert re.search(r'variable "spend_stop_email" \{[^}]*default     = ""', variables)
     assert not re.search(r"[\w.+-]+@[\w-]+\.[\w.]+", spend + variables), "no address is committed"
 
+
+def test_the_instance_resets_the_demo_nightly_on_its_own_without_exposing_the_token():
+    template = (ROOT / "infra" / "amazon" / "bootstrap.sh.tftpl").read_text()
+    assert "OnCalendar=*-*-* 08:11:00 UTC" in template and "systemctl enable --now logiops-reset.timer" in template
+    assert "EnvironmentFile=/etc/logiops.env" in template.split("logiops-reset.service")[1]
+    assert '"$$LOGIOPS_ACCESS_TOKEN" | curl' in template and "-H @- -X POST http://127.0.0.1:8000/demo/reset" in template
+    assert "%%s" in template, "systemd would read %s as a specifier"
+
