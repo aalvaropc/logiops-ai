@@ -47,6 +47,9 @@ guest: execute, quote and book answer `401` with the OAuth challenge (the CLI re
 Inspector's web UI, enter the client id and scopes from `GET /auth/config` in its OAuth settings.
 The device is an MCP client too: in the browser's network panel, its posts to `/mcp` are `initialize`,
 `tools/list`, `resources/read` for the plans card and `tools/call` for `list_incidents` and `list_alerts`.
+In an assistant that hosts MCP Apps, such as Claude: add a custom connector with the URL
+`https://dir4g4n7eq982.cloudfront.net/mcp` and no sign-in, then ask "What's happening with SHIP-433? Show me the
+plans". It reads the shipment, asks before `investigate_incident`, and renders the plans card in the chat.
 
 1. **MCP check.** `uv run python scripts/check_mcp.py http://127.0.0.1:8000/mcp`
    performs `initialize`, `tools/list`, `tools/call(get_shipment)` and
