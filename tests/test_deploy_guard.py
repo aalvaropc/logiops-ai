@@ -139,3 +139,13 @@ def test_the_instance_resets_the_demo_nightly_on_its_own_without_exposing_the_to
     assert '"$$LOGIOPS_ACCESS_TOKEN" | curl' in template and "-H @- -X POST http://127.0.0.1:8000/demo/reset" in template
     assert "%%s" in template, "systemd would read %s as a specifier"
 
+
+def test_an_aws_alarm_watches_the_demo_without_committing_an_address():
+    monitor = (ROOT / "infra" / "amazon" / "monitor.tf").read_text()
+    assert 'type              = "HTTPS"' in monitor and 'resource_path     = "/healthz"' in monitor
+    assert "fqdn              = aws_cloudfront_distribution.app.domain_name" in monitor
+    assert 'metric_name         = "HealthCheckStatus"' in monitor and 'treat_missing_data  = "breaching"' in monitor
+    assert "alarm_actions       = [aws_sns_topic.alerts.arn]" in monitor and "ok_actions          = [aws_sns_topic.alerts.arn]" in monitor
+    assert 'count     = var.spend_stop_email == "" ? 0 : 1' in monitor
+    assert not re.search(r"[\w.+-]+@[\w-]+\.[\w.]+", monitor), "no address is committed"
+
