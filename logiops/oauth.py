@@ -35,6 +35,7 @@ import httpx
 import jwt
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
+from pydantic import AnyUrl, ValidationError
 
 from .identity import Actor
 
@@ -157,7 +158,7 @@ async def needed_scope(request: Request) -> str | None:
         ] + [
             OPERATE for message in messages
             if isinstance(message, dict) and message.get("method") == "resources/read"
-            and str((message.get("params") or {}).get("uri", "")).startswith("receipt://")
+            and receipt_uri((message.get("params") or {}).get("uri", ""))
         ]
         return BOOK if BOOK in found else (OPERATE if OPERATE in found else None)
     if path.startswith("/bookings/"):
@@ -169,6 +170,13 @@ async def needed_scope(request: Request) -> str | None:
     if GUEST_POSTS.fullmatch(path):
         return None
     return OPERATE
+
+
+def receipt_uri(value: Any) -> bool:
+    try:
+        return AnyUrl(value).scheme == "receipt"
+    except (ValidationError, TypeError):
+        return False
 
 
 def install_oauth(app: FastAPI, settings: OAuthSettings, public_host: str | None) -> None:

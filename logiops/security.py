@@ -125,6 +125,10 @@ def install_security(
                     return JSONResponse(status_code=403, content={"detail": "Your sign-in does not allow this action."},
                                         headers={"WWW-Authenticate": challenge(base, need, error="insufficient_scope")})
         request.state.actor = actor
+        request.state.permissions = frozenset(
+            name for name in ("incidents.operate", "bookings.write")
+            if scope_name(base_url(request, public_host), name) in (scopes or set())
+        )
         internal = _constant_time_equal(request.headers.get(INTERNAL_HEADER, ""), internal_key)
         if (path.startswith("/mcp") or path.startswith("/memory")) and not internal and not mcp_limiter.allow(key):
             return JSONResponse(status_code=429, content={"detail": "MCP rate limit exceeded"})

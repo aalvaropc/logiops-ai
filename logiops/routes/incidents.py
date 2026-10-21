@@ -7,7 +7,7 @@ from typing import Any
 
 from fastapi import APIRouter, Request
 
-from ..identity import OPERATOR, actor_of, profile_of
+from ..identity import OPERATOR, actor_of, has_permission, profile_of
 from ..metrics import incident_metrics, session_metrics
 from ..preferences import preference_for
 from ..presentation import customer_text
@@ -73,7 +73,7 @@ def router(ctx: Context) -> APIRouter:
         return {
             **snapshot, "operator_preferences": saved,
             "preference": preference_for(visible_plans(snapshot), saved),
-            "bookings": bookings.for_incident(incident_id),
+            "bookings": bookings.for_incident(incident_id) if has_permission(request, "incidents.operate") else [],
         }
 
     @routes.post("/incidents/{incident_id}/investigate")

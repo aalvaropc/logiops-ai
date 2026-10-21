@@ -30,3 +30,7 @@ def actor_of(request: Any) -> Actor:
     state = getattr(request, "state", None)
     actor = getattr(state, "actor", None)
     return actor if isinstance(actor, Actor) else OPERATOR
+
+
+def has_permission(request: Any, permission: str) -> bool:
+    return actor_of(request).kind == "operator" or permission in getattr(request.state, "permissions", frozenset())
