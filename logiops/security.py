@@ -11,8 +11,8 @@ from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
 from .agent import INTERNAL_HEADER
-from .identity import OPERATOR
-from .mcp_transport import McpRequestGuard
+from .identity import OPERATOR, Actor
+from .mcp_transport import NO_STORE, McpRequestGuard
 from .oauth import GUEST, InvalidToken, OAuthSettings, base_url, challenge, needed_scope, scope_name, verify_async
 
 
@@ -77,10 +77,42 @@ def install_security(
     agent_limiter = _SlidingWindow(agent_limit_per_minute, 60)
     speech_limiter = _SlidingWindow(agent_limit_per_minute * 3, 60)
 
+    def on_sandbox(request: Request) -> bool:
+        return bool(sandbox_host) and request.headers.get("host", "").split(":")[0].lower() == sandbox_host
+
+    async def identify(request: Request) -> tuple[Actor, set[str] | None] | JSONResponse:
+        """Who is calling and with which scopes, or the 401 to send. Worked out once per request."""
+        known = getattr(request.state, "identity", None)
+        if known is not None:
+            return known
+        supplied = request.headers.get("authorization", "")
+        scopes: set[str] | None = None
+        if access_token and _constant_time_equal(supplied, f"Bearer {access_token}"):
+            actor = OPERATOR
+        elif oauth and supplied[:7].lower() == "bearer ":
+            try:
+                actor, scopes = await verify_async(oauth, supplied[7:].strip())
+            except InvalidToken as exc:
+                base = base_url(request, public_host)
+                return JSONResponse(status_code=401, content={"detail": str(exc)},
+                                    headers={**NO_STORE, "WWW-Authenticate": challenge(base, error="invalid_token", description=str(exc))})
+        elif oauth:
+            actor = GUEST
+        elif access_token:
+            return JSONResponse(
+                status_code=401,
+                content={"detail": "Bearer token required"},
+                headers={**NO_STORE, "WWW-Authenticate": "Bearer"},
+            )
+        else:
+            actor = OPERATOR
+        request.state.identity = (actor, scopes)
+        return actor, scopes
+
     @app.middleware("http")
     async def guard(request: Request, call_next: Any) -> Any:
         path = request.url.path
-        if sandbox_host and request.headers.get("host", "").split(":")[0].lower() == sandbox_host and path != SANDBOX_PATH:
+        if on_sandbox(request) and path != SANDBOX_PATH:
             return JSONResponse(status_code=404, content={"detail": "Not found"})
         key = client_key(request, trust_cloudfront=trust_cloudfront)
         request.state.viewer = key
@@ -94,27 +126,10 @@ def install_security(
             response = await call_next(request)
             response.headers.setdefault("Cache-Control", "no-cache")
             return response
-        supplied = request.headers.get("authorization", "")
-        scopes: set[str] | None = None
-        if access_token and _constant_time_equal(supplied, f"Bearer {access_token}"):
-            actor = OPERATOR
-        elif oauth and supplied[:7].lower() == "bearer ":
-            try:
-                actor, scopes = await verify_async(oauth, supplied[7:].strip())
-            except InvalidToken as exc:
-                base = base_url(request, public_host)
-                return JSONResponse(status_code=401, content={"detail": str(exc)},
-                                    headers={"WWW-Authenticate": challenge(base, error="invalid_token", description=str(exc))})
-        elif oauth:
-            actor = GUEST
-        elif access_token:
-            return JSONResponse(
-                status_code=401,
-                content={"detail": "Bearer token required"},
-                headers={"WWW-Authenticate": "Bearer"},
-            )
-        else:
-            actor = OPERATOR
+        identity = await identify(request)
+        if isinstance(identity, JSONResponse):
+            return identity
+        actor, scopes = identity
         if actor.kind != "operator":
             need = await needed_scope(request)
             if need:
@@ -144,8 +159,10 @@ def install_security(
         return _constant_time_equal(request.headers.get(INTERNAL_HEADER, ""), internal_key) or mcp_limiter.allow(
             client_key(request, trust_cloudfront=trust_cloudfront))
 
-    app.add_middleware(
-        McpRequestGuard, allow=allow_mcp,
-        inspect_body=lambda request: bool(oauth or not access_token or _constant_time_equal(
-            request.headers.get("authorization", ""), f"Bearer {access_token}")),
-    )
+    async def admit_mcp(request: Request) -> JSONResponse | None:
+        if on_sandbox(request):
+            return JSONResponse(status_code=404, content={"detail": "Not found"}, headers=NO_STORE)
+        identity = await identify(request)
+        return identity if isinstance(identity, JSONResponse) else None
+
+    app.add_middleware(McpRequestGuard, admit=admit_mcp, allow=allow_mcp, retry_after=int(mcp_limiter.window))

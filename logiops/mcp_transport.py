@@ -1,31 +1,45 @@
 import json
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 
 from mcp.types import JSONRPCMessage
 from pydantic import ValidationError
 from starlette.requests import Request
-from starlette.responses import JSONResponse
+from starlette.responses import JSONResponse, Response
 from starlette.types import ASGIApp, Receive, Scope, Send
 
 
 MAX_BODY_BYTES = 4 * 1024 * 1024
+NO_STORE = {"Cache-Control": "no-store"}
 
 
 class McpRequestGuard:
-    def __init__(self, app: ASGIApp, allow: Callable[[Request], bool], inspect_body: Callable[[Request], bool]) -> None:
+    """Checks an MCP request before the server reads it: who is calling (`admit` returns the response to send, or
+    None), the rate limit, the 4 MiB body limit and that the body is a JSON-RPC message. The order matters: a caller
+    that fails to authenticate neither uses up the limit nor has its body read."""
+
+    def __init__(
+        self, app: ASGIApp, admit: Callable[[Request], Awaitable[Response | None]], allow: Callable[[Request], bool],
+        retry_after: int = 60,
+    ) -> None:
         self.app = app
+        self.admit = admit
         self.allow = allow
-        self.inspect_body = inspect_body
+        self.retry_after = retry_after
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         if scope["type"] != "http" or scope["path"] not in ("/mcp", "/mcp/"):
             await self.app(scope, receive, send)
             return
         request = Request(scope)
-        if not self.allow(request):
-            await JSONResponse({"detail": "MCP rate limit exceeded"}, status_code=429)(scope, receive, send)
+        refused = await self.admit(request)
+        if refused is not None:
+            await refused(scope, receive, send)
             return
-        if scope["method"] != "POST" or not self.inspect_body(request):
+        if not self.allow(request):
+            await JSONResponse({"detail": "MCP rate limit exceeded"}, status_code=429,
+                               headers={**NO_STORE, "Retry-After": str(self.retry_after)})(scope, receive, send)
+            return
+        if scope["method"] != "POST":
             await self.app(scope, receive, send)
             return
         body = bytearray()
@@ -35,7 +49,7 @@ class McpRequestGuard:
                 return
             body.extend(message.get("body", b""))
             if len(body) > MAX_BODY_BYTES:
-                await JSONResponse({"detail": "MCP request body exceeds 4 MiB"}, status_code=413)(scope, receive, send)
+                await JSONResponse({"detail": "MCP request body exceeds 4 MiB"}, status_code=413, headers=NO_STORE)(scope, receive, send)
                 return
             if not message.get("more_body", False):
                 break
@@ -60,4 +74,5 @@ class McpRequestGuard:
 
                 await self.app(scope, replay, send)
                 return
-        await JSONResponse({"jsonrpc": "2.0", "id": None, "error": {"code": code, "message": reason}}, status_code=400)(scope, receive, send)
+        await JSONResponse({"jsonrpc": "2.0", "id": None, "error": {"code": code, "message": reason}},
+                           status_code=400, headers=NO_STORE)(scope, receive, send)
