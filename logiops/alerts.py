@@ -18,7 +18,7 @@ from typing import Any, Callable, ContextManager
 from .preferences import PreferenceStore, preference_for
 from .scenario import best_plan, incident_ids
 from .service import LogiOpsService, WorkflowError
-from .storage import connect
+from .storage import connect, of_current_seed
 
 SCHEMA = """CREATE TABLE IF NOT EXISTS alerts (
     id TEXT PRIMARY KEY, incident_id TEXT NOT NULL, source_version INTEGER NOT NULL, alert_json TEXT NOT NULL,
@@ -68,12 +68,26 @@ class AlertWatcher:
             return connection.execute(
                 "SELECT 1 FROM alerts WHERE incident_id = ? AND source_version = ?", (incident_id, version)).fetchone() is not None
 
+    def _snapshot(self, incident_id: str) -> dict[str, Any] | None:
+        try:
+            return self.service.get(incident_id)
+        except WorkflowError:
+            return None
+
+    def _forget_earlier_seeds(self, snapshot: dict[str, Any]) -> None:
+        with self._connection() as connection:
+            rows = connection.execute(
+                "SELECT id, alert_json FROM alerts WHERE incident_id = ?", (snapshot["state"]["incident_id"],)).fetchall()
+            connection.executemany("DELETE FROM alerts WHERE id = ?", [
+                (row[0],) for row in rows if not of_current_seed(snapshot, json.loads(row[1])["previous_plan"]["plan_id"])])
+
     def scan(self) -> list[dict[str, Any]]:
         """New alerts for every incident whose plans went stale; repeating a scan adds nothing."""
         return [alert for incident_id in incident_ids() if (alert := self.check(incident_id))]
 
     def check(self, incident_id: str) -> dict[str, Any] | None:
         snapshot = self.service.get(incident_id)
+        self._forget_earlier_seeds(snapshot)
         version = snapshot["source_version"]
         planned = max((plan["source_version"] for plan in snapshot["plans"]), default=None)
         if snapshot["executions"] or planned is None or planned >= version or self._known(incident_id, version):
@@ -141,10 +155,15 @@ class AlertWatcher:
         return alert
 
     def open_alerts(self) -> list[dict[str, Any]]:
+        """Undismissed alerts, newest first, about incidents as they are now: an alert from before a reset or a
+        date refresh, or about an incident no longer registered, is left out."""
         with self._connection() as connection:
             rows = connection.execute(
                 "SELECT alert_json FROM alerts WHERE dismissed_at IS NULL ORDER BY created_at DESC, id").fetchall()
-        return [json.loads(row[0]) for row in rows]
+        alerts = [json.loads(row[0]) for row in rows]
+        snapshots = {incident_id: self._snapshot(incident_id) for incident_id in {alert["incident_id"] for alert in alerts}}
+        return [alert for alert in alerts if (snapshot := snapshots[alert["incident_id"]])
+                and of_current_seed(snapshot, alert["previous_plan"]["plan_id"])]
 
     def dismiss(self, alert_id: str) -> dict[str, Any]:
         with self._connection() as connection:

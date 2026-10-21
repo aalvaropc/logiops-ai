@@ -2,6 +2,7 @@
 
 import asyncio
 import re
+from datetime import date
 
 import httpx
 import jsonschema
@@ -54,6 +55,24 @@ def test_a_stock_drop_under_an_approved_plan_proposes_a_new_pick_and_approves_no
     decision = [event for event in snapshot["events"] if event["name"] == "autopilot_decision"]
     assert len(decision) == 1 and decision[0]["data"]["decision"] == "propose" and decision[0]["data"]["approved"] is False
     assert alerts.scan() == [] and len(alerts.open_alerts()) == 1
+
+
+def test_an_alert_from_before_a_date_refresh_never_shows_and_never_blocks_the_next_one(tmp_path):
+    path = tmp_path / "alerts.sqlite3"
+    day = [date(2026, 10, 12)]
+    service = LogiOpsService(path, scenario_day=lambda: day[0])
+    alerts = AlertWatcher(path, service, PreferenceStore(path))
+    approve(service, "SHIP-421", "split-express")
+    service.set_local_inventory("SHIP-421", 3)
+    [old] = alerts.scan()
+    day[0] = date(2026, 10, 15)
+    service.list_incidents()
+    assert alerts.open_alerts() == [] and alerts.scan() == []
+    approve(service, "SHIP-421", "split-express")
+    service.set_local_inventory("SHIP-421", 3)
+    [new] = alerts.scan()
+    assert new["id"] == old["id"] == "SHIP-421-v2" and new["previous_plan"]["plan_id"] != old["previous_plan"]["plan_id"]
+    assert alerts.open_alerts() == [new]
 
 
 def test_only_stale_unexecuted_investigations_raise_alerts(tmp_path):
