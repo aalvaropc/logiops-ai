@@ -52,7 +52,7 @@ bottom.
 - [x] `scripts/clean_room.sh main` passes on a clean clone (tests, Docker build, `check_mcp.py`, `rehearse_api.py`): 2026-10-13 on `3a49be3`, 385 passed.
 - [x] `gitleaks git` over the full history reports no leaks: the CI `gitleaks` job passed on every pull request until 2026-10-20 (last: #119), when GitHub Actions stopped running for this private repository; re-run it locally before the repository goes public.
 - [ ] Test count recorded on the commit to tag. Last count on `main` (2026-10-20): 412 pytest, 91 node and 22 browser walkthroughs. Earlier: 385 passed (plus 8 browser walkthroughs) on `3a49be3`, deployed as D3 on 2026-10-13 and verified live (`check_oauth.py` 4/4, `check_mcp.py`, `verify_remote.py`, device and console walkthrough on CloudFront).
-- [ ] README Submission table lists the repository, the tag and the video (the open-source library and the tag name are in; the Devpost link and the video come with the tag).
+- [ ] The README's submission table lists the repository, the tag and the video (the open-source library and the tag name are in; the Devpost link and the video come with the tag).
 - [ ] Repository public, or the reviewers from the rules invited (`rules-verification.md` 6).
 - [ ] Tag `amazon-v1.0` on that commit and a GitHub Release created.
 - [ ] Submitted at least one day before the deadline (target 22 Oct; deadline 23 Oct, 12:00 PT).

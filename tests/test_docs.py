@@ -6,6 +6,11 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 
 
+def _anchors(markdown: str) -> set[str]:
+    return {re.sub(r"[^\w\- ]", "", line[3:].strip().lower()).replace(" ", "-")
+            for line in markdown.splitlines() if line.startswith("## ")}
+
+
 def test_every_screenshot_is_referenced_and_present():
     readme = (ROOT / "README.md").read_text()
     referenced = set(re.findall(r"\]\((docs/img/[\w.-]+\.png)\)", readme))
@@ -27,6 +32,13 @@ def test_the_docs_name_the_device_the_console_strands_metrics_and_packs():
     architecture = (ROOT / "docs" / "architecture.md").read_text()
     for text in ("/console", "Strands Agents", "GET /metrics", "scenario pack", "illustrative", "Measured on the deployed demo"):
         assert text in readme, text
+    reference = (ROOT / "docs" / "reference.md").read_text()
+    own, theirs = re.findall(r"\]\(#([\w-]+)\)", readme), re.findall(r"\]\(docs/reference\.md#([\w-]+)\)", readme)
+    inside = re.findall(r"\]\(#([\w-]+)\)", reference)
+    assert own and theirs and len(inside) >= 20
+    assert set(own) <= _anchors(readme) and set(theirs + inside) <= _anchors(reference)
+    for target in re.findall(r"\]\(((?:\.\./)?[\w./-]+\.md)(?:#[\w-]+)?\)", reference):
+        assert (ROOT / "docs" / target).resolve().is_file(), target
     for text in ("## Production path", "Strands Agents", "AgentCore Memory", "Amazon Polly", "Amazon Cognito", "scenario packs", "alexa-plus-readiness.md"):
         assert text in architecture, text
     assert "operator panel" not in readme

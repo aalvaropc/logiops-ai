@@ -74,7 +74,8 @@ def test_the_release_caps_live_model_calls_and_documents_it():
     variables = (ROOT / "infra" / "amazon" / "variables.tf").read_text()
     assert 'variable "daily_model_calls" {\n  type    = number\n  default = 40\n}' in variables
     readme = (ROOT / "README.md").read_text()
-    row = next(line for line in readme.splitlines() if line.startswith("| `LOGIOPS_DAILY_MODEL_CALLS` |"))
+    reference = (ROOT / "docs" / "reference.md").read_text()
+    row = next(line for line in reference.splitlines() if line.startswith("| `LOGIOPS_DAILY_MODEL_CALLS` |"))
     assert row.endswith("| `150`; the AWS deployment sets `40` |")
     assert "DEFAULT_DAILY_CALLS = 150" in (ROOT / "logiops" / "budget.py").read_text()
     assert "daily budget of 40 model calls" in readme and "mcp-apps-web-host" in readme
