@@ -1,4 +1,3 @@
-// The device's first load: try, pause with growing delays, then leave the next try to the person.
 export function createStartup({
   attempt, delays = [2000, 5000, 10000], retryable = () => true,
   wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
@@ -7,7 +6,6 @@ export function createStartup({
   let turn = 0;
   let failed = false;
 
-  // A newer start supersedes one that is still waiting, so a manual retry never races an automatic one.
   async function start() {
     const mine = ++turn;
     for (let index = 0; ; index += 1) {

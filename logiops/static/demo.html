@@ -33,6 +33,10 @@
         <ol><li>Detected</li><li>Investigated</li><li>Approved</li><li>Executed</li></ol>
       </section>
       <main id="surface" class="surface" tabindex="0">
+        <div id="auth-status" class="message" role="status" aria-live="polite" hidden>
+          Sign-in is temporarily unavailable.
+          <button id="auth-retry" type="button" class="retry">Retry sign-in</button>
+        </div>
         <div id="message" class="message" role="status" aria-live="polite"></div>
         <button id="retry" type="button" class="retry" hidden>Retry</button>
         <section data-surface="home" class="card home" aria-label="Home">

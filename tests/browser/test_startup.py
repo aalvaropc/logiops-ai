@@ -1,9 +1,13 @@
+import json
+
+import pytest
 from playwright.sync_api import expect
 
 
 def test_commands_wait_for_the_initial_snapshot(page, replay_server, page_errors):
     held = []
-    page.route("**/auth/config", lambda route: held.append(route))
+    page.route("**/incidents", lambda route: held.append(route))
+    page.route("**/mcp", lambda route: held.append(route))
     page.goto(f"{replay_server}/demo")
     expect(page.locator("#ask")).to_be_disabled()
     expect(page.locator("#ask-input")).to_have_attribute("readonly", "")
@@ -13,14 +17,14 @@ def test_commands_wait_for_the_initial_snapshot(page, replay_server, page_errors
         document.querySelector('#ask-form').dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
     }""")
     expect(page.locator("#device-heard")).not_to_have_text("investigate SHIP-421")
-    held[0].continue_()
+    page.unroute("**/incidents")
+    page.unroute("**/mcp")
     expect(page.locator("#connection")).to_have_text("Connected")
     expect(page.locator("#ask")).to_be_enabled()
     assert page_errors == []
 
 
 def fail_while(page, outage):
-    """Refuse the incident list, over MCP and plain HTTP, for as long as the outage lasts."""
     def gate(route):
         if outage["on"]:
             route.abort()
@@ -81,3 +85,41 @@ def test_the_account_button_works_while_the_first_load_has_failed(page, replay_s
     expect(page.locator("#ask")).to_be_disabled()
     page.click("#account")
     page.wait_for_url("https://idp.example.com/oauth2/authorize?**")
+
+
+AUTH_CONFIG = {"enabled": True, "client_id": "demo", "authorize_endpoint": "https://idp.example.com/oauth2/authorize", "scope": "openid"}
+
+
+@pytest.mark.parametrize("surface", ["demo", "console"])
+def test_sign_in_recovers_automatically_when_only_its_configuration_failed(page, replay_server, surface):
+    calls = []
+
+    def config(route):
+        calls.append(True)
+        route.fulfill(status=503, json={}) if len(calls) == 1 else route.fulfill(json=AUTH_CONFIG)
+
+    page.route("**/auth/config", config)
+    page.goto(f"{replay_server}/{surface}")
+    expect(page.locator("#connection")).to_have_text("Connected")
+    expect(page.locator("#account")).to_be_visible(timeout=10000)
+    assert len(calls) == 2
+    expect(page.locator("#auth-status")).to_be_hidden()
+
+
+@pytest.mark.parametrize("surface", ["demo", "console"])
+def test_a_temporary_auth_outage_preserves_the_session_and_offers_a_manual_retry(page, replay_server, surface):
+    session = {"access": "test-access", "refresh": "test-refresh", "expiresAt": 9999999999999, "username": "alice"}
+    page.add_init_script(f"sessionStorage.setItem('logiops-session', {json.dumps(json.dumps(session))})")
+    outage = {"on": True}
+    page.route("**/auth/config", lambda route: route.fulfill(status=503, json={}) if outage["on"] else route.fulfill(json=AUTH_CONFIG))
+    page.goto(f"{replay_server}/{surface}")
+    expect(page.locator("#connection")).to_have_text("Connected")
+    expect(page.locator("#auth-status")).to_be_visible()
+    assert page.evaluate("JSON.parse(sessionStorage.getItem('logiops-session'))") == session
+    outage["on"] = False
+    page.locator("#auth-retry").focus()
+    page.keyboard.press("Enter")
+    expect(page.locator("#auth-status")).to_be_hidden()
+    expect(page.locator("#account")).to_contain_text("alice")
+    assert page.evaluate("JSON.parse(sessionStorage.getItem('logiops-session'))") == session
+    expect(page.locator("#connection")).to_have_text("Connected")

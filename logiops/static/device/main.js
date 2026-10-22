@@ -830,25 +830,37 @@ if (resumed) {
   state.approver = resumed.username || "demo-operator";
 }
 setInterval(() => { checkAlerts().catch(() => {}); }, 10000);
-let authLoaded = false;
+const authStartup = createStartup({
+  attempt: async () => {
+    await loadAuth();
+    await finishSignIn();
+  },
+  onFailure: () => {
+    $("auth-status").hidden = false;
+    $("auth-status").classList.add("visible");
+  },
+  onSuccess: () => {
+    const retryFocused = document.activeElement === $("auth-retry");
+    $("auth-status").hidden = true;
+    $("auth-status").classList.remove("visible");
+    if (retryFocused && !$("account").hidden) $("account").focus();
+    if (state.signInNote) {
+      say("assistant", state.signInNote);
+      state.signInNote = null;
+    }
+    if (state.snapshot) recallMemory();
+  },
+});
+$("auth-retry").addEventListener("click", () => authStartup.start());
+authStartup.start();
 
 async function connect() {
   $("connection").textContent = "Connecting";
   $("connection").className = "connection";
-  if (!authLoaded) {
-    try {
-      await loadAuth();
-      authLoaded = true;
-      await finishSignIn();
-    } catch (_) {
-      // Without the sign-in settings the page still works as a guest; the first snapshot decides whether it is connected.
-    }
-  }
   await act(async () => {}, "");
 }
 
 function afterConnected() {
-  if (state.signInNote) say("assistant", state.signInNote);
   loadVoice();
   recallMemory();
   checkAlerts().catch(() => {});
