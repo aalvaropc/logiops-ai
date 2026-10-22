@@ -1,3 +1,5 @@
+import { money } from "./selectors.js";
+
 export const PURCHASE_KEY = "logiops-pending-purchase";
 
 export function dollars(value) {
@@ -86,7 +88,7 @@ export function createPurchase({
     }
     const plan = locked || selectors.planFromUtterance(lower);
     if (!plan) {
-      const options = selectors.visiblePlans(current).map((item) => `“${item.label}” ($${item.incremental_cost_usd})`).join(", ");
+      const options = selectors.visiblePlans(current).map((item) => `“${item.label}” (${money(item.incremental_cost_usd)})`).join(", ");
       say("assistant", `That plan isn't available for the current data. The options are ${options}.`);
       return null;
     }

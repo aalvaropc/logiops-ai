@@ -58,7 +58,8 @@ test("an utterance names a plan by preference, price, cheapest, keyword or defau
 
 test("event labels and dates read for people", () => {
   assert.equal(selectors.EVENT_LABELS.plan_approved, "Plan approved by operator");
-  assert.equal(selectors.formatDate("2026-10-12T13:00:00-05:00"), "Oct 12, 01:00 PM");
+  assert.equal(selectors.formatDate("2026-10-12T13:00:00-05:00"), "Oct 12, 13:00");
+  assert.deepEqual([selectors.money(120), selectors.money(1500), selectors.money(147.5), selectors.money("80")], ["$120", "$1,500", "$147.50", "$80"]);
 });
 
 test("the look-alike guard marks only the words that differ from the nearest neighbour", () => {

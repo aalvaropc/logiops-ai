@@ -1,5 +1,5 @@
 import { dollars, bookingRows } from "../app/purchase.js";
-import { formatDate, allocationSummary, distinguishing, visibleApproval, TIME_ZONE } from "../app/selectors.js";
+import { formatDate, allocationSummary, distinguishing, visibleApproval, money, TIME_ZONE } from "../app/selectors.js";
 import { incidentFacts, incidentBand, confirmDetails, resultFigures, resultOutcome, orderRows, alertDetails } from "./surfaces.js";
 import { EMPTY_SESSION } from "../app/metrics.js";
 
@@ -159,7 +159,7 @@ export function drawMap(map, caption, snapshot, plan, { route, journey, id = "de
   if (plan) {
     const line = el("p", "plan-line", undefined, doc);
     const labels = snapshot.plans.filter((item) => item.source_version === plan.source_version).map((item) => item.label);
-    line.append(...labelNodes(plan.label, labels, doc), ` · $${plan.incremental_cost_usd}`);
+    line.append(...labelNodes(plan.label, labels, doc), ` · ${money(plan.incremental_cost_usd)}`);
     if (!decided(snapshot)) {
       const outcome = resultOutcome(plan);
       line.append(` · keeps ${outcome.value} ${outcome.label}`);
@@ -304,7 +304,7 @@ export function renderPlanList(container, { plans, selectedId, recommendedId, pr
     if (plan.projected_customer_delay_hours === 0) title.append(el("span", "badge", "Zero delay", doc));
     description.append(title, el("small", "", allocationSummary(plan), doc));
     const figures = el("div", "plan-figures", undefined, doc);
-    figures.append(el("strong", "", `$${plan.incremental_cost_usd}`, doc), el("small", "", `${plan.projected_customer_delay_hours} h delay · ${formatDate(plan.projected_completion_eta)}`, doc));
+    figures.append(el("strong", "", money(plan.incremental_cost_usd), doc), el("small", "", `${plan.projected_customer_delay_hours} h delay · ${formatDate(plan.projected_completion_eta)}`, doc));
     item.append(description, figures);
     if (!locked) {
       const choose = button(plan.id === selectedId ? "Selected" : "Select", "plan-select", () => onSelect(plan), doc);

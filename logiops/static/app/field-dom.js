@@ -1,3 +1,5 @@
+import { money } from "./selectors.js";
+
 const SVG = "http://www.w3.org/2000/svg";
 
 function shape(doc, tag, attributes = {}, text) {
@@ -22,7 +24,7 @@ export function drawField(figure, plans, pickId, { shapes, view = shapes.WIDE, i
   const { left, right, top, bottom, ticks } = field.axes;
   const pick = plans.find((plan) => plan.id === pickId);
   const said = pick
-    ? `${plans.length} plans by delay and cost. The ${chosen} plan costs $${pick.incremental_cost_usd} with ${pick.projected_customer_delay_hours} h of delay.`
+    ? `${plans.length} plans by delay and cost. The ${chosen} plan costs ${money(pick.incremental_cost_usd)} with ${pick.projected_customer_delay_hours} h of delay.`
     : `${plans.length} plans by delay and cost.`;
   const map = shape(doc, "svg", { viewBox: `0 0 ${field.view.width} ${field.view.height}`, role: "img", "aria-label": said });
   const defs = shape(doc, "defs");
@@ -45,7 +47,7 @@ export function drawField(figure, plans, pickId, { shapes, view = shapes.WIDE, i
     map.append(shape(doc, "circle", { cx: point.x, cy: point.y, r: point.pick ? 6 : 5, class: `field-dot ${point.pick ? "chosen" : point.standing}` }));
     if (point.labelled) {
       map.append(shape(doc, "text", { x: point.x, y: point.y - (point.pick ? 18 : 11), "text-anchor": anchor, class: `field-label${point.pick ? " chosen" : ""}` },
-        `$${point.cost}`));
+        money(point.cost)));
     }
   }
   const key = doc.createElement("ul");

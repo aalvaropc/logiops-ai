@@ -1,5 +1,5 @@
 import { dollars } from "../app/purchase.js";
-import { formatDate, allocationSummary, localWarehouse, visiblePlans, visibleApproval, plural } from "../app/selectors.js";
+import { formatDate, allocationSummary, localWarehouse, visiblePlans, visibleApproval, plural, money } from "../app/selectors.js";
 
 export const SPOKEN_LIMIT = 260;
 export const SURFACES = ["home", "incident", "plans", "confirm", "receipt", "alert", "result"];
@@ -154,7 +154,7 @@ export function confirmDetails(payload) {
   if (payload.kind === "withdraw") {
     return {
       kind: "withdraw", title: "Withdraw this approval?", lead: plan.label,
-      figure: [`$${plan.incremental_cost_usd}`, "approved extra cost"],
+      figure: [money(plan.incremental_cost_usd), "approved extra cost"],
       rows: [["Plans and approval", "cleared"], ["Incident data", "back to the original"], ["Next step", "investigate again"]],
       note: "An approval is recorded with its data, so withdrawing it resets the incident. Nothing has run yet.", warning: null,
       yes: "Yes, withdraw", no: "Keep it",
@@ -162,7 +162,7 @@ export function confirmDetails(payload) {
   }
   return {
     kind: "approval", title: "Approve this plan?", lead: plan.label,
-    figure: [`$${plan.incremental_cost_usd}`, "extra cost"],
+    figure: [money(plan.incremental_cost_usd), "extra cost"],
     rows: [...orderRows(plan), ["Allocation", allocationSummary(plan)]],
     note: "Approval records the exact plan and data version. Nothing is executed yet.", warning: lateWarning(plan),
     yes: "Yes, approve", no: "No",
@@ -174,7 +174,7 @@ export function resultFigures(snapshot, execution) {
     ?? snapshot.state.shipment.units_on_delayed_route + execution.fulfillments.reduce((sum, item) => sum + item.units, 0);
   return [
     { label: "Units accounted for", value: String(accounted) },
-    { label: "Extra cost", value: `$${execution.incremental_cost_usd}` },
+    { label: "Extra cost", value: money(execution.incremental_cost_usd) },
     { label: "Notifications simulated", value: String(execution.notifications.length) },
     { label: "Customer delay", value: `${execution.projected_customer_delay_hours} h`, note: "projected" },
   ];
@@ -196,9 +196,9 @@ export function alertDetails(alert) {
   return {
     title: `Heads up on ${alert.incident_id}`, text: change || String(alert.message).replace(`Heads up on ${alert.incident_id}: `, ""),
     invalidated,
-    was: before?.label ? { label: before.label, figures: Number.isFinite(before.incremental_cost_usd) ? `$${before.incremental_cost_usd}` : "" } : null,
+    was: before?.label ? { label: before.label, figures: Number.isFinite(before.incremental_cost_usd) ? money(before.incremental_cost_usd) : "" } : null,
     plan: plan ? {
-      label: plan.label, figures: `$${plan.incremental_cost_usd} · ${plan.projected_customer_delay_hours ? `${plan.projected_customer_delay_hours} h late` : "on time"}`,
+      label: plan.label, figures: `${money(plan.incremental_cost_usd)} · ${plan.projected_customer_delay_hours ? `${plan.projected_customer_delay_hours} h late` : "on time"}`,
       late: plan.projected_customer_delay_hours > 0,
     } : null,
   };

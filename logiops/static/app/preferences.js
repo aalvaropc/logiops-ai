@@ -1,8 +1,10 @@
+import { money } from "./selectors.js";
+
 export const RULE_NAMES = { balanced: "balanced ranking", cheapest_unless_critical_late: "cheapest unless a critical order is late" };
 
 export function describePreferences(prefs) {
   const parts = [RULE_NAMES[prefs.rule] || prefs.rule];
-  parts.push(prefs.max_cost_usd === null || prefs.max_cost_usd === undefined ? "no spend cap" : `spend cap $${prefs.max_cost_usd}`);
+  parts.push(prefs.max_cost_usd === null || prefs.max_cost_usd === undefined ? "no spend cap" : `spend cap ${money(prefs.max_cost_usd)}`);
   if (prefs.note) parts.push(`note “${prefs.note}”`);
   return parts.join(" · ");
 }
