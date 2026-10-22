@@ -86,7 +86,7 @@ def install_security(
             return known
         supplied = request.headers.get("authorization", "")
         scopes: set[str] | None = None
-        if access_token and _constant_time_equal(supplied, f"Bearer {access_token}"):
+        if access_token and supplied[:7].lower() == "bearer " and _constant_time_equal(supplied[7:].strip(), access_token):
             actor = OPERATOR
         elif oauth and supplied[:7].lower() == "bearer ":
             try:
@@ -135,10 +135,10 @@ def install_security(
                 base = base_url(request, public_host)
                 if actor.kind == "guest":
                     return JSONResponse(status_code=401, content={"detail": "Sign in to do this; guests can only read."},
-                                        headers={"WWW-Authenticate": challenge(base, need)})
+                                        headers={**NO_STORE, "WWW-Authenticate": challenge(base, need)})
                 if scope_name(base, need) not in (scopes or set()):
                     return JSONResponse(status_code=403, content={"detail": "Your sign-in does not allow this action."},
-                                        headers={"WWW-Authenticate": challenge(base, need, error="insufficient_scope")})
+                                        headers={**NO_STORE, "WWW-Authenticate": challenge(base, need, error="insufficient_scope")})
         request.state.actor = actor
         request.state.permissions = frozenset(
             name for name in ("incidents.operate", "bookings.write")

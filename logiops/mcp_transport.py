@@ -27,10 +27,15 @@ class McpRequestGuard:
         if scope["type"] != "http" or scope["path"] not in ("/mcp", "/mcp/"):
             await self.app(scope, receive, send)
             return
+        scope = {**scope, "path": "/mcp", "raw_path": b"/mcp"}
         request = Request(scope)
         refused = await self.admit(request)
         if refused is not None:
             await refused(scope, receive, send)
+            return
+        if scope["method"] == "GET":
+            await JSONResponse({"detail": "This stateless MCP server has no event stream: POST JSON-RPC messages to /mcp"},
+                               status_code=405, headers={**NO_STORE, "Allow": "POST"})(scope, receive, send)
             return
         if not self.allow(request):
             await JSONResponse({"detail": "MCP rate limit exceeded"}, status_code=429,

@@ -172,3 +172,40 @@ def test_the_sandbox_host_never_reaches_the_mcp_guard(tmp_path, monkeypatch):
 
     sandbox, main = serve(tmp_path, work, access_token=TOKEN, mcp_limit_per_minute=1)
     assert sandbox.status_code == 404 and main.status_code == 400
+
+
+def test_get_is_refused_without_holding_a_stream_open_or_using_the_limit(tmp_path):
+    async def work(http):
+        refused = await http.get("/mcp", headers={"accept": "text/event-stream"})
+        listed = await http.post("/mcp", headers=MCP_HEADERS, json=LIST_TOOLS)
+        return refused, listed
+
+    refused, listed = serve(tmp_path, work, mcp_limit_per_minute=1)
+    assert refused.status_code == 405 and refused.headers["allow"] == "POST"
+    assert refused.headers["cache-control"] == "no-store" and "event-stream" not in refused.headers["content-type"]
+    assert listed.status_code == 200, "the refused GET did not use the only request of the minute"
+
+
+def test_a_trailing_slash_reaches_the_server_without_a_redirect(tmp_path):
+    async def work(http):
+        return await http.post("/mcp/", headers=MCP_HEADERS, json=LIST_TOOLS)
+
+    response = serve(tmp_path, work)
+    assert response.status_code == 200 and len(response.json()["result"]["tools"]) == 12
+
+
+def test_the_static_token_scheme_is_case_insensitive(tmp_path):
+    async def work(http):
+        return [(await http.post("/mcp", headers={**MCP_HEADERS, "authorization": f"{scheme} {TOKEN}"}, json=LIST_TOOLS)).status_code
+                for scheme in ("Bearer", "bearer", "BEARER")]
+
+    assert serve(tmp_path, work, access_token=TOKEN) == [200, 200, 200]
+
+
+def test_a_guest_challenge_is_never_cached(tmp_path):
+    async def work(http):
+        call = {"jsonrpc": "2.0", "id": 2, "method": "tools/call", "params": {"name": "execute_approved_plan", "arguments": {}}}
+        return await http.post("/mcp", headers=MCP_HEADERS, json=call)
+
+    response = serve(tmp_path, work, oauth=settings())
+    assert response.status_code == 401 and response.headers["cache-control"] == "no-store"
