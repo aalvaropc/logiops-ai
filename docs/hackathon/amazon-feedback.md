@@ -1,8 +1,8 @@
 # Product Feedback — Amazon, AWS and the Alexa+ track tools
 
-The submission asks, for every tool, API or SDK used: what we used it for, what
+The submission asks, for every tool, API or SDK used: what I used it for, what
 worked well, what needs work, how onboarding went (zero to hello world), and
-whether we would build with it again. Each section below answers those five.
+whether I would build with it again. Each section below answers those five.
 Measured figures carry their date and come from the deployed demo unless they
 say "local". Discrete problems are in `amazon-friction-log.md`; the requests
 that follow from them, with priorities, are in `feature-requests.md`.
@@ -12,9 +12,9 @@ that follow from them, with priorities, are in `feature-requests.md`.
 - **Amazon Bedrock** is the runtime: Claude Sonnet 4.6 through the global
   inference profile `global.anthropic.claude-sonnet-4-6` in `us-east-1`, called
   with the Converse API. Every investigation is a multi-turn tool-use loop over
-  our MCP tools, with the Agent Skill and the prompt cached; follow-ups and the
+  my MCP tools, with the Agent Skill and the prompt cached; follow-ups and the
   queue briefing are shorter loops with read-only tools.
-- **Strands Agents** runs that loop, with a `Model` adapter over our Converse
+- **Strands Agents** runs that loop, with a `Model` adapter over my Converse
   client and one tool per allowed MCP tool.
 - **Amazon Bedrock AgentCore Memory** keeps each signed-in person's turns and
   long-term facts across sessions ("Welcome back", "forget me").
@@ -43,15 +43,15 @@ that follow from them, with priorities, are in `feature-requests.md`.
     structured results; tool calling worked on the first real request.
   - Prompt caching: with the Agent Skill and the prompt before a cache point,
     one run read 11,596 tokens from the cache (2026-10-12).
-  - Testing: botocore's Stubber validated our request shapes without a paid
+  - Testing: botocore's Stubber validated my request shapes without a paid
     call, which was the cheapest useful test.
   - Performance: 15.8 s for an investigation of five tool calls and three
-    plans with 5,529 input and 1,192 output tokens (2026-10-06, our first
+    plans with 5,529 input and 1,192 output tokens (2026-10-06, my first
     hand-written loop); 12.2 s with 5 MCP calls and 5,941 tokens, about
     US$0.04 for that run (2026-10-19); answered in 11.2 s (2026-10-21).
-  - Reliability: we saw no failed Converse call in our runs. We still enforce
+  - Reliability: I saw no failed Converse call in my runs. I still enforce
     a 50 s deadline (CloudFront cuts at 60 s), and since 2026-10-21 an outage
-    answers from our scripted replay instead of failing.
+    answers from my scripted replay instead of failing.
 - **Needs work:**
   - Model access: the "Model access" page older guides describe no longer
     exists; access is a use-case form shown the first time a model is opened
@@ -59,13 +59,13 @@ that follow from them, with priorities, are in `feature-requests.md`.
   - Claude Sonnet 5.5 returned `AccessDeniedException` pointing to AWS Sales,
     with no reason and no self-service path, while Sonnet 4.6 worked after the
     same form.
-- **Onboarding:** on 2026-10-02 we filled the use-case form for Claude Sonnet
+- **Onboarding:** on 2026-10-02 I filled the use-case form for Claude Sonnet
   4.6 and the first Converse call returned `stopReason: tool_use` (637 tokens)
-  the same day. Our first client shelled out to the AWS CLI with the whole
+  the same day. My first client shelled out to the AWS CLI with the whole
   conversation in `argv`, which fails past 128 KiB and hid the real error; on
-  2026-10-05 we moved to boto3.
+  2026-10-05 I moved to boto3.
 - **Would build with it again:** yes. The Converse API was the most predictable
-  part of the stack, and one interface served the live model, our daily-budget
+  part of the stack, and one interface served the live model, my daily-budget
   wrapper, the replay and every test fake.
 
 ## AWS promotional credits and Marketplace billing for Claude
@@ -77,7 +77,7 @@ that follow from them, with priorities, are in `feature-requests.md`.
 - **Needs work:**
   - Claude on Bedrock is billed as an AWS Marketplace subscription sold by a
     third party. By 2026-10-07 the Claude usage (US$0.63) had no credits
-    applied. Nothing we found says whether Marketplace-billed models are
+    applied. Nothing I found says whether Marketplace-billed models are
     covered; for a Bedrock hackathon the model is the main runtime cost.
   - The form gives no processing time, and the Credits page and Cost Explorer
     lag a day or more, so a builder cannot see during the hackathon whether a
@@ -91,11 +91,11 @@ that follow from them, with priorities, are in `feature-requests.md`.
   replacing a hand-written Converse loop with the same contract
   (`logiops/strands_runtime.py`).
 - **Worked well:**
-  - The `Model` interface is small enough to adapt our non-streaming Converse
+  - The `Model` interface is small enough to adapt my non-streaming Converse
     client (Bedrock, the daily-budget wrapper, the replay and every test fake)
     in one class.
-  - `AgentTool` lets a tool run on an MCP session we own.
-  - Hooks (`AfterModelCallEvent`, `AfterToolCallEvent`) hold our guards, which
+  - `AgentTool` lets a tool run on an MCP session I own.
+  - Hooks (`AfterModelCallEvent`, `AfterToolCallEvent`) hold my guards, which
     run before any tool executes; `limits={"turns": n}` and
     `NullConversationManager` keep the loop predictable.
   - System prompt content blocks carry the Agent Skill and a cache point.
@@ -104,10 +104,10 @@ that follow from them, with priorities, are in `feature-requests.md`.
     the earlier hand-written loop. The runtime added no measurable latency.
 - **Needs work:**
   - `MCPClient` runs its own thread and event loop and deadlocks with an
-    in-process stateless Streamable HTTP server (friction 2026-10-12); we wrote
+    in-process stateless Streamable HTTP server (friction 2026-10-12); I wrote
     one `AgentTool` per MCP tool instead.
   - The order of `AfterModelCallEvent` and the max-tokens recovery, and how
-    turn limits count cycles, we learned from the source.
+    turn limits count cycles, I learned from the source.
   - A production install pulls OpenTelemetry and watchdog even when tracing
     is off.
 - **Onboarding:** it landed in one day: first unwired with its own tests, then
@@ -122,7 +122,7 @@ that follow from them, with priorities, are in `feature-requests.md`.
   drives the "Welcome back" line, "pick up where we left off" and "forget me".
 - **Worked well:** `scripts/verify_remote.py` recalls the previous session's
   turn and forgets one item in under two seconds each on the deployment. The
-  extracted facts need no store of our own.
+  extracted facts need no store of my own.
 - **Needs work:**
   - Listing a person's latest events needs a session id: "Welcome back" takes
     `ListSessions`, sorting, and then `ListEvents` (friction 2026-10-11).
@@ -132,7 +132,7 @@ that follow from them, with priorities, are in `feature-requests.md`.
     `namespace_templates` showed up only in the provider schema.
 - **Onboarding:** the memory and its two strategies came in one Terraform apply
   on 2026-10-11; the first live recall ran on 2026-10-12.
-- **Would build with it again:** yes. It gave us cross-session memory without
+- **Would build with it again:** yes. It gave me cross-session memory without
   running a database for it.
 
 ## Amazon Polly
@@ -147,8 +147,8 @@ that follow from them, with priorities, are in `feature-requests.md`.
     naturally.
   - The browser's voice is a transparent fallback when the budget is spent or
     Polly fails.
-- **Needs work:** nothing blocked us. A per-text cache hint or ETag would
-  remove the store we keep to stay under the daily cap.
+- **Needs work:** nothing blocked me. A per-text cache hint or ETag would
+  remove the store I keep to stay under the daily cap.
 - **Onboarding:** one IAM permission (`polly:SynthesizeSpeech`) and one boto3
   call; the first audio on the deployment came on 2026-10-12.
 - **Would build with it again:** yes.
@@ -167,15 +167,15 @@ that follow from them, with priorities, are in `feature-requests.md`.
   - The OIDC discovery document does not advertise
     `code_challenge_methods_supported`, and there is no
     `/.well-known/oauth-authorization-server`, so spec-following MCP clients
-    refuse to start (friction 2026-10-11). We serve our own RFC 8414 document.
+    refuse to start (friction 2026-10-11). I serve my own RFC 8414 document.
   - Access tokens carry no `aud` and RFC 8707 resource indicators are not
-    supported; we check the issuer, `token_use`, the client and the
+    supported; I check the issuer, `token_use`, the client and the
     resource-prefixed scopes instead.
   - There is no dynamic client registration, so each MCP client needs the
-    client id entered by hand (we publish it at `GET /auth/config`).
+    client id entered by hand (I publish it at `GET /auth/config`).
 - **Onboarding:** the Terraform resources plus a script that creates the demo
   user; the discovery facade and token proxy took one pull request.
-- **Would build with it again:** yes for managed sign-in. For MCP clients we
+- **Would build with it again:** yes for managed sign-in. For MCP clients I
   would keep the facade until discovery and audiences follow the specs.
 
 ## Amazon EC2 and Amazon EBS
@@ -186,7 +186,7 @@ that follow from them, with priorities, are in `feature-requests.md`.
   instance uses its role's temporary credentials, so no AWS key is on disk.
 - **Worked well:** the state survived an EC2 reboot (2026-10-06) and an
   instance replacement (2026-10-12) with the data volume intact.
-- **Needs work:** nothing blocked us. The always-on cost (about US$21 a month
+- **Needs work:** nothing blocked me. The always-on cost (about US$21 a month
   idle, including the public IPv4 address and EBS) needs planning when a demo
   must stay up through a month of judging.
 - **Onboarding:** part of the first Terraform apply; the first deploy answered
@@ -199,7 +199,7 @@ that follow from them, with priorities, are in `feature-requests.md`.
   policy that forwards `Authorization` and never caches, and a 60 s origin
   timeout; a second distribution on the same origin is the MCP Apps sandbox
   origin, where only `/mcp-app/sandbox.html` answers.
-- **Worked well:** two distributions on one origin gave us the second origin
+- **Worked well:** two distributions on one origin gave me the second origin
   MCP Apps requires without a second server; `CloudFront-Viewer-Address` lets
   the app apply per-viewer limits.
 - **Needs work:**
@@ -220,7 +220,7 @@ that follow from them, with priorities, are in `feature-requests.md`.
   release prefix.
 - **Worked well:** versioning keeps every uploaded release, and nothing in the
   bucket is public.
-- **Needs work:** nothing we hit.
+- **Needs work:** nothing I hit.
 - **Onboarding:** part of the first Terraform apply.
 - **Would build with it again:** yes.
 
@@ -242,7 +242,7 @@ that follow from them, with priorities, are in `feature-requests.md`.
   finding why takes `get-command-invocation` and, for the service, `journalctl`
   through a second `send-command`.
 - **Onboarding:** the managed policy `AmazonSSMManagedInstanceCore` on an
-  Amazon Linux 2023 instance was enough; our deploy script wraps the rest.
+  Amazon Linux 2023 instance was enough; my deploy script wraps the rest.
 - **Would build with it again:** yes; nothing on the instance needs a key.
 
 ## AWS IAM
@@ -253,7 +253,7 @@ that follow from them, with priorities, are in `feature-requests.md`.
   managed policy Systems Manager needs.
 - **Worked well:** temporary role credentials everywhere; no static key exists
   in the deployment.
-- **Needs work:** nothing blocked us. The Bedrock statement for a global
+- **Needs work:** nothing blocked me. The Bedrock statement for a global
   inference profile takes three resource ARNs (the profile, and the foundation
   model with and without a Region); a ready-made example for global profiles
   would help.
@@ -330,7 +330,7 @@ that follow from them, with priorities, are in `feature-requests.md`.
     token behind a CDN) is thin.
   - With `stateless_http=True` the server still answers `GET /mcp` with an event
     stream that can never carry a message and stays open, a ping every 15 s,
-    until the client leaves; each one holds a socket. We answer 405 ourselves,
+    until the client leaves; each one holds a socket. I answer 405 myself,
     as the transport allows (found 2026-10-22 with MCP Inspector, which opens
     that stream after connecting). A numeric argument such as `433` for a
     `str` parameter also fails validation before the tool runs, with a raw
@@ -343,14 +343,14 @@ that follow from them, with priorities, are in `feature-requests.md`.
 
 - **Used for:** every MCP conversation: the agent's client, the device in the
   browser (`initialize`, `tools/list`, `tools/call` for its inbox and alerts,
-  `resources/read` for the plans card), MCP Inspector and our checks.
+  `resources/read` for the plans card), MCP Inspector and my checks.
 - **Worked well:** one POST endpoint with JSON responses sits behind CloudFront
   unchanged; an invalid `MCP-Protocol-Version` gets 400 on the deployment
   (checked 2026-10-21).
 - **Needs work:** the security section is written around local servers; a
   public server behind a CDN has to combine the Origin rule, a Host allowlist
   and its own authentication.
-- **Onboarding:** the official SDK implements the transport, so we wrote no
+- **Onboarding:** the official SDK implements the transport, so I wrote no
   transport code.
 - **Would build with it again:** yes.
 
@@ -358,7 +358,7 @@ that follow from them, with priorities, are in `feature-requests.md`.
 
 - **Used for:** an interactive plan-comparison card declared on
   `investigate_incident` (`text/html;profile=mcp-app`), rendered inside the
-  device by our own host bridge through a sandbox proxy on a second origin. We
+  device by my own host bridge through a sandbox proxy on a second origin. I
   published the bridge and the proxy as the MIT library `mcp-apps-web-host`.
 - **Worked well:** the handshake is small and plain `postMessage` is enough;
   the host context (theme, size, safe-area insets) is easy to honour; a view
@@ -366,17 +366,17 @@ that follow from them, with priorities, are in `feature-requests.md`.
 - **Needs work:**
   - Web hosts must load views through a sandbox proxy on a different origin.
     For one domain that means a second hostname. A reference proxy page and a
-    documented local pattern (we pair `127.0.0.1` with `localhost`) would save
+    documented local pattern (I pair `127.0.0.1` with `localhost`) would save
     every host author the same work.
   - Tool `visibility` defaults to `["model", "app"]`, so a state-changing tool
     is callable from views unless you opt out.
   - Firefox reports the host's origin in `location.ancestorOrigins` as
     `"null"` when the host frame sends no referrer, as the HTML specification
-    says. Our proxy checked that list against the host and stayed silent, so
-    no view loaded in Firefox until we found it on 2026-10-22 (library 1.3.1).
+    says. My proxy checked that list against the host and stayed silent, so
+    no view loaded in Firefox until I found it on 2026-10-22 (library 1.3.1).
     A reference proxy, and a note that `ancestorOrigins` may be masked, would
     spare other host authors the same bug.
-- **Onboarding:** we wrote the host bridge (about 130 lines) and the sandbox
+- **Onboarding:** I wrote the host bridge (about 130 lines) and the sandbox
   page (about 90 lines) from the specification text, with no SDK.
 - **Would build with it again:** yes.
 
@@ -387,12 +387,12 @@ that follow from them, with priorities, are in `feature-requests.md`.
   fails). The server serves it as `skill://logiops-exception-desk/SKILL.md`;
   the agent reads it at the start of every run and sends it as the first system
   block before the cache point; each run reports its name, URI and SHA-256.
-- **Worked well:** plain Markdown with YAML frontmatter, easy to test: our
+- **Worked well:** plain Markdown with YAML frontmatter, easy to test: my
   tests check the frontmatter, that every tool it names exists, and that the
   file, the MCP resource and the system block are byte-identical. Behind the
   cache point it costs almost nothing after the first turn.
 - **Needs work:** MCP has no standard way for a server to advertise a skill, so
-  we serve it as a resource and point to it from the server instructions and
+  I serve it as a resource and point to it from the server instructions and
   the prompts.
 - **Onboarding:** one pull request, following the format at agentskills.io.
 - **Would build with it again:** yes.
@@ -403,7 +403,7 @@ that follow from them, with priorities, are in `feature-requests.md`.
   demo video.
 - **Worked well:** one `npx` command with no install. On 2026-10-21, as a guest
   against the deployment, the CLI listed the tools and `get_shipment` answered.
-- **Needs work:** in CLI mode, a tool that needs sign-in (our
+- **Needs work:** in CLI mode, a tool that needs sign-in (my
   `execute_approved_plan` answers 401 with an OAuth challenge) surfaces as
   `auth_required` with a message about a TTY, which reads like a tooling error
   rather than "this tool needs a token".
@@ -414,15 +414,15 @@ that follow from them, with priorities, are in `feature-requests.md`.
 ## Alexa+ developer tools (Category SDK, MCP Toolkit, CLI, Web Simulator)
 
 - **Used for:** nothing: they are partner-only, and there is no way for
-  hackathon participants to request access. Following the FAQ, we built a
-  self-hosted MCP server and our own simulated device over it (decision on
+  hackathon participants to request access. Following the FAQ, I built a
+  self-hosted MCP server and my own simulated device over it (decision on
   2026-10-03).
 - **Worked well:** the FAQ answered the access question clearly.
 - **Needs work:** individual setup pages read like open onboarding and do not
   always say the tools are partner-only, which costs time. A public simulator,
   even a limited one, would let builders test the real Alexa+ conversation
   instead of building their own.
-- **Onboarding:** we did not get past the access step.
+- **Onboarding:** I did not get past the access step.
 - **Would build with it again:** yes, once access opens. The server already
   speaks MCP over Streamable HTTP with OAuth 2.1; what is left is listed in
   `alexa-plus-readiness.md`.
@@ -433,7 +433,7 @@ that follow from them, with priorities, are in `feature-requests.md`.
   port published on loopback only) and the CI `docker` job, which builds the
   image and runs `check_mcp.py` and `rehearse_api.py` against the container.
 - **Worked well:** one command and no AWS account to run the whole demo.
-- **Needs work:** nothing we hit.
+- **Needs work:** nothing I hit.
 - **Onboarding:** standard; the image installs from the lock file with
   `uv sync --frozen`.
 - **Would build with it again:** yes.

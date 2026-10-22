@@ -1,7 +1,7 @@
 # Friction log — Amazon / AWS
 
 Real friction only, logged as it happened. Each entry gives the
-technology, the task attempted, the steps taken, what we expected, what
+technology, the task attempted, the steps taken, what I expected, what
 actually happened, the severity, the workaround and a suggestion.
 
 **Severity scale:** Blocker (stopped work, no workaround) · High (blocked a
@@ -21,7 +21,7 @@ feature until a workaround) · Medium (cost time, workaround easy) · Low
 - **Actual:** `AccessDeniedException: anthropic.claude-sonnet-5-5 is not
   available for this account`, pointing to AWS Sales with no self-service
   option. Claude Sonnet 4.6 showed the expected use-case form and granted
-  access right after we submitted it. Nothing said *why* one model self-serves
+  access right after I submitted it. Nothing said *why* one model self-serves
   and the newer one does not.
 - **Severity:** Low — another model worked at once, but the difference was
   confusing.
@@ -73,7 +73,7 @@ feature until a workaround) · Medium (cost time, workaround easy) · Low
 
 - **Technology:** Alexa+ Add-on developer tools (Category SDK, MCP Toolkit, CLI,
   Web Simulator).
-- **Task attempted:** register our self-hosted MCP server with Alexa+ and test
+- **Task attempted:** register my self-hosted MCP server with Alexa+ and test
   the real conversation in the Web Simulator.
 - **Steps taken:**
   1. Read the Alexa+ add-on documentation and its setup pages to plan the
@@ -86,10 +86,10 @@ feature until a workaround) · Medium (cost time, workaround easy) · Low
   notice on every setup page.
 - **Actual:** no access for hackathon participants. The FAQ says: "there is
   currently no way for hackathon participants to apply for or gain access".
-- **Severity:** High — the real Alexa+ integration was not possible; we built
+- **Severity:** High — the real Alexa+ integration was not possible; I built
   around it.
 - **Workaround:** a real self-hosted MCP server (Streamable HTTP, OAuth 2.1, MCP
-  Apps, Agent Skill) driven by our own simulated Alexa+ device, as the FAQ
+  Apps, Agent Skill) driven by my own simulated Alexa+ device, as the FAQ
   recommends (decision D2). `alexa-plus-readiness.md` lists what is left once
   the tools open.
 - **Suggestion:** state "partner-only" on every setup page, and publish a
@@ -114,7 +114,7 @@ feature until a workaround) · Medium (cost time, workaround easy) · Low
   `CachingDisabled` cannot include headers in the cache key, so GET requests
   would have reached the origin without the token and answered 401. POST
   requests are unaffected, which makes the failure easy to miss in a quick
-  test. We caught it in this review, so the deployed demo never dropped a
+  test. I caught it in this review, so the deployed demo never dropped a
   token.
 - **Severity:** High — every authenticated read would have failed.
 - **Workaround:** a custom cache policy that adds `Authorization` to the cache
@@ -177,7 +177,7 @@ feature until a workaround) · Medium (cost time, workaround easy) · Low
   1. Signed in with `aws login --region us-east-1`; the CLI worked in the same
      shell.
   2. Started the API locally in Bedrock mode and posted an investigation.
-  3. Every live run failed with our generic "Bedrock Converse failed".
+  3. Every live run failed with my generic "Bedrock Converse failed".
   4. Added the SDK error's class name to that message, which showed the real
      cause.
 - **Expected:** boto3 finds the CLI login session like any other credentials.
@@ -229,8 +229,8 @@ feature until a workaround) · Medium (cost time, workaround easy) · Low
 - **Actual:** the OIDC discovery document omits the PKCE methods, and there is
   no `/.well-known/oauth-authorization-server`. Spec-following MCP clients
   refuse to start an authorization-code flow without S256 in the metadata.
-- **Severity:** High — standard MCP clients could not sign in until we served
-  our own metadata.
+- **Severity:** High — standard MCP clients could not sign in until I served
+  my own metadata.
 - **Workaround:** LogiOps serves its own RFC 8414 document with S256, Cognito's
   authorize endpoint, and a token endpoint that forwards only PKCE and refresh
   grants of allowed public clients.
@@ -289,7 +289,7 @@ feature until a workaround) · Medium (cost time, workaround easy) · Low
      with `ListEvents`.
   2. Found that `ListEvents` requires `sessionId`.
   3. Rewrote it as `ListSessions`, then `ListEvents` on the chosen session.
-  4. Tested it with botocore's Stubber, which rejected our short
+  4. Tested it with botocore's Stubber, which rejected my short
      `memoryRecordId` values.
 - **Expected:** to list an actor's latest events across sessions.
 - **Actual:** `ListEvents` requires `sessionId`. Finding the previous session
