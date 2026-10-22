@@ -54,3 +54,11 @@ def test_the_developer_drawer_imports_a_scenario_pack():
     assert 'request("/scenario/packs", "POST", pack)' in script and "error.detail?.errors" in script
     assert "Nothing was registered." in script and "until the server restarts" in script
     assert "error.detail = detail;" in api and 'typeof detail === "string" ? detail : detail?.message' in api
+
+
+def test_the_console_shows_who_the_approval_was_recorded_under():
+    script = (STATIC / "console.js").read_text()
+    assert 'import { recordedNote } from "./app/approval.js";' in script
+    assert 'const approval = await request(incidentPath("/approvals")' in script
+    assert 'recordedNote(approvedBy, approval)' in script and '$("approver").value = approval.approved_by' in script
+    assert '$("approver").readOnly = Boolean(' in script, "a signed-in name is the server's to set, so the field is not editable"
