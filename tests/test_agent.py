@@ -348,3 +348,25 @@ def test_a_stream_pings_while_the_model_thinks_and_ends_with_the_error(tmp_path,
     kinds = [kind for kind, _ in events]
     assert kinds.count("ping") >= 2 and set(kinds[:-1]) == {"ping"}
     assert events[-1] == ("error", {"status": 502, "detail": "Bedrock is unavailable"})
+
+
+def test_investigating_an_executed_incident_is_refused_before_any_model_call(tmp_path, monkeypatch):
+    monkeypatch.setenv("LOGIOPS_AGENT_MODE", "replay")
+
+    async def run():
+        app = create_app(tmp_path / "executed.sqlite3")
+        async with app.router.lifespan_context(app):
+            async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url=BASE_URL) as http:
+                plan = (await http.post("/incidents/SHIP-421/investigate")).json()["plans"][0]
+                body = {"plan_id": plan["id"], "source_version": plan["source_version"]}
+                await http.post("/incidents/SHIP-421/approvals", json={**body, "approved_by": "ci"})
+                await http.post("/incidents/SHIP-421/execute", json=body)
+                plain = await http.post("/incidents/SHIP-421/agent/investigate", json={})
+                stream = await http.post("/incidents/SHIP-421/agent/investigate/stream", json={})
+                events = (await http.get("/incidents/SHIP-421")).json()["events"]
+                return plain, stream, events
+
+    plain, stream, events = asyncio.run(run())
+    assert plain.status_code == 409 and plain.json()["detail"] == "The incident has already been executed"
+    assert "event: error" in stream.text and "409" in stream.text and "already been executed" in stream.text
+    assert not any(event["name"] == "agent_run_failed" for event in events)

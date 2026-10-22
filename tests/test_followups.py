@@ -162,7 +162,7 @@ def test_follow_up_after_execution_refers_to_the_executed_plans(tmp_path, monkey
                 assert response.status_code == 200, response.text
                 assert "$120" in response.json()["answer"] and response.json()["source_version"] == 1
                 again = await http.post("/incidents/SHIP-421/agent/investigate", json={})
-                assert again.status_code == 502 and "could not calculate" in again.json()["detail"]
+                assert again.status_code == 409 and again.json()["detail"] == "The incident has already been executed"
 
     asyncio.run(run())
 

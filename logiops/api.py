@@ -130,12 +130,6 @@ def create_app(
     if oauth:
         install_oauth(app, oauth, public_host or None)
     static_dir = STATIC_DIR
-    demo_page_html = (static_dir / "demo.html").read_text(encoding="utf-8")
-    console_page_html = (static_dir / "console.html").read_text(encoding="utf-8")
-    demo_assets = {name: (static_dir / name).read_bytes() for name in DEMO_ASSETS}
-    sandbox_page = (static_dir / "mcp_app_sandbox.html").read_text(encoding="utf-8")
-
-    static_dir = STATIC_DIR
     context = Context(
         app=app, service=service, preferences=preferences, bookings=bookings, alerts=alerts, voice=voice, memory=memory,
         budget=budget, bedrock=bedrock, bedrock_client=bedrock_client, followup_client=followup_client,
