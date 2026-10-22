@@ -19,6 +19,7 @@ import { renderMarkdown } from "./app/markdown-dom.js";
 import { sessionFigures, EMPTY_SESSION } from "./app/metrics.js";
 import { drawField } from "./app/field-dom.js";
 import { createStartup } from "./app/startup.js";
+import { createFocusKeeper, loadAuthInto, openHtml, parkedPurchaseLine, showMessage } from "./app/page.js";
 
 const $ = (id) => document.getElementById(id);
 const DEFAULT_INCIDENT = "SHIP-421";
@@ -33,32 +34,17 @@ const store = createStore({
 const state = store.state;
 const incidentPath = (suffix = "") => `/incidents/${encodeURIComponent(state.incidentId)}${suffix}`;
 function message(text, success = false) {
-  const box = $("message");
-  box.textContent = text;
-  box.className = text ? `message visible${success ? " success" : ""}` : "message";
-  box.setAttribute("role", success || !text ? "status" : "alert");
-  box.setAttribute("aria-live", success || !text ? "polite" : "assertive");
+  showMessage($("message"), text, success);
 }
 
 const NEXT_FOCUS = { approve: "execute", execute: "banner-reset", "banner-reset": "ask-input" };
-let focusBeforeBusy = null;
+const focus = createFocusKeeper({ fallback: (before) => (before?.id && NEXT_FOCUS[before.id] ? $(NEXT_FOCUS[before.id]) : null) });
 
 function setBusy(busy) {
-  if (busy && !state.busy) focusBeforeBusy = document.activeElement;
+  if (busy && !state.busy) focus.remember();
   store.set({ busy });
   renderControls();
-  if (!busy) restoreFocus();
-}
-
-function restoreFocus() {
-  const before = focusBeforeBusy;
-  focusBeforeBusy = null;
-  const usable = (node) => Boolean(node?.isConnected && !node.disabled && !node.closest("[hidden]"));
-  const active = document.activeElement;
-  if (!before || (active && active !== document.body && usable(active))) return;
-  const next = before.id ? $(NEXT_FOCUS[before.id]) : null;
-  const target = usable(before) ? before : usable(next) ? next : null;
-  target?.focus({ preventScroll: true });
+  if (!busy) focus.restore();
 }
 
 function explainError(status, detail) {
@@ -117,12 +103,8 @@ function renderAccount() {
   $("link-account").hidden = Boolean(state.session);
   $("sign-out").hidden = !state.session;
 }
-async function loadAuth() {
-  const auth = await api.loadAuth();
-  if (auth.unavailable) throw new Error("The sign-in settings could not be read.");
-  state.auth = auth;
-  if (!state.auth.enabled) keepSession(null);
-  renderAccount();
+function loadAuth() {
+  return loadAuthInto({ api, state, keepSession, renderAccount });
 }
 async function linkAccount() {
   if (!state.auth.enabled) {
@@ -631,10 +613,7 @@ function showBooking(booking) {
 }
 
 async function openReceipt(number) {
-  const html = await purchase.openReceipt(number);
-  const url = URL.createObjectURL(new Blob([html], { type: "text/html" }));
-  window.open(url, "_blank");
-  setTimeout(() => URL.revokeObjectURL(url), 60000);
+  openHtml(await purchase.openReceipt(number));
 }
 
 function renderAlertBell() {
@@ -850,8 +829,7 @@ function afterConnected() {
   checkAlerts().catch(() => {});
   const parked = storedPurchase();
   if (parked) {
-    say("assistant", `A booking is waiting for “${parked.quote.plan_label}” on ${parked.incidentId} (${dollars(parked.quote.total_usd)}). `
-      + "Say “resume” to hear the price again, or “no” to drop it. Nothing was charged.");
+    say("assistant", parkedPurchaseLine(parked, dollars));
   }
 }
 
