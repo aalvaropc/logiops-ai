@@ -1,0 +1,90 @@
+#!/usr/bin/env bash
+set -euo pipefail
+test "$#" -eq 4 || { echo 'Usage: logiops-deploy <s3-uri> <sha256> <public-host> <sandbox-host>' >&2; exit 2; }
+artifact_uri="$1"
+digest="$2"
+public_host="$3"
+sandbox_host="$4"
+[[ "$artifact_uri" =~ ^s3://[a-z0-9.-]+/releases/[a-f0-9]{64}\.tar\.gz$ ]] || exit 2
+[[ "$digest" =~ ^[a-f0-9]{64}$ ]] || exit 2
+[[ "$public_host" =~ ^[a-z0-9.-]+$ ]] || exit 2
+[[ "$sandbox_host" =~ ^[a-z0-9.-]+$ && "$sandbox_host" != "$public_host" ]] || exit 2
+mountpoint -q /var/lib/logiops || { echo 'Data volume is not mounted' >&2; exit 1; }
+
+release="/opt/logiops/releases/$digest"
+if ! test -f "$release/.ready"; then
+  archive=$(mktemp /tmp/logiops-release.XXXXXX.tar.gz)
+  stage=$(mktemp -d /opt/logiops/releases/.stage.XXXXXX)
+  trap 'rm -f "$archive"; test -z "$stage" || rm -rf "$stage"' EXIT
+  aws s3 cp --region '${aws_region}' "$artifact_uri" "$archive" --only-show-errors
+  printf '%s  %s\n' "$digest" "$archive" | sha256sum -c -
+  tar -xzf "$archive" -C "$stage"
+  rm -rf "$release"
+  mv "$stage" "$release"
+  stage=''
+  /opt/logiops/tooling/bin/uv sync --project "$release" --frozen --no-dev --python /usr/bin/python3.12
+  test -x "$release/.venv/bin/uvicorn"
+  chown -R logiops:logiops "$release"
+  touch "$release/.ready"
+fi
+
+if test -f /var/lib/logiops/logiops.sqlite3; then
+  backed_up=''
+  if test -x /usr/local/sbin/logiops-backup; then
+    for attempt in 1 2 3; do
+      if /usr/local/sbin/logiops-backup predeploy; then backed_up=1; break; fi
+      echo "Pre-deploy backup attempt $attempt of 3 failed" >&2
+      if [ "$attempt" -lt 3 ]; then sleep 10; fi
+    done
+  else
+    echo 'logiops-backup is not installed; run scripts/install_recovery.py first' >&2
+  fi
+  if test -z "$backed_up"; then
+    echo 'Deployment stopped before changing the release: no verified pre-deploy backup. Repair the backup and retry; see journalctl -u logiops-backup.service.' >&2
+    exit 1
+  fi
+fi
+
+token=$(aws ssm get-parameter --region '${aws_region}' --name '${token_param}' --with-decryption --query Parameter.Value --output text)
+[[ "$token" =~ ^[a-f0-9]{64}$ ]] || { echo 'Access token must be 64 lowercase hex characters' >&2; exit 1; }
+config=$(aws ssm get-parameters-by-path --region '${aws_region}' --path '${config_path}/' --query 'Parameters[].[Name,Value]' --output text)
+umask 027
+{
+  printf 'AWS_REGION=${aws_region}\n'
+  printf 'BEDROCK_MODEL_ID=${model_id}\n'
+  printf 'LOGIOPS_DB_PATH=/var/lib/logiops/logiops.sqlite3\n'
+  printf 'LOGIOPS_AGENT_MODE=bedrock\n'
+  printf 'LOGIOPS_PUBLIC=1\n'
+  printf 'LOGIOPS_TRUST_CLOUDFRONT=1\n'
+  printf 'LOGIOPS_PUBLIC_HOST=%s\n' "$public_host"
+  printf 'LOGIOPS_SANDBOX_HOST=%s\n' "$sandbox_host"
+  printf 'LOGIOPS_ACCESS_TOKEN=%s\n' "$token"
+  while IFS=$'\t' read -r name value; do
+    key="$${name##*/}"
+    case "$key" in
+      LOGIOPS_COGNITO_ISSUER|LOGIOPS_COGNITO_DOMAIN|LOGIOPS_COGNITO_CLIENT_ID|LOGIOPS_MEMORY_ID|LOGIOPS_POLLY_VOICE|LOGIOPS_POLLY_ENGINE|LOGIOPS_DAILY_SPEECH_CHARS|LOGIOPS_DAILY_MODEL_CALLS|LOGIOPS_GUEST_DAILY_MODEL_CALLS)
+        if [[ "$value" =~ ^[A-Za-z0-9:/._-]+$ ]]; then printf '%s=%s\n' "$key" "$value"; fi
+        ;;
+    esac
+  done <<< "$config"
+} > /etc/logiops.env
+chown root:logiops /etc/logiops.env
+chmod 0640 /etc/logiops.env
+previous_release=$(readlink -f /opt/logiops/current || true)
+ln -sfn "$release" /opt/logiops/current
+systemctl daemon-reload
+systemctl enable logiops.service
+systemctl restart logiops.service
+for _ in $(seq 1 30); do
+  if curl -fsS http://127.0.0.1:8000/healthz >/dev/null; then
+    echo 'LogiOps health check passed'
+    exit 0
+  fi
+  sleep 2
+done
+if test -n "$previous_release" && test -f "$previous_release/.ready"; then
+  ln -sfn "$previous_release" /opt/logiops/current
+  systemctl restart logiops.service || true
+fi
+systemctl status logiops.service --no-pager >&2 || true
+exit 1

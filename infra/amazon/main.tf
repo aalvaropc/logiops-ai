@@ -197,6 +197,7 @@ resource "aws_instance" "app" {
     token_param    = var.access_token_parameter_name
     model_id       = var.bedrock_model_id
     config_path    = var.config_parameter_path
+    recovery_setup = local.recovery_setup
   })
   user_data_replace_on_change = false
   tags                        = { Name = "logiops-ai-demo" }

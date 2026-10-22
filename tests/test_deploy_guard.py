@@ -38,7 +38,7 @@ def test_an_untracked_file_in_the_release_counts_as_dirty(monkeypatch):
 
 
 def test_the_instance_reads_only_allowed_settings_from_ssm():
-    template = (ROOT / "infra" / "amazon" / "bootstrap.sh.tftpl").read_text()
+    template = (ROOT / "infra" / "amazon" / "bootstrap.sh.tftpl").read_text() + (ROOT / "infra" / "amazon" / "deploy.sh.tftpl").read_text()
     assert "aws ssm get-parameters-by-path --region '${aws_region}' --path '${config_path}/'" in template
     allowed = ("LOGIOPS_COGNITO_ISSUER|LOGIOPS_COGNITO_DOMAIN|LOGIOPS_COGNITO_CLIENT_ID|LOGIOPS_MEMORY_ID|"
                "LOGIOPS_POLLY_VOICE|LOGIOPS_POLLY_ENGINE|LOGIOPS_DAILY_SPEECH_CHARS|LOGIOPS_DAILY_MODEL_CALLS|LOGIOPS_GUEST_DAILY_MODEL_CALLS)")
@@ -109,11 +109,11 @@ def test_the_uptime_check_runs_every_check_reports_why_and_closes_its_issue():
     assert "ubuntu-latest" not in uptime + ci
 
 
-def test_the_demo_is_checked_hourly_and_reset_nightly_without_echoing_the_token():
+def test_the_demo_is_checked_hourly_and_github_resets_only_manually():
     uptime = (ROOT / ".github" / "workflows" / "uptime.yml").read_text()
-    assert '- cron: "43 * * * *"' in uptime and '- cron: "11 8 * * *"' in uptime
-    assert "if: ${{ github.event.schedule != '11 8 * * *' && !inputs.reset }}" in uptime
-    assert "if: ${{ github.event.schedule == '11 8 * * *' || inputs.reset }}" in uptime
+    assert '- cron: "43 * * * *"' in uptime and '- cron: "11 8 * * *"' not in uptime
+    assert "if: ${{ !inputs.reset }}" in uptime
+    assert "if: ${{ github.event_name == 'workflow_dispatch' && inputs.reset }}" in uptime
     assert uptime.count("secrets.LOGIOPS_OPERATOR_TOKEN") == 1 and "TOKEN: ${{ secrets.LOGIOPS_OPERATOR_TOKEN }}" in uptime
     reset = uptime.split("\n  reset:\n", 1)[1]
     assert "-H @-" in reset and '"$BASE/demo/reset"' in reset and "inputs.base" not in reset
@@ -133,7 +133,7 @@ def test_an_account_level_spend_stop_cuts_bedrock_and_polly_without_committing_a
 
 
 def test_the_instance_resets_the_demo_nightly_on_its_own_without_exposing_the_token():
-    template = (ROOT / "infra" / "amazon" / "bootstrap.sh.tftpl").read_text()
+    template = (ROOT / "infra" / "amazon" / "bootstrap.sh.tftpl").read_text() + (ROOT / "infra" / "amazon" / "deploy.sh.tftpl").read_text()
     assert "OnCalendar=*-*-* 08:11:00 UTC" in template and "systemctl enable --now logiops-reset.timer" in template
     assert "EnvironmentFile=/etc/logiops.env" in template.split("logiops-reset.service")[1]
     assert '"$$LOGIOPS_ACCESS_TOKEN" | curl' in template and "-H @- -X POST http://127.0.0.1:8000/demo/reset" in template

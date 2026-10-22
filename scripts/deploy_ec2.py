@@ -20,7 +20,7 @@ ROOT = Path(__file__).resolve().parents[1]
 INFRA = ROOT / "infra" / "amazon"
 
 
-def package() -> tuple[Path, str]:
+def package(commit: str | None = None) -> tuple[Path, str]:
     files = [
         ROOT / "pyproject.toml",
         ROOT / "uv.lock",
@@ -40,6 +40,11 @@ def package() -> tuple[Path, str]:
                 info.mode = 0o644
                 info.mtime = 0
                 archive.addfile(info, io.BytesIO(data))
+            if commit is not None:
+                data = (json.dumps({"commit": commit}, sort_keys=True) + "\n").encode()
+                info = tarfile.TarInfo("release.json")
+                info.size, info.mode, info.mtime = len(data), 0o644, 0
+                archive.addfile(info, io.BytesIO(data))
     digest = hashlib.sha256(output.read_bytes()).hexdigest()
     final = output.with_name(f"logiops-ai-{digest}.tar.gz")
     output.replace(final)
@@ -50,6 +55,10 @@ def git(*args: str) -> str:
     return subprocess.run(["git", "-C", str(ROOT), *args], check=True, capture_output=True, text=True).stdout.strip()
 
 
+RECOVERY_GUARD = (
+    "test -x /usr/local/sbin/logiops-backup || "
+    "{ echo 'The recovery hook is not installed: run scripts/install_recovery.py first' >&2; exit 1; }; "
+)
 RELEASE_PATHS = ("pyproject.toml", "uv.lock", "logiops", "skills")
 
 
@@ -69,6 +78,14 @@ def unmerged_reason(head: str, main: str, dirty: bool) -> str | None:
         return (f"HEAD {head[:7]} is not origin/main {main[:7]}. Merge to main, `git switch main && git pull`, "
                 "and deploy again (or pass --allow-unmerged for a deliberate preview).")
     return None
+
+
+def deploy_command(uri: str, digest: str, host: str, sandbox_host: str) -> str:
+    return (
+        "for attempt in $(seq 1 120); do "
+        "test -x /usr/local/sbin/logiops-deploy && break; sleep 5; done; "
+        f"{RECOVERY_GUARD}/usr/local/sbin/logiops-deploy {uri} {digest} {host} {sandbox_host}"
+    )
 
 
 def command(*args: str) -> dict[str, Any]:
@@ -104,8 +121,14 @@ def main() -> None:
     parser.add_argument("--package-only", action="store_true")
     parser.add_argument("--allow-unmerged", action="store_true", help="deploy a checkout that is not origin/main")
     args = parser.parse_args()
-    archive, digest = package()
+    if release_dirty():
+        raise SystemExit("The working tree has uncommitted changes; build a release from a clean commit.")
+    head = git("rev-parse", "HEAD")
+    archive, digest = package(head)
+    manifest = archive.with_suffix(".manifest.json")
+    manifest.write_text(json.dumps({"commit": head, "sha256": digest, "archive": archive.name}, indent=2) + "\n")
     print(f"Release: {archive} (sha256 {digest})")
+    print(f"Commit: {head}; manifest: {manifest}")
     if args.package_only:
         return
     git("fetch", "--quiet", "origin", "main")
@@ -134,11 +157,7 @@ def main() -> None:
     subprocess.run(["aws", "--region", region, "s3", "cp", str(archive), uri, "--only-show-errors"], check=True)
     wait_for_ssm(region, instance_id)
 
-    remote_command = (
-        "for attempt in $(seq 1 120); do "
-        "test -x /usr/local/sbin/logiops-deploy && break; sleep 5; done; "
-        f"/usr/local/sbin/logiops-deploy {uri} {digest} {host} {sandbox_host}"
-    )
+    remote_command = deploy_command(uri, digest, host, sandbox_host)
     sent = command(
         "aws", "--region", region, "ssm", "send-command",
         "--instance-ids", instance_id,
