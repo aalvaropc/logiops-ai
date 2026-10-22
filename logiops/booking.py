@@ -293,8 +293,8 @@ class BookingStore:
         return json.loads(row[0])
 
     def for_incident(self, incident_id: str) -> list[dict[str, Any]]:
-        """The incident's bookings as it is now; a booking from before a reset or a date refresh is still found by
-        its number, but no longer shown on the fresh incident."""
+        """The incident's bookings as it is now; a booking from before a date refresh is still found by its number,
+        but no longer shown on the fresh incident. A reset deletes the incident's bookings."""
         snapshot = self.service.get(incident_id)
         with self._connection() as connection:
             rows = connection.execute(

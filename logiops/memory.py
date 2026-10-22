@@ -223,7 +223,13 @@ class MemoryService:
 
     def forget(self, actor: Actor) -> int:
         key = actor_key(actor)
-        return 0 if key is None else self.store.forget(key)
+        if key is None:
+            return 0
+        try:
+            return self.store.forget(key)
+        except (BotoCoreError, ClientError) as exc:
+            logger.warning("Memory forget failed (%s)", type(exc).__name__)
+            return 0
 
     def block(self, recalled: dict[str, Any]) -> str:
         """The <memory> block for a live agent run: long-term facts only, marked as data."""
