@@ -6,9 +6,9 @@ requires-python = ">=3.12"
 dependencies = [
     "boto3[crt]>=1.40,<2",
     "fastapi>=0.115,<1",
-    "mcp==1.28.1",
+    "mcp==1.30.0",
     "pydantic==2.13.4",
-    "pyjwt[crypto]>=2.10",
+    "pyjwt[crypto]>=2.15.1",
     "strands-agents==1.60.0",
     "uvicorn>=0.30,<1",
 ]
@@ -20,3 +20,6 @@ browser = ["axe-playwright-python>=0.1.8,<1", "playwright==1.62.0", "pytest-play
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]
+
+[tool.uv]
+constraint-dependencies = ["certifi>=2026.10.19"]
