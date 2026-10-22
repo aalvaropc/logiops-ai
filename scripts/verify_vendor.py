@@ -1,4 +1,3 @@
-"""Checks that the vendored copy of mcp-apps-web-host matches its manifest and, with --upstream, the pinned upstream commit."""
 
 import argparse
 import hashlib
@@ -23,7 +22,6 @@ def read_url(url):
 
 
 def fetch(url, read=read_url, sleep=time.sleep, attempts=ATTEMPTS, delay=FIRST_DELAY):
-    """Read a URL, retrying network errors, rate limits and server errors with a doubling delay; other 4xx fail at once."""
     for attempt in range(1, attempts + 1):
         try:
             return read(url)

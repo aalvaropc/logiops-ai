@@ -5,7 +5,7 @@ export function createMcpAppHost({
   window: win = globalThis.window, sandboxOrigin, hostOrigin, proxyPath = "/mcp-app/sandbox.html", slot, mcp,
   uriPrefix = "ui://", mime = MCP_APP_MIME, protocol = MCP_APPS_PROTOCOL, hostInfo = { name: "MCP Apps web host", version: "1.1.0" },
   hostContext = () => ({}), onMessage = () => false, onHide = () => {}, frameTitle = "MCP App", frameId = "mcp-app-frame",
-  minHeight = 80, maxHeight = 640, teardownTimeout = 500, readyTimeout = 5000,
+  minHeight = 80, maxHeight = 640, teardownTimeout = 500, readyTimeout = 0,
   onReady = () => {}, onError = () => {}, rejectMessage = "The host did not accept the message",
 } = {}) {
   const doc = win.document;

@@ -33,7 +33,6 @@ const intent = window.LogiOpsIntent;
 const CLOCK = new Intl.DateTimeFormat("en-US", { timeZone: TIME_ZONE, weekday: "short", hour: "2-digit", minute: "2-digit", hourCycle: "h23", timeZoneName: "short" });
 const reducedMotion = () => matchMedia("(prefers-reduced-motion: reduce)").matches;
 const hashIncident = () => decodeURIComponent(location.hash.slice(1)).trim().toUpperCase() || null;
-// A cold second origin needs more than the library's 5 s default to load its page and start the card.
 const MCP_APP = { uriPrefix: "ui://logiops/resolution-options", proxyPath: "/mcp-app/sandbox.html", readyTimeout: 15000 };
 const SANDBOX_ORIGIN = (() => {
   const value = document.querySelector('meta[name="logiops-sandbox-origin"]')?.content || "";

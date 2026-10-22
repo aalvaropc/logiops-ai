@@ -1,4 +1,3 @@
-"""verify_vendor.py pins the vendored host to an upstream commit and refuses anything that drifts from it."""
 
 import hashlib
 import json
