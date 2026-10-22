@@ -6,20 +6,28 @@ export function bellText(alerts, incidentId) {
   return { count, incidentId: first, text: `${count} alert${count === 1 ? "" : "s"} · ${first}`, label: `${count} proactive alert${count === 1 ? "" : "s"}; open ${first}` };
 }
 
-export function createAlerts({ request, list = () => request("/alerts"), incidentId, isBusy = () => false, isHidden = () => false, onAlerts = () => {}, onAnnounce }) {
+export const SEEN_KEY = "logiops-alerts-seen";
+
+export function createAlerts({
+  request, list = () => request("/alerts"), incidentId, isBusy = () => false, isHidden = () => false, onAlerts = () => {}, onAnnounce,
+  acknowledge = true, storage = null,
+}) {
   let alerts = [];
   let checking = null;
-  const announced = new Set();
+  const announced = new Set(storage?.getJson(SEEN_KEY) || []);
 
   async function announce(alert) {
     if (announced.has(alert.id)) return false;
     announced.add(alert.id);
-    try {
-      await request(`/alerts/${encodeURIComponent(alert.id)}/dismiss`, "POST");
-    } catch (_) {
-      announced.delete(alert.id);
-      return false;
+    if (acknowledge) {
+      try {
+        await request(`/alerts/${encodeURIComponent(alert.id)}/dismiss`, "POST");
+      } catch (_) {
+        announced.delete(alert.id);
+        return false;
+      }
     }
+    storage?.set(SEEN_KEY, JSON.stringify([...announced].slice(-50)));
     alerts = alerts.filter((item) => item.id !== alert.id);
     onAlerts(alerts);
     await onAnnounce(alert);
