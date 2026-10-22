@@ -174,7 +174,8 @@ again from `main` once the fix is merged.
   -replace=aws_instance.app`, then `python3 scripts/deploy_ec2.py` again. The
   data volume is detached only after the instance stops, and SQLite survives.
 - `terraform destroy` is blocked by design: the EBS volume has
-  `prevent_destroy`, and the versioned release bucket is not force-destroyed.
+  `prevent_destroy`, and the versioned release and backup buckets are not
+  force-destroyed.
   See "Teardown" below.
 - The CloudFront default domain is the public URL. The connection from
   CloudFront to EC2 uses HTTP, restricted to CloudFront's origin-facing IP
@@ -188,6 +189,12 @@ again from `main` once the fix is merged.
   recording pause (`/etc/logiops-reset-paused`) lasts 30 hours at most, see
   `docs/release-recovery.md`. `systemctl list-timers logiops-reset.timer` shows
   the next run.
+- The instance backs up SQLite every day at 07:45 UTC (`logiops-backup.timer`)
+  and before every deployment, to the private versioned bucket in `backup.tf`
+  (`terraform output -raw backup_bucket`). Each snapshot is checked, uploaded
+  encrypted and restored into a temporary database before it counts; a deploy
+  without one stops with the release unchanged. Snapshots expire after seven
+  days; `docs/release-recovery.md` has the restore steps.
 - A Route 53 health check calls `/healthz` through CloudFront every 30 seconds
   from several regions (`monitor.tf`). When it has failed for three minutes, the
   CloudWatch alarm `logiops-ai-demo-down` writes to the SNS topic
@@ -218,6 +225,7 @@ billing. Use a local branch: the change to `main.tf` is never merged.
 cd infra/amazon
 REGION=$(terraform output -raw aws_region)
 BUCKET=$(terraform output -raw release_bucket)
+BACKUPS=$(terraform output -raw backup_bucket)
 TOKEN_PARAM=$(terraform output -raw access_token_parameter_name)
 
 # 1. Optional: keep a snapshot of the SQLite volume (it is billed until you delete it).
@@ -227,11 +235,13 @@ aws ec2 create-snapshot --region "$REGION" --volume-id "$VOLUME" --description "
 # 2. Allow the volume to be destroyed: delete the line `lifecycle { prevent_destroy = true }`
 #    from aws_ebs_volume.data in main.tf.
 
-# 3. Empty the versioned release bucket. Every object version and delete marker must go;
-#    repeat while the listing is not empty, since each call deletes up to 1,000.
-aws s3api list-object-versions --bucket "$BUCKET" --output json \
-  --query '{Objects: [Versions, DeleteMarkers][][].{Key: Key, VersionId: VersionId}}' > /tmp/versions.json
-aws s3api delete-objects --bucket "$BUCKET" --delete file:///tmp/versions.json
+# 3. Empty the versioned release and backup buckets. Every object version and delete
+#    marker must go; repeat while a listing is not empty, since each call deletes up to 1,000.
+for B in "$BUCKET" "$BACKUPS"; do
+  aws s3api list-object-versions --bucket "$B" --output json \
+    --query '{Objects: [Versions, DeleteMarkers][][].{Key: Key, VersionId: VersionId}}' > /tmp/versions.json
+  aws s3api delete-objects --bucket "$B" --delete file:///tmp/versions.json
+done
 
 # 4. Destroy everything Terraform created, then the token it did not create.
 terraform destroy

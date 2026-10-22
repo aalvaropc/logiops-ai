@@ -1,31 +1,37 @@
 # Release and SQLite recovery
 
-This change prepares recovery controls. Applying Terraform and installing the
-rendered host configuration are separate release steps; neither happens in CI.
-The CloudFront origin transport remains a separate, deferred change.
+The deployed demo keeps verified SQLite snapshots in a private S3 bucket: one
+every day and one before every deployment (`infra/amazon/backup.tf`,
+`infra/amazon/recovery.sh.tftpl`). Both were applied and installed on the
+running instance on 2026-10-21, before `main` was deployed on top. Applying
+Terraform and installing on the host are release steps; neither happens in CI.
+TLS between CloudFront and the instance is a separate change, deferred.
 
-## Review before the coordinated release
+## Before a release
 
-Merge the security, dependency, host, and demo fixes to `main`. Run the backend,
-Chromium, dependency-audit, vendor, and Terraform checks on the resulting commit.
-Use a clean checkout for `python scripts/deploy_ec2.py --package-only`; retain the
-printed commit, archive SHA-256, and sidecar manifest. Repeating this build from
-the same commit must produce the same archive hash.
+Run the backend, Chromium, dependency-audit, vendor, and Terraform checks on the
+`main` commit to release. In a clean checkout, `python scripts/deploy_ec2.py
+--package-only` prints the commit, the archive SHA-256 and a sidecar manifest.
+The archive holds the release files with fixed modes and times plus a
+`release.json` naming the commit, so a rebuild of the same commit with the same
+Python gives the same hash. On the instance,
+`/opt/logiops/current/release.json` names the deployed commit.
 
-Review `terraform plan` before applying it. The recovery addition creates a
-private encrypted S3 bucket, seven-day snapshot expiration, version cleanup,
+Review `terraform plan` before applying it. The recovery resources are a
+private encrypted S3 bucket, seven-day snapshot expiration, version cleanup, a
 TLS-only bucket policy, and an instance-role policy limited to snapshot reads,
 writes, and aborting an unfinished upload. S3 expires current snapshots after
 seven days, which leaves a delete marker over the old version; that version is
 removed seven days later and the then-empty delete marker is removed by its own
-lifecycle rule, so a snapshot is recoverable for about fourteen days. It must
-not replace the instance, EBS volume, identity pool, or either CloudFront
+lifecycle rule, so a snapshot is recoverable for about fourteen days. A plan
+must not replace the instance, EBS volume, identity pool, or either CloudFront
 distribution.
 
-## Install on an existing instance after the approved apply
+## Install on an existing instance
 
-The existing instance ignores `user_data` changes. Updating Terraform alone does
-not install the timer or deployment hook. Generate a reviewable SSM payload:
+The existing instance ignores `user_data` changes, so a Terraform apply alone
+does not install the timer or the deployment hook. Generate a reviewable SSM
+payload:
 
 ```sh
 python scripts/install_recovery.py --output /tmp/logiops-recovery-ssm.json
@@ -37,8 +43,9 @@ file:///tmp/logiops-recovery-ssm.json`. Use the configured region and inspect th
 command result. This installs the same recovery and deployment scripts used by
 a new instance; it does not restart the running application.
 
-Run `/usr/local/sbin/logiops-backup predeploy` through SSM and retain its S3 URI,
-checksum, and successful restore result before deploying the reviewed archive.
+Before the first deployment with the hook, run
+`/usr/local/sbin/logiops-backup predeploy` through SSM and keep its S3 URI,
+checksum, and successful restore result.
 The deployment hook repeats this check before changing the release symlink,
 trying up to three times ten seconds apart. If it still fails, the deployment
 stops with the reason and the release is unchanged; so does a host without the

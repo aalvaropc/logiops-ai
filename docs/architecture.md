@@ -112,7 +112,9 @@ execution through REST or MCP.
 - **EBS:** stores SQLite separately from the EC2 root filesystem so the audit
   history survives instance restarts.
 - **S3 and Systems Manager:** transfer a checksum-verified release and run its
-  installation without SSH or long-lived credentials on the instance.
+  installation without SSH or long-lived credentials on the instance. A second,
+  private bucket keeps verified SQLite snapshots, taken every day and before
+  every deployment.
 - **CloudFront:** gives judges a stable HTTPS address. The EC2 security group
   accepts origin traffic only from CloudFront's origin-facing prefix list;
   CloudFront to EC2 currently uses HTTP, with bearer authentication on every
@@ -124,7 +126,8 @@ execution through REST or MCP.
   demo is down.
 
 These resources are defined in `infra/amazon/` and were provisioned on 2026-10-06
-and 2026-10-11; the spend stop and the alarm were added on 2026-10-21.
+and 2026-10-11; the spend stop, the alarm and the verified backups were added
+on 2026-10-21.
 
 ## Production path
 
