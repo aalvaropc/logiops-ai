@@ -62,17 +62,22 @@ The API reference is at <http://127.0.0.1:8000/docs>. The MCP endpoint is
 (the core protocol; MCP Apps, below, is an extension with its own version).
 The SQLite database is created at
 `data/logiops.sqlite3` and survives server restarts. Set `LOGIOPS_DB_PATH` to
-change the location. The default configuration is **local only**. Do not bind
-it to a public interface without `LOGIOPS_PUBLIC=1`, a random
-`LOGIOPS_ACCESS_TOKEN` of at least 32 characters, and HTTPS. In public mode the
-token guards both REST and MCP. In a single process, MCP requests are limited
-to 60 per minute and agent calls (investigations, follow-ups and briefings,
-each one calls a paid model) share a budget of 10 per minute per viewer. Behind CloudFront, set `LOGIOPS_TRUST_CLOUDFRONT=1` so viewers are
-identified by the `CloudFront-Viewer-Address` header instead of the shared
-edge IP; only do this when the origin accepts traffic exclusively from
-CloudFront. The agent's own in-process MCP calls are exempt from the MCP
-limit. Responses carry `Cache-Control: no-store`. A production deployment
-needs shared rate limiting.
+change the location.
+
+The default configuration is **local only**. Do not bind it to a public
+interface without `LOGIOPS_PUBLIC=1`, a random `LOGIOPS_ACCESS_TOKEN` of at
+least 32 characters, and HTTPS. In public mode the token guards both REST and
+MCP.
+
+In a single process, MCP requests are limited to 60 per minute and agent calls
+(investigations, follow-ups and briefings, each one calls a paid model) share a
+budget of 10 per minute per viewer. The agent's own in-process MCP calls are
+exempt from the MCP limit. A production deployment needs shared rate limiting.
+
+Behind CloudFront, set `LOGIOPS_TRUST_CLOUDFRONT=1` so viewers are identified by
+the `CloudFront-Viewer-Address` header instead of the shared edge IP; only do
+this when the origin accepts traffic exclusively from CloudFront. Responses
+carry `Cache-Control: no-store`.
 
 Each incident is isolated: its plans, approvals, executions and audit events
 never mix with another's.
@@ -85,29 +90,46 @@ short-lived credentials passed at runtime.
 
 Open the browser demo at <http://127.0.0.1:8000/demo>. It is a simulated
 Alexa+ device (an Echo Show-style screen, full-screen on a phone) that shows
-one surface at a time, drawn as light on a night road: home leads with the
-critical units at risk and the open incidents as lanes that run to their promise
-and trail their delay (open ones first, then by critical units at risk, priority
-and due time; "Start here" marks the briefing's pick); the incident is a wide
-map of the plan's legs (late legs dashed red) with its one large figure and each
-order on one time scale against its promise; while the agent investigates, a
-stage lights each MCP tool call as it returns, then the data check; the plans
-show the interactive MCP App with a decision field of every plan by delay and
-cost; a confirmation reads an approval or a price back with Yes / No; then the
-receipt, a proactive alert and the result after execution. Below, the dock shows
-what it heard and the short spoken reply in large type, a voice light bar
-(Ready, Listening, Thinking with the seconds elapsed, Speaking), suggestion
-chips, the microphone (Chrome, Edge) and a text field; "More" opens the whole
-conversation with the tool trace of each reply and the data-check badge. Open an
-incident by tapping its card, by linking to it (`/demo#SHIP-433`) or by naming
-it ("what about SHIP-452?"); each incident keeps its own conversation.
+one surface at a time, drawn as light on a night road:
 
-Ask "What's happening with SHIP-421?" and say "approve the recommended plan":
-the assistant reads the plan back (price, delay, any critical order left late)
-and approves only after "yes" (spoken, typed or tapped on the card). Then say
-"execute it". Those requests use the same REST approval and execution
-endpoints as the operator console's buttons, so the version checks are
-identical. A message acts only when the whole message comes from a closed
+- home leads with the critical units at risk and the open incidents as lanes
+  that run to their promise and trail their delay (open ones first, then by
+  critical units at risk, priority and due time; "Start here" marks the
+  briefing's pick);
+- the incident is a wide map of the plan's legs (late legs dashed red) with its
+  one large figure and each order on one time scale against its promise;
+- while the agent investigates, a stage lights each MCP tool call as it
+  returns, then the data check;
+- the plans show the interactive MCP App with a decision field of every plan by
+  delay and cost;
+- a confirmation reads an approval or a price back with Yes / No;
+- then the receipt, a proactive alert and the result after execution.
+
+Below, the dock shows:
+
+- what it heard and the short spoken reply in large type;
+- a voice light bar (Ready, Listening, Thinking with the seconds elapsed,
+  Speaking);
+- suggestion chips, the microphone (Chrome, Edge) and a text field.
+
+"More" opens the whole conversation with the tool trace of each reply and the
+data-check badge.
+
+Open an incident by tapping its card, by linking to it (`/demo#SHIP-433`) or by
+naming it ("what about SHIP-452?"); each incident keeps its own conversation.
+
+To approve and execute a plan:
+
+1. Ask "What's happening with SHIP-421?".
+2. Say "approve the recommended plan": the assistant reads the plan back
+   (price, delay, any critical order left late) and approves only after "yes"
+   (spoken, typed or tapped on the card).
+3. Then say "execute it".
+
+Those requests use the same REST approval and execution endpoints as the
+operator console's buttons, so the version checks are identical.
+
+A message acts only when the whole message comes from a closed
 grammar: a verb and words that name a plan by kind, price or pick ("approve
 the split plan", "approve the cheapest plan", "approve the $240 plan", "ok,
 execute it"). Questions, negations ("please don't execute it yet"), commands
@@ -147,13 +169,16 @@ npx @modelcontextprotocol/inspector --cli https://dir4g4n7eq982.cloudfront.net/m
 ```
 
 The first lists the 12 tools; the second returns SHIP-433's record. Without the
-header you are a guest: the read tools still answer, and execute, quote, book and the
-booking lookup (`execute_approved_plan`, `quote_carrier_booking`, `book_carrier`,
-`get_booking`) refuse with
-`401` and the OAuth challenge, which the CLI reports as `auth_required`. To sign
-in from Inspector's web UI (`npx @modelcontextprotocol/inspector`), enter the
-client id and the scopes that `GET /auth/config` reports in its OAuth settings;
-Inspector's callback is registered, and signing in opens Amazon Cognito.
+header you are a guest: the read tools still answer, and execute, quote, book
+and the booking lookup (`execute_approved_plan`, `quote_carrier_booking`,
+`book_carrier`, `get_booking`) refuse with `401` and the OAuth challenge, which
+the CLI reports as `auth_required`.
+
+To sign in from Inspector's web UI (`npx @modelcontextprotocol/inspector`),
+enter the client id and the scopes that `GET /auth/config` reports in its OAuth
+settings; Inspector's callback is registered, and signing in opens Amazon
+Cognito.
+
 Locally, point the same commands at `http://127.0.0.1:8000/mcp`.
 
 ## Agent investigation
@@ -175,36 +200,48 @@ The agent receives only read and investigation tools. Its MCP tool results,
 response, and token usage are recorded in the incident's events. The API
 returns the calculated plans separately from the model's explanation.
 
-Before an answer is shown, a deterministic grounding check (`logiops/evaluator.py`)
-reads it, spoken line included, against the incident's data: it must end with
-`Recommended plan:` naming a real plan; every dollar amount, hour value and
-unit count must match the plans, orders, stock, carrier quotes or the saved
-preferences (spend cap and note), or the gap between two of them; every
-SHIP-/ORD- id must belong to the incident and every timestamp must be one in
-its data; and it must not claim that anything was approved, executed or
-delivered. A failed check goes back to the model once with the reasons, if at
-least 18 of the 50 seconds remain; an answer that still fails is returned with
+Before an answer is shown, a deterministic grounding check
+(`logiops/evaluator.py`) reads it, spoken line included, against the incident's
+data:
+
+- it must end with `Recommended plan:` naming a real plan;
+- every dollar amount, hour value and unit count must match the plans, orders,
+  stock, carrier quotes or the saved preferences (spend cap and note), or the
+  gap between two of them;
+- every SHIP-/ORD- id must belong to the incident and every timestamp must be
+  one in its data;
+- it must not claim that anything was approved, executed or delivered.
+
+A failed check goes back to the model once with the reasons, if at least 18 of
+the 50 seconds remain; an answer that still fails is returned with
 `grounded: false`. The response and the recorded event carry `evaluations`
-(one per attempt) and `grounded`. For a
-deterministic rehearsal, launch the server with `LOGIOPS_AGENT_MODE=replay`;
-the response says `mode: replay` and reports zero tokens. Normal mode is
-`bedrock`. The tool loop runs on Strands Agents (`logiops/strands_runtime.py`):
-a model provider over the same Converse client (boto3 with SDK retries), one
-agent tool per allowed MCP tool on the in-process session, and hooks that keep
-the loop's guards. A run stops
-with a clear error after 50 seconds so it always answers before CloudFront's
-60-second origin timeout. Live calls share a daily budget for the whole demo
+(one per attempt) and `grounded`.
+
+For a deterministic rehearsal, launch the server with
+`LOGIOPS_AGENT_MODE=replay`; the response says `mode: replay` and reports zero
+tokens. Normal mode is `bedrock`.
+
+The tool loop runs on Strands Agents (`logiops/strands_runtime.py`):
+
+- a model provider over the same Converse client (boto3 with SDK retries);
+- one agent tool per allowed MCP tool on the in-process session;
+- hooks that keep the loop's guards.
+
+A run stops with a clear error after 50 seconds so it always answers before
+CloudFront's 60-second origin timeout.
+
+Live calls share a daily budget for the whole demo
 (`LOGIOPS_DAILY_MODEL_CALLS`): when a run no longer fits, the response says
 `mode: replay` with `fallback: "daily_budget"`, and the page says so until
 midnight (UTC-05:00). A guest's run must also fit the day's guest share; when
-only that share is used, the response says `fallback: "guest_budget"`. When the
-model service itself fails (no credentials, a
-refused or throttled call, a timeout, or the 50-second limit), the failure is
-recorded as `agent_run_failed` and the same job is answered again from the
-replay with `fallback: "model_unavailable"`, which the page also says; for five
-minutes after that, live requests go straight to the replay. The agent's own
-guards (a disallowed tool, too many turns, a missing plan) still fail the
-request.
+only that share is used, the response says `fallback: "guest_budget"`.
+
+When the model service itself fails (no credentials, a refused or throttled
+call, a timeout, or the 50-second limit), the failure is recorded as
+`agent_run_failed` and the same job is answered again from the replay with
+`fallback: "model_unavailable"`, which the page also says; for five minutes
+after that, live requests go straight to the replay. The agent's own guards (a
+disallowed tool, too many turns, a missing plan) still fail the request.
 
 ## Follow-up questions
 
@@ -217,15 +254,23 @@ curl -sS -X POST http://127.0.0.1:8000/incidents/SHIP-421/agent/ask \
 A follow-up answers from the latest investigation of the data being shown
 (plans, assessment, approval and execution), with read tools only, so it never
 recalculates plans. It returns 409 if there is no investigation for the
-current data. The question and up to 8 history turns are sent as quoted JSON
-after the context, so user text cannot open or close a block. Answers change
-nothing and are not stored; failed calls are audited as `agent_run_failed`
-with `job: "ask"`. The browser routes questions (anything ending in `?` or
-starting with how/what/should/…) to the agent, never to approve or execute.
+current data.
+
+The question and up to 8 history turns are sent as quoted JSON after the
+context, so user text cannot open or close a block. Answers change nothing and
+are not stored; failed calls are audited as `agent_run_failed` with
+`job: "ask"`.
+
+The browser routes questions (anything ending in `?` or starting with
+how/what/should/…) to the agent, never to approve or execute.
+
 A follow-up passes the same data check without needing a pick
-(`evaluator.check_facts`): its figures may also come from the question and
-earlier user turns (a hypothetical "only 11 units"), and once the record shows
-an approval or execution it may say so in the passive voice ("was executed").
+(`evaluator.check_facts`):
+
+- its figures may also come from the question and earlier user turns (a
+  hypothetical "only 11 units");
+- once the record shows an approval or execution, it may say so in the passive
+  voice ("was executed").
 
 ## Queue briefing
 
@@ -238,14 +283,20 @@ The agent calls `list_incidents` (and, if it needs to, the other read tools),
 keeps the inbox order (open first, then the most critical units at risk,
 priority and due time) and ends with `Start with: <incident id>`,
 returned as `start_with`. It cannot calculate plans: `investigate_incident`
-is not in its toolset, so a briefing changes nothing and stores nothing. In
-the browser, "Any delays today?" or "brief me" runs it and marks that incident
-"Start here" in the inbox. The first message on the page also summarises the
-queue, from the inbox itself, at no cost. The briefing passes the data check
-against every incident's facts (amounts, delays, units, ids and times), with one
-revision. In the browser, every checked reply carries a badge: "Checked against
-the data", "… after one revision", or, in red, "Did not pass the data check"
-with the first reason, plus a notice that the plan cards are the reference.
+is not in its toolset, so a briefing changes nothing and stores nothing.
+
+In the browser, "Any delays today?" or "brief me" runs it and marks that
+incident "Start here" in the inbox. The first message on the page also
+summarises the queue, from the inbox itself, at no cost.
+
+The briefing passes the data check against every incident's facts (amounts,
+delays, units, ids and times), with one revision. In the browser, every checked
+reply carries a badge:
+
+- "Checked against the data";
+- "… after one revision";
+- or, in red, "Did not pass the data check" with the first reason, plus a
+  notice that the plan cards are the reference.
 
 ## Operator preferences
 
@@ -259,16 +310,22 @@ curl -sS http://127.0.0.1:8000/incidents/SHIP-433   # "preference": the plan it 
 
 Two rules: `balanced` (the default ranking: critical orders, then the worst
 delay, then late units, then cost) and `cheapest_unless_critical_late`, plus an optional spend cap per
-incident and a note of up to 200 characters. `logiops/preferences.py` applies
-them to the calculated plans by fixed rules, never by the model: with a $250
-cap, SHIP-433, SHIP-452 and SHIP-460 move to a cheaper plan, and the result
-says what that trades away and warns if a critical order ends up late.
+incident and a note of up to 200 characters.
+
+`logiops/preferences.py` applies them to the calculated plans by fixed rules,
+never by the model: with a $250 cap, SHIP-433, SHIP-452 and SHIP-460 move to a
+cheaper plan, and the result says what that trades away and warns if a
+critical order ends up late.
+
 `investigate_incident` returns the same result as `operator_preferences`, so
 the agent, the MCP App card and any other MCP host see one answer; the agent
-recommends the preferred plan and the note reaches it as quoted data.
-A preference never approves or executes anything. In the browser, say
-"remember my spend cap is $250", "from now on pick the cheapest plan unless a
-critical order would be late", or "forget my preferences", or use the panel.
+recommends the preferred plan and the note reaches it as quoted data. A
+preference never approves or executes anything.
+
+In the browser, say "remember my spend cap is $250", "from now on pick the
+cheapest plan unless a critical order would be late", or "forget my
+preferences", or use the panel.
+
 Preferences persist in the same SQLite file across sessions and restarts.
 Resetting one incident keeps them; resetting everything clears them.
 
@@ -279,7 +336,9 @@ Every investigation, follow-up and briefing prompt asks the model for a
 investigation, the `Recommended plan:` line still comes last). The server
 removes it from the answer (so the stored assessment and the chat stay clean)
 and returns it as `spoken`; if the model forgets it, `spoken` is the first
-sentence of prose. With "Read replies aloud" on, the browser reads `spoken`,
+sentence of prose.
+
+With "Read replies aloud" on, the browser reads `spoken`,
 which is what an Alexa+ device would say, instead of the whole Markdown answer.
 
 ## Interactive plan card (MCP Apps)
@@ -287,33 +346,44 @@ which is what an Alexa+ device would say, instead of the whole Markdown answer.
 `investigate_incident` declares an MCP Apps view (`_meta.ui.resourceUri` =
 `ui://logiops/resolution-options.<sha8>.html`, served as
 `text/html;profile=mcp-app`). The URI carries a hash of the view, so a host
-never shows a stale cached copy after an update. A host that supports MCP Apps
-(extension version 2026-01-26) renders the calculated plans as cards next to
-the conversation, shows the tool's `invoking` and `invoked` status lines, and
-the result repeats `_meta.ui` for hosts that read it there. The view follows
-the host context: light or dark theme, the host's style variables, safe-area
-insets, and a compact layout under 480 px. It shows five plans at a time,
-always including the pick. The resource declares an empty CSP allowlist: the
-view makes no network calls. The card can only ask the
-host to **select** a plan: there is no approval tool, and
-`execute_approved_plan` is marked model-only (`_meta.ui.visibility`), so no
-view can call it in any host. Approval stays with the operator.
+never shows a stale cached copy after an update.
+
+A host that supports MCP Apps (extension version 2026-01-26) renders the
+calculated plans as cards next to the conversation, shows the tool's
+`invoking` and `invoked` status lines, and the result repeats `_meta.ui` for
+hosts that read it there.
+
+The view follows the host context: light or dark theme, the host's style
+variables, safe-area insets, and a compact layout under 480 px. It shows five
+plans at a time, always including the pick. The resource declares an empty CSP
+allowlist: the view makes no network calls.
+
+The card can only ask the host to **select** a plan: there is no approval
+tool, and `execute_approved_plan` is marked model-only
+(`_meta.ui.visibility`), so no view can call it in any host. Approval stays
+with the operator.
 
 The browser demo is a spec-conformant web host. It reads the resource over
 `/mcp` and loads it through a **sandbox proxy** served from a different
 origin: `/mcp-app/sandbox.html` on `localhost` when the page is on
 `127.0.0.1` (and the reverse), or on `LOGIOPS_SANDBOX_HOST` in public mode.
+
 The proxy puts the view in an inner `allow-scripts` iframe (opaque origin)
 under a CSP with no network access, relays messages, and drops the view if it
 navigates away. The host checks the proxy's origin on every message, sends
 `ui/resource-teardown` before removing the view, and shows no card at all if
-no separate sandbox origin is available. Its MCP client runs `initialize` once
-and then sends `MCP-Protocol-Version: 2025-11-25` on every request: `tools/list`
-and `resources/read` for the card, and `tools/call` for `list_incidents` (the
-inbox, with `GET /incidents` only as a fallback) and `list_alerts`. It passes a
-full `hostContext` (theme, display mode, container size, locale, time
-zone, device capabilities, safe-area insets). The theme is always dark,
-and a window resize sends `ui/notifications/host-context-changed`.
+no separate sandbox origin is available.
+
+Its MCP client runs `initialize` once and then sends
+`MCP-Protocol-Version: 2025-11-25` on every request:
+
+- `tools/list` and `resources/read` for the card;
+- `tools/call` for `list_incidents` (the inbox, with `GET /incidents` only as a
+  fallback) and `list_alerts`.
+
+The host passes a full `hostContext` (theme, display mode, container size,
+locale, time zone, device capabilities, safe-area insets). The theme is always
+dark, and a window resize sends `ui/notifications/host-context-changed`.
 
 ## Carrier booking and payment
 
@@ -349,9 +419,13 @@ forgets the bookings, and the follow-up check accepts the booking's amounts.
 In the demo, "book it" reads the plan and the full price back before anything
 happens; once a plan is approved, the "Book and pay" chip does the same. If the
 plan is not approved yet, a single "yes" approves it and pays, because the
-read-back named both. The reply gives
-the written confirmation and speaks the number character by character. The
-receipt is a card on the device and a panel on the console. Other commands:
+read-back named both.
+
+The reply gives the written confirmation and speaks the number character by
+character. The receipt is a card on the device and a panel on the console.
+
+Other commands:
+
 - "no" drops the purchase;
 - a bare "yes" with nothing pending does nothing;
 - the idempotency key is chosen at read-back, so a retry after a network error
@@ -383,18 +457,21 @@ by the three `LOGIOPS_COGNITO_*` settings; without them nothing changes.
   - the scope that the action needs.
 
   The signed-in user's name is recorded on quotes and bookings.
-- **Guests.** Without a token a visitor can read, ask the agent and use the
-  read tools, hear every reply with Polly and receive the alert card. On the
-  public deployment a guest's agent runs live while the day's guest share of
-  model calls lasts (`LOGIOPS_GUEST_DAILY_MODEL_CALLS`) and the visitor's own
-  allowance within it (`LOGIOPS_GUEST_VIEWER_DAILY_MODEL_CALLS`, about one
-  investigation a day), then on the replay model with `fallback:
-  "guest_budget"`; with no share, always on the replay (`fallback: "sign_in"`). Approving,
-  executing, changing data, booking (and the MCP tools
-  `execute_approved_plan`, `quote_carrier_booking`, `book_carrier`,
-  `get_booking`) answer `401` with `WWW-Authenticate: Bearer
-  resource_metadata="…", scope="…"`. A token without the scope gets `403
-  insufficient_scope`, and a bad token gets `401 invalid_token`.
+- **Guests.**
+  - Without a token a visitor can read, ask the agent and use the read tools,
+    hear every reply with Polly and receive the alert card.
+  - On the public deployment a guest's agent runs live while the day's guest
+    share of model calls lasts (`LOGIOPS_GUEST_DAILY_MODEL_CALLS`) and the
+    visitor's own allowance within it
+    (`LOGIOPS_GUEST_VIEWER_DAILY_MODEL_CALLS`, about one investigation a day),
+    then on the replay model with `fallback: "guest_budget"`; with no share,
+    always on the replay (`fallback: "sign_in"`).
+  - Approving, executing, changing data, booking (and the MCP tools
+    `execute_approved_plan`, `quote_carrier_booking`, `book_carrier`,
+    `get_booking`) answer `401` with
+    `WWW-Authenticate: Bearer resource_metadata="…", scope="…"`.
+  - A token without the scope gets `403 insufficient_scope`, and a bad token
+    gets `401 invalid_token`.
 - **Static token.** The operator token still works, for scripts and the
   testing instructions.
 
@@ -481,16 +558,22 @@ The watcher then does four things:
    event.
 
 It never approves or books: the alert proposes, and a person decides. For
-example: "Heads up on SHIP-421: Arequipa stock is now 3 units, so your
-approved plan “Fulfill local stock and send the rest express” no longer
-applies. I recalculated the plans. The new pick is “Move the full order to an
-alternative carrier”: $80, 3 h late. Approve again to go ahead." The spoken
-line says the same in one breath. If no plan works any more, the alert says so.
+example:
+
+> "Heads up on SHIP-421: Arequipa stock is now 3 units, so your approved plan
+> “Fulfill local stock and send the rest express” no longer applies. I
+> recalculated the plans. The new pick is “Move the full order to an
+> alternative carrier”: $80, 3 h late. Approve again to go ahead."
+
+The spoken line says the same in one breath. If no plan works any more, the
+alert says so.
 
 It scans right after `POST /demo/inventory`, and in the background every
 `LOGIOPS_ALERT_SCAN_SECONDS` (30 by default; 0 turns it off). The endpoints
 are `GET /alerts` and `POST /alerts/{id}/dismiss`, and MCP clients read the
-alerts with `list_alerts`. The device is one of them: every ten seconds it calls
+alerts with `list_alerts`.
+
+The device is one of them: every ten seconds it calls
 `list_alerts` over `/mcp` (and `GET /alerts` if MCP refuses; the console reads
 `GET /alerts`). The device acknowledges an alert it shows, which dismisses it for
 MCP clients too; the console shows it without acknowledging and remembers it for
@@ -506,10 +589,15 @@ Then:
 [`skills/logiops-exception-desk/SKILL.md`](../skills/logiops-exception-desk/SKILL.md)
 is an [Agent Skill](https://agentskills.io): YAML frontmatter (`name`,
 `description`, `license`, `compatibility`, `metadata`) and a playbook for these
-tools. It covers the workflow, the rules (plans by label, projected delivery,
-local time, no tool approves), how to speak on a voice device (at most five
-options, a read-back before anything is approved), and what to do when a tool
-fails. The MCP server serves it as the resource
+tools. It covers:
+
+- the workflow;
+- the rules (plans by label, projected delivery, local time, no tool approves);
+- how to speak on a voice device (at most five options, a read-back before
+  anything is approved);
+- what to do when a tool fails.
+
+The MCP server serves it as the resource
 `skill://logiops-exception-desk/SKILL.md` (`text/markdown`), and its
 instructions point to it, so any MCP client can load the same playbook.
 
@@ -517,11 +605,18 @@ The agent reads that resource over MCP at the start of every run. It sends the
 skill to Bedrock as the first system block, before the task prompt, followed by
 a `cachePoint`, so later turns of a run read the tools, skill and prompt from
 the prompt cache (`usage` reports `cacheReadInputTokens` and
-`cacheWriteInputTokens`). The run reports which skill it loaded (`skill`: name,
-URI and SHA-256), and the device's "More" sheet lists it before the tool steps. In
-replay mode the skill is loaded the same way, but the scripted model does not
-read it. Tests check the frontmatter rules, that every tool it names exists,
-and that the file, the MCP resource and the system block are byte-identical.
+`cacheWriteInputTokens`).
+
+The run reports which skill it loaded (`skill`: name, URI and SHA-256), and the
+device's "More" sheet lists it before the tool steps. In replay mode the skill
+is loaded the same way, but the scripted model does not read it.
+
+Tests check:
+
+- the frontmatter rules;
+- that every tool it names exists;
+- that the file, the MCP resource and the system block are byte-identical.
+
 The release archive and the Docker image include it.
 
 ## Prompts, completions, incident records and URL elicitation
@@ -553,17 +648,25 @@ if the skill resource is missing.
 The four built-in incidents are a scenario pack like any other.
 `GET /scenario/packs/builtin` returns them in pack form as a template:
 `{"version": 1, "incidents": [{"id", "kind", "kind_label", "title", "shipment",
-"orders", "inventory", "carriers", "options"}, ...]}`. `POST /scenario/packs`
-(operator) validates a pack of your own — ids like `SHIP-470` and `ORD-470A`,
-ISO timestamps with the `-05:00` offset (the demo runs on one fixed offset), at most one local warehouse, carriers
-with capacity and cost, options in the playbook form — and registers its
-incidents: they join the inbox, the briefing, the MCP tools, resources and
-completions, the alerts and the metrics, and their plans are calculated by the
-same code as the built-ins. A pack with one bad incident registers nothing and
-answers 422 with every problem and its path. Uploaded incidents live in the
-process until it restarts; `LOGIOPS_SCENARIO_PACK=/path/pack.json` loads a pack
-at every start (a bad file stops the start). `tests/fixtures/scenario_pack.json`
-is a worked example: a dock strike at Paita holding frozen seafood for Piura.
+"orders", "inventory", "carriers", "options"}, ...]}`.
+
+`POST /scenario/packs` (operator) validates a pack of your own:
+
+- ids like `SHIP-470` and `ORD-470A`;
+- ISO timestamps with the `-05:00` offset (the demo runs on one fixed offset);
+- at most one local warehouse;
+- carriers with capacity and cost;
+- options in the playbook form.
+
+It then registers its incidents: they join the inbox, the briefing, the MCP
+tools, resources and completions, the alerts and the metrics, and their plans
+are calculated by the same code as the built-ins. A pack with one bad incident
+registers nothing and answers 422 with every problem and its path.
+
+Uploaded incidents live in the process until it restarts;
+`LOGIOPS_SCENARIO_PACK=/path/pack.json` loads a pack at every start (a bad file
+stops the start). `tests/fixtures/scenario_pack.json` is a worked example: a
+dock strike at Paita holding frozen seafood for Piura.
 
 ## Walk through it in Swagger
 
@@ -584,13 +687,18 @@ Run tests with `uv run pytest`, in a shell without `LOGIOPS_ACCESS_TOKEN`,
 `LOGIOPS_AGENT_MODE`, or `LOGIOPS_TRUST_CLOUDFRONT` exported. The MCP
 interoperability tests use the official Python MCP client against the
 in-process ASGI app, and the Bedrock tests validate request shapes against
-botocore's service model without a paid call. The browser walkthroughs
-(`tests/browser/`, Playwright against a replay server, axe with zero
-violations at 1440 and 390 px) need the `browser` extra and a browser:
-`uv sync --extra dev --extra browser`, `uv run playwright install --only-shell chromium`,
-then `LOGIOPS_BROWSER=1 uv run pytest -q tests/browser`. CI runs them in the
-`browser` job, in Chromium and again in Firefox (`uv run playwright install firefox`,
-then `--browser firefox`).
+botocore's service model without a paid call.
+
+The browser walkthroughs (`tests/browser/`, Playwright against a replay
+server, axe with zero violations at 1440 and 390 px) need the `browser` extra
+and a browser:
+
+1. `uv sync --extra dev --extra browser`
+2. `uv run playwright install --only-shell chromium`
+3. `LOGIOPS_BROWSER=1 uv run pytest -q tests/browser`
+
+CI runs them in the `browser` job, in Chromium and again in Firefox
+(`uv run playwright install firefox`, then `--browser firefox`).
 
 A public HTTPS deployment runs on AWS (CloudFront, EC2, Bedrock); its URL and
 access token are in the submission's testing instructions. The infrastructure
