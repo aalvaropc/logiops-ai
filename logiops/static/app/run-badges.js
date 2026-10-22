@@ -1,4 +1,4 @@
-import { plural } from "./selectors.js";
+import { money, plural } from "./selectors.js";
 
 export const CHECK_FAILED_NOTE = "This answer did not pass the automatic check against the incident's data. The plan cards are calculated by code; rely on them.";
 export const BUDGET_NOTE = "Today's live model budget is used, so answers come from the scripted replay until midnight (UTC-05:00).";
@@ -36,5 +36,5 @@ export function traceSummary(run) {
 export function executionSummary(snapshot, execution) {
   const accounted = execution.accounted_units
     ?? snapshot.state.shipment.units_on_delayed_route + execution.fulfillments.reduce((sum, item) => sum + item.units, 0);
-  return `Verified: ${accounted} units accounted for · $${execution.incremental_cost_usd} extra · ${execution.notifications.length} simulated notifications. Customer delay: ${execution.projected_customer_delay_hours}h (projected).`;
+  return `Verified: ${accounted} units accounted for · ${money(execution.incremental_cost_usd)} extra · ${execution.notifications.length} simulated notifications. Customer delay: ${execution.projected_customer_delay_hours}h (projected).`;
 }

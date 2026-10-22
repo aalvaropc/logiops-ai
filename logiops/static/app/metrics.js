@@ -1,5 +1,5 @@
 import { dollars } from "./purchase.js";
-import { plural } from "./selectors.js";
+import { money, plural } from "./selectors.js";
 
 export function seconds(value) {
   if (value === null || value === undefined) return null;
@@ -16,7 +16,7 @@ export function sessionFigures(totals) {
   return [
     [`${totals.executed} of ${totals.incidents}`, plural(totals.incidents, "incident executed", "incidents executed")],
     [String(totals.decided), plural(totals.decided, "plan approved", "plans approved")],
-    [`$${totals.extra_cost_usd}`, "extra cost committed"],
+    [money(totals.extra_cost_usd), "extra cost committed"],
     [dollars(totals.booked_usd), "booked and paid"],
     [String(totals.late_units), "units late after execution"],
     [seconds(totals.median_time_to_decision_s) ?? "—", "median time to decision"],

@@ -1,10 +1,11 @@
 import { CAPABILITIES_TEXT, CAPABILITIES_SPOKEN, FRESH_INVESTIGATION } from "./capabilities.js";
+import { money } from "./selectors.js";
 
 export function approvalReadback(plan) {
   const delay = plan.projected_customer_delay_hours ? `${plan.projected_customer_delay_hours} hours of delay` : "no delay";
   const late = (plan.orders || []).filter((order) => order.priority === "critical" && order.delay_hours > 0);
   const warning = late.length ? `, and it leaves the critical order for ${late.map((order) => order.customer).join(" and ")} late` : "";
-  return `Approve “${plan.label}” for $${plan.incremental_cost_usd} extra, ${delay}${warning}?`;
+  return `Approve “${plan.label}” for ${money(plan.incremental_cost_usd)} extra, ${delay}${warning}?`;
 }
 
 export function withdrawReadback(plan, incidentId) {
@@ -255,7 +256,7 @@ export function createCommands({
           return;
         }
         if (!plan) {
-          const options = selectors.visiblePlans(state.snapshot).map((item) => `“${item.label}” ($${item.incremental_cost_usd})`).join(", ");
+          const options = selectors.visiblePlans(state.snapshot).map((item) => `“${item.label}” (${money(item.incremental_cost_usd)})`).join(", ");
           say("assistant", `That plan isn't available for the current data. The options are ${options}.`);
           return;
         }

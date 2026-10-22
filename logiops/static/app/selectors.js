@@ -26,7 +26,14 @@ export const PLAN_KEYWORDS = [
 ];
 
 export const TIME_ZONE = "America/Lima";
-const DATE = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit", timeZone: TIME_ZONE });
+const DATE = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit", hourCycle: "h23", timeZone: TIME_ZONE });
+const WHOLE = new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 });
+const CENTS = new Intl.NumberFormat("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+export function money(value) {
+  const amount = Number(value);
+  return `$${(Number.isInteger(amount) ? WHOLE : CENTS).format(amount)}`;
+}
 
 export function plural(count, one, many = `${one}s`) {
   return count === 1 ? one : many;
