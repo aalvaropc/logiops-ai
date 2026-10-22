@@ -123,3 +123,55 @@ def test_a_temporary_auth_outage_preserves_the_session_and_offers_a_manual_retry
     expect(page.locator("#account")).to_contain_text("alice")
     assert page.evaluate("JSON.parse(sessionStorage.getItem('logiops-session'))") == session
     expect(page.locator("#connection")).to_have_text("Connected")
+
+
+def test_the_console_first_load_says_so_and_recovers_on_retry(page, replay_server, page_errors):
+    outage = {"on": True}
+    fail_while(page, outage)
+    page.goto(f"{replay_server}/console")
+    expect(page.locator("#retry")).to_be_visible(timeout=20000)
+    expect(page.locator("#connection")).to_have_text("Offline")
+    expect(page.locator("#message")).to_contain_text("couldn't reach LogiOps")
+    expect(page.locator("#ask")).to_be_disabled()
+    outage["on"] = False
+    page.focus("#retry")
+    page.keyboard.press("Enter")
+    expect(page.locator("#connection")).to_have_text("Connected")
+    expect(page.locator("#retry")).to_be_hidden()
+    expect(page.locator("#message")).to_have_text("Connected.")
+    expect(page.locator("#ask-input")).to_be_focused()
+    assert [error for error in page_errors if "ERR_FAILED" not in error] == []
+
+
+@pytest.mark.parametrize("surface", ["demo", "console"])
+def test_the_first_load_waits_for_the_sign_in_settings(page, replay_server, surface):
+    held = []
+    loads = []
+    page.route("**/auth/config", lambda route: held.append(route))
+    page.on("request", lambda request: loads.append(request.url) if request.url.endswith(("/incidents", "/mcp")) else None)
+    page.goto(f"{replay_server}/{surface}")
+    page.wait_for_timeout(800)
+    assert held and loads == [], "the inbox is read only after the sign-in settings, so an expired session can refresh first"
+    held[0].continue_()
+    expect(page.locator("#connection")).to_have_text("Connected")
+
+
+@pytest.mark.parametrize("surface", ["demo", "console"])
+def test_welcome_back_is_said_once_when_sign_in_recovers_after_the_first_load(page, replay_server, surface):
+    welcome = "Welcome back. Last time we looked at SHIP-433."
+    calls = []
+
+    def config(route):
+        calls.append(True)
+        route.fulfill(status=503, json={}) if len(calls) == 1 else route.continue_()
+
+    page.route("**/auth/config", config)
+    page.route("**/memory?*", lambda route: route.fulfill(json={"enabled": True, "welcome": welcome, "last_incident": "SHIP-433"}))
+    page.goto(f"{replay_server}/{surface}")
+    expect(page.locator("#connection")).to_have_text("Connected")
+    expect(page.locator("#auth-status")).to_be_hidden(timeout=10000)
+    page.wait_for_timeout(500)
+    if surface == "demo":
+        page.click("#more")
+    expect(page.locator("#conversation")).to_contain_text(welcome)
+    assert page.locator("#conversation").inner_text().count(welcome) == 1

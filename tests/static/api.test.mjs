@@ -163,6 +163,22 @@ test("the callback checks the state, exchanges the code with the verifier and cl
   assert.equal((await api.finishSignIn({ search: "?code=c2&state=nonce" })).path, "/console#SHIP-452");
 });
 
+test("a code exchange that never reached the server keeps the pending sign-in for a retry", async () => {
+  const auth = { enabled: true, client_id: "c1" };
+  let down = true;
+  const { api, storage } = setup({
+    auth,
+    routes: { "/auth/token": () => { if (down) throw new TypeError("Failed to fetch"); return jsonResponse(200, { access_token: jwt({ username: "judge" }), expires_in: 3600 }); } },
+  });
+  storage.set(OAUTH_KEY, JSON.stringify({ verifier: "v".repeat(64), state: "nonce", hash: "#SHIP-433" }));
+  await assert.rejects(api.finishSignIn({ search: "?code=c1&state=nonce" }), TypeError);
+  assert.equal(JSON.parse(storage.get(OAUTH_KEY)).state, "nonce", "the pending sign-in survives a request that never left");
+  down = false;
+  const linked = await api.finishSignIn({ search: "?code=c1&state=nonce" });
+  assert.equal(linked.session.username, "judge");
+  assert.equal(storage.get(OAUTH_KEY), null, "a finished exchange consumes the pending entry");
+});
+
 test("sign out drops the session and falls back to the stored operator token", async () => {
   const { api, state, backing } = setup({ token: "sess", session: { access: "sess", refresh: null, username: "judge" } });
   backing.setItem(TOKEN_KEY, "operator-token");

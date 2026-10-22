@@ -74,3 +74,17 @@ test("a manual retry during a pause supersedes the waiting loop", async () => {
   assert.equal(await waiting, false);
   assert.deepEqual(log, ["attempt", "failure:10", "attempt", "success:true"]);
 });
+
+test("a start while an attempt is still running is ignored", async () => {
+  let release;
+  let attempts = 0;
+  const startup = createStartup({
+    attempt: () => { attempts += 1; return new Promise((resolve) => { release = resolve; }); },
+    wait: async () => {},
+  });
+  const first = startup.start();
+  assert.equal(await startup.start(), false);
+  release();
+  assert.equal(await first, true);
+  assert.equal(attempts, 1);
+});

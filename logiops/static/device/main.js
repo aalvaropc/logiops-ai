@@ -630,7 +630,7 @@ async function recallMemory() {
   const recalled = await memory.recall();
   if (!recalled) return;
   state.memoryIncident = recalled.last_incident || null;
-  if (recalled.welcome && !state.conversation.some((turn) => turn.role === "user")) {
+  if (recalled.welcome && !state.conversation.some((turn) => turn.role === "user" || String(turn.meta || "").startsWith("welcome back"))) {
     say("assistant", recalled.welcome, "welcome back · from memory", recalled.welcome);
   }
 }
@@ -837,10 +837,16 @@ if (resumed) {
   state.approver = resumed.username || "demo-operator";
 }
 setInterval(() => { checkAlerts().catch(() => {}); }, 10000);
+let authSettled = () => {};
+const authReady = new Promise((resolve) => { authSettled = resolve; });
 const authStartup = createStartup({
   attempt: async () => {
-    await loadAuth();
-    await finishSignIn();
+    try {
+      await loadAuth();
+      await finishSignIn();
+    } finally {
+      authSettled();
+    }
   },
   onFailure: () => {
     $("auth-status").hidden = false;
@@ -862,6 +868,7 @@ $("auth-retry").addEventListener("click", () => authStartup.start());
 authStartup.start();
 
 async function connect() {
+  await authReady;
   $("connection").textContent = "Connecting";
   $("connection").className = "connection";
   await act(async () => {}, "");
