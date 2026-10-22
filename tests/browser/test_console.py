@@ -99,3 +99,30 @@ def test_a_failed_switch_keeps_the_open_incident_on_the_console(page, replay_ser
     expect(page.locator("#incident-id")).to_have_text("SHIP-421")
     expect(page.locator('.incident-card[aria-pressed="true"]')).to_contain_text("SHIP-421")
 
+
+
+def test_a_stock_change_on_the_console_still_reaches_the_device(page, replay_server, reset_demo):
+    from tests.browser.test_device import say_on_device
+
+    page.set_viewport_size({"width": 1440, "height": 1000})
+    page.goto(f"{replay_server}/demo#SHIP-421")
+    expect(page.locator("#connection")).to_have_text("Connected")
+    say_on_device(page, "What's happening with SHIP-421?")
+    say_on_device(page, "open SHIP-433")
+    expect(page.locator('[data-surface="incident"] .incident-id')).to_have_text("SHIP-433")
+
+    console = page.context.new_page()
+    console.set_viewport_size({"width": 1440, "height": 1000})
+    console.goto(f"{replay_server}/console#SHIP-421")
+    expect(console.locator("#connection")).to_have_text("Connected")
+    console.locator("#developer summary").click()
+    console.fill("#stock-input", "11")
+    console.click("#set-stock")
+    expect(console.locator("#conversation")).to_contain_text("Heads up on SHIP-421", timeout=15000)
+
+    bell = page.locator("#alerts-bell")
+    expect(bell).to_contain_text("SHIP-421", timeout=20000)
+    bell.click()
+    expect(page.locator('[data-surface="alert"]')).to_contain_text("Heads up on SHIP-421")
+    console.wait_for_timeout(6000)
+    assert console.locator("#conversation").inner_text().count("Heads up on SHIP-421") == 1
