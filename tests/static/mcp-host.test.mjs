@@ -206,7 +206,7 @@ test("teardown asks an initialized view first and removes the frame on its reply
 
 test("readiness is reported once after tool input and result are delivered", async () => {
   const ready = [];
-  const view = await shown({ onReady: (resource) => ready.push(resource) });
+  const view = await shown({ readyTimeout: 5000, onReady: (resource) => ready.push(resource) });
   assert.equal(view.host.ready(), false);
   assert.deepEqual(ready, []);
   assert.equal(view.win.timers[0].ms, 5000);
@@ -233,7 +233,7 @@ test("an unresponsive sandbox is removed and reports a timeout", async () => {
 
 test("hiding, replacing and destroying views cancels pending readiness callbacks", async () => {
   const errors = [];
-  const view = await shown({ onError: (error) => errors.push(error) });
+  const view = await shown({ readyTimeout: 5000, onError: (error) => errors.push(error) });
   const first = view.win.timers[0];
   await view.host.show({ toolName: "investigate_incident", input: {}, result: {} });
   assert.equal(first.cancelled, true);
@@ -250,7 +250,7 @@ test("hiding, replacing and destroying views cancels pending readiness callbacks
 
 test("iframe load errors report failure and remove the pending view", async () => {
   const errors = [];
-  const view = await shown({ onError: (error) => errors.push(error) });
+  const view = await shown({ readyTimeout: 5000, onError: (error) => errors.push(error) });
   view.frame.onerror();
   assert.equal(errors.length, 1);
   assert.equal(view.frame.removed, true);
@@ -304,7 +304,7 @@ test("the readiness budget restarts when the sandbox page has loaded, and only o
 test("a view that initializes after its sandbox loaded slowly is still reported ready", async () => {
   const ready = [];
   const errors = [];
-  const view = await shown({ onReady: (resource) => ready.push(resource), onError: (error) => errors.push(error) });
+  const view = await shown({ readyTimeout: 200, onReady: (resource) => ready.push(resource), onError: (error) => errors.push(error) });
   view.frame.onload();
   view.fromView({ jsonrpc: "2.0", method: "ui/notifications/initialized" });
   assert.equal(ready.length, 1);
@@ -314,8 +314,8 @@ test("a view that initializes after its sandbox loaded slowly is still reported 
   assert.deepEqual(errors, []);
 });
 
-test("a readyTimeout of zero or Infinity never arms a timer", async () => {
-  for (const readyTimeout of [0, Infinity]) {
+test("the default readyTimeout, zero and Infinity never arm a timer", async () => {
+  for (const readyTimeout of [undefined, 0, Infinity]) {
     const errors = [];
     const view = await shown({ readyTimeout, onError: (error) => errors.push(error) });
     view.frame.onload();
@@ -338,7 +338,7 @@ test("a timeout of the old view does not cancel a newer show that is still loadi
   const win = fakeWindow();
   const slot = fakeSlot();
   const errors = [];
-  const host = createMcpAppHost({ window: win, sandboxOrigin: SANDBOX, hostOrigin: HOST, slot, mcp, uriPrefix: "ui://logiops/resolution-options", onError: (error) => errors.push(error) });
+  const host = createMcpAppHost({ window: win, sandboxOrigin: SANDBOX, hostOrigin: HOST, slot, mcp, readyTimeout: 200, uriPrefix: "ui://logiops/resolution-options", onError: (error) => errors.push(error) });
   await host.show({ toolName: "first", input: {}, result: {} });
   const [stale] = slot.children;
   let release;
