@@ -155,3 +155,44 @@ def test_a_stock_change_on_the_console_still_reaches_the_device(page, replay_ser
     expect(page.locator('[data-surface="alert"]')).to_contain_text("Heads up on SHIP-421")
     console.wait_for_timeout(6000)
     assert console.locator("#conversation").inner_text().count("Heads up on SHIP-421") == 1
+
+
+def test_the_plan_radios_keep_the_keyboard_focus(page, replay_server, reset_demo):
+    page.set_viewport_size({"width": 1440, "height": 1000})
+    page.goto(f"{replay_server}/console#SHIP-421")
+    expect(page.locator("#connection")).to_have_text("Connected")
+    say(page, "What's happening with SHIP-421?")
+    page.locator('#plans input[type="radio"]:checked').focus()
+    first = page.evaluate("document.activeElement.value")
+    page.keyboard.press("ArrowDown")
+    second = page.evaluate("document.activeElement.type === 'radio' && document.activeElement.checked ? document.activeElement.value : null")
+    page.keyboard.press("ArrowDown")
+    third = page.evaluate("document.activeElement.type === 'radio' && document.activeElement.checked ? document.activeElement.value : null")
+    assert second and third and len({first, second, third}) == 3, (first, second, third)
+
+
+def test_an_inbox_card_keeps_the_keyboard_focus_after_it_opens(page, replay_server, reset_demo):
+    page.goto(f"{replay_server}/console#SHIP-421")
+    expect(page.locator("#connection")).to_have_text("Connected")
+    page.locator('.incident-card[data-incident="SHIP-433"]').focus()
+    page.keyboard.press("Enter")
+    expect(page.locator("#incident-id")).to_have_text("SHIP-433")
+    assert page.evaluate("document.activeElement.dataset.incident") == "SHIP-433"
+
+
+
+def test_approve_and_execute_by_keyboard_keep_the_focus_moving_forward(page, replay_server, reset_demo):
+    page.set_viewport_size({"width": 1440, "height": 1000})
+    page.goto(f"{replay_server}/console#SHIP-421")
+    expect(page.locator("#connection")).to_have_text("Connected")
+    say(page, "What's happening with SHIP-421?")
+    page.locator("#approve").focus()
+    page.keyboard.press("Enter")
+    expect(page.locator("#execute")).to_be_focused()
+    page.keyboard.press("Enter")
+    expect(page.locator("#execution-state")).to_have_text("Operationally verified")
+    expect(page.locator("#banner-reset")).to_be_focused()
+    page.keyboard.press("Enter")
+    expect(page.locator("#message")).to_contain_text("This incident was reset")
+    expect(page.locator("#banner-reset, #ask-input").first).to_be_attached()
+    assert page.evaluate("document.activeElement !== document.body")

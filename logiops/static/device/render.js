@@ -306,7 +306,11 @@ export function renderPlanList(container, { plans, selectedId, recommendedId, pr
     const figures = el("div", "plan-figures", undefined, doc);
     figures.append(el("strong", "", `$${plan.incremental_cost_usd}`, doc), el("small", "", `${plan.projected_customer_delay_hours} h delay · ${formatDate(plan.projected_completion_eta)}`, doc));
     item.append(description, figures);
-    if (!locked) item.append(button(plan.id === selectedId ? "Selected" : "Select", "plan-select", () => onSelect(plan), doc));
+    if (!locked) {
+      const choose = button(plan.id === selectedId ? "Selected" : "Select", "plan-select", () => onSelect(plan), doc);
+      choose.setAttribute("aria-label", `${plan.id === selectedId ? "Selected" : "Select"}: ${plan.label}`);
+      item.append(choose);
+    }
     container.append(item);
   }
 }
@@ -374,8 +378,9 @@ export function renderResult(section, { snapshot, execution, plan, booking, time
     map = el("figure", "device-map result-map", undefined, doc);
     settle(section, map, `${snapshot.state.incident_id}:${execution.plan_id}`);
     const drawing = svg("svg", { viewBox: `0 0 ${journey.WIDE.width} ${journey.WIDE.height}`, role: "img", "aria-labelledby": "result-map-title" }, undefined, doc);
-    map.append(drawing);
-    drawMap(drawing, el("figcaption", "", undefined, doc), snapshot, plan, { route, journey, id: "result-map" }, doc);
+    const caption = el("figcaption", "visually-hidden", undefined, doc);
+    map.append(drawing, caption);
+    drawMap(drawing, caption, snapshot, plan, { route, journey, id: "result-map" }, doc);
   }
   const heading = el("h2", "", plan ? plan.label : execution.plan_id, doc);
   const lead = el("p", "lead", undefined, doc);

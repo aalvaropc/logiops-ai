@@ -359,6 +359,7 @@ input::placeholder { color: var(--ink-3); }
   .heard { display: none; }
   .spoken { -webkit-line-clamp: 1; line-clamp: 1; }
   .talk { gap: 6px; padding-top: 6px; }
+  .confirm-actions { position: sticky; bottom: -18px; z-index: 1; margin: 12px calc(-1 * var(--gutter)) 0; padding: 10px var(--gutter) 14px; border-top: 1px solid var(--hairline); background: var(--ground); }
 }
 @media (min-width: 768px) {
   :root { --gutter: 24px; }
