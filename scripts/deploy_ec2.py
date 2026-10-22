@@ -80,12 +80,11 @@ def unmerged_reason(head: str, main: str, dirty: bool) -> str | None:
     return None
 
 
-def deploy_command(uri: str, digest: str, host: str, sandbox_host: str, accept_no_recovery_point: bool) -> str:
-    prefix = "LOGIOPS_ACCEPT_NO_RECOVERY_POINT=yes " if accept_no_recovery_point else RECOVERY_GUARD
+def deploy_command(uri: str, digest: str, host: str, sandbox_host: str) -> str:
     return (
         "for attempt in $(seq 1 120); do "
         "test -x /usr/local/sbin/logiops-deploy && break; sleep 5; done; "
-        f"{prefix}/usr/local/sbin/logiops-deploy {uri} {digest} {host} {sandbox_host}"
+        f"{RECOVERY_GUARD}/usr/local/sbin/logiops-deploy {uri} {digest} {host} {sandbox_host}"
     )
 
 
@@ -121,7 +120,6 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--package-only", action="store_true")
     parser.add_argument("--allow-unmerged", action="store_true", help="deploy a checkout that is not origin/main")
-    parser.add_argument("--accept-no-recovery-point", action="store_true", help="emergency only: deploy even if the pre-deploy backup keeps failing")
     args = parser.parse_args()
     if release_dirty():
         raise SystemExit("The working tree has uncommitted changes; build a release from a clean commit.")
@@ -159,7 +157,7 @@ def main() -> None:
     subprocess.run(["aws", "--region", region, "s3", "cp", str(archive), uri, "--only-show-errors"], check=True)
     wait_for_ssm(region, instance_id)
 
-    remote_command = deploy_command(uri, digest, host, sandbox_host, args.accept_no_recovery_point)
+    remote_command = deploy_command(uri, digest, host, sandbox_host)
     sent = command(
         "aws", "--region", region, "ssm", "send-command",
         "--instance-ids", instance_id,

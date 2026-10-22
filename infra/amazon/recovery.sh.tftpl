@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
+test -f /etc/systemd/system/logiops-reset.service || { echo 'logiops-reset.service is not installed; the nightly reset would never run' >&2; exit 1; }
 install -d -m 0755 /usr/local/lib/logiops
 cat > /usr/local/lib/logiops/sqlite_backup.py <<'PYTHON'
 ${backup_code}
@@ -17,12 +18,10 @@ mountpoint -q /var/lib/logiops
 test -f /var/lib/logiops/logiops.sqlite3
 umask 077
 directory=$(mktemp -d /tmp/logiops-backup.XXXXXX)
-# A read-only SQLite connection can leave root-owned -wal/-shm files when the
-# service is stopped; hand them back so logiops can open the database.
 database=/var/lib/logiops/logiops.sqlite3
 restore_owner() {
   for sidecar in "$database-wal" "$database-shm"; do
-    if test -e "$sidecar"; then chown --reference="$database" "$sidecar"; fi
+    if test -e "$sidecar"; then chown --no-dereference --reference="$database" "$sidecar"; fi
   done
 }
 trap 'rm -rf "$directory"; restore_owner' EXIT
@@ -84,9 +83,6 @@ echo "Pause marker is older than $max_age seconds; resetting. Touch $marker to p
 GATE
 chmod 0755 /usr/local/sbin/logiops-reset-gate
 
-# The nightly reset is the only scheduled one. A pause skips it for 30 hours at
-# most, and a missing reset unit fails this installation instead of passing.
-test -f /etc/systemd/system/logiops-reset.service || { echo 'logiops-reset.service is not installed; the nightly reset would never run' >&2; exit 1; }
 install -d -m 0755 /etc/systemd/system/logiops-reset.service.d
 cat > /etc/systemd/system/logiops-reset.service.d/pause.conf <<'UNIT'
 [Service]

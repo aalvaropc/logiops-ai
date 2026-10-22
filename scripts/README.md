@@ -10,8 +10,7 @@
 - `deploy_ec2.py` — packages the pinned app and browser demo, uploads the
   archive to S3, and deploys it to EC2 through Systems Manager.
   `--package-only` validates the archive without AWS access.
-  It stops if the pre-deploy SQLite backup fails; `--accept-no-recovery-point`
-  is the emergency override.
+  It requires a verified pre-deploy SQLite backup and stops if the backup fails.
 - `install_recovery.py` — renders the SQLite backup, deploy hook and reset-pause
   setup into a Systems Manager parameters file for an existing instance.
   `docs/release-recovery.md` has the steps.

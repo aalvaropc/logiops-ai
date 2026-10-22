@@ -42,10 +42,9 @@ checksum, and successful restore result before deploying the reviewed archive.
 The deployment hook repeats this check before changing the release symlink,
 trying up to three times ten seconds apart. If it still fails, the deployment
 stops with the reason and the release is unchanged; so does a host without the
-hook, and `deploy_ec2.py` refuses to start in that case. Only for an emergency,
-`python scripts/deploy_ec2.py --accept-no-recovery-point` deploys anyway and the
-instance logs a warning. Installing the hook also fails, visibly, if
-`logiops-reset.service` is missing, because the nightly reset would never run.
+hook, and `deploy_ec2.py` refuses to start in that case. There is no bypass:
+repair the backup and retry. Installation checks for `logiops-reset.service`
+before modifying the host and fails visibly if it is missing.
 
 ## Recovery behavior
 
@@ -70,9 +69,11 @@ before resuming normal operation. A live restore requires a separate approval.
 The instance timer is the only scheduled demo reset. GitHub's reset is manual.
 Before recording, run `touch /etc/logiops-reset-paused` through SSM. The reset
 unit checks the marker through `logiops-reset-gate` and skips while the marker
-is younger than 30 hours; an older marker is ignored and the reset runs, so a
-forgotten pause costs one night at most. Touch the marker again to extend it,
-and remove it after recording. The skipped run is in
+is younger than 30 hours. The marker's expiry does not schedule a reset:
+the next daily run at 08:11 UTC performs it. A pause can therefore skip two
+daily runs, and the next reset can occur almost 54 hours after the marker was
+created. Touch the marker again to extend it, and remove it after recording.
+Keep the timer active while recording. The skipped run is in
 `journalctl -u logiops-reset.service` ("Reset skipped"). The timer uses
 `Persistent=false`, so it does not replay a missed reset.
 
