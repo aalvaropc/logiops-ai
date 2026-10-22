@@ -12,7 +12,7 @@ from typing import Any, Callable, Iterator
 
 from .scenario import (
     INCIDENT_ID, SEED_DAY, SHIPMENT_SOURCE, available_units, build_plans, inbox_key, incident_ids, incident_summary,
-    local_warehouse, seed_state,
+    local_warehouse, register_pack, seed_state,
 )
 from .tools import find_alternative_carriers, get_local_inventory, get_orders, get_shipment
 
@@ -117,13 +117,25 @@ class LogiOpsService:
         )
 
     @classmethod
-    def _seed(cls, connection: sqlite3.Connection, incident_id: str, day: date | None, refreshed: bool = False) -> None:
+    def _seed(
+        cls, connection: sqlite3.Connection, incident_id: str, day: date | None, refreshed: bool = False,
+        *, definition: dict[str, Any] | None = None,
+    ) -> None:
         connection.execute(
             "INSERT INTO snapshot (incident_id, version, state_json) VALUES (?, ?, ?)",
-            (incident_id, 1, _json(seed_state(incident_id, day))),
+            (incident_id, 1, _json(seed_state(incident_id, day, definition=definition))),
         )
         cls._event(connection, incident_id, "scenario_reset",
                    {"source_version": 1, **({"dates_refreshed": True} if refreshed else {})})
+
+    def register_pack(self, pack: Any) -> list[str]:
+        def persist(definitions: dict[str, dict[str, Any]]) -> None:
+            day = self._scenario_day()
+            with self._connection(write=True) as connection:
+                for incident_id, definition in definitions.items():
+                    self._seed(connection, incident_id, day, definition=definition)
+
+        return register_pack(pack, persist=persist)
 
     def seed_missing(self) -> list[str]:
         """Seed every registered incident that has no stored data yet (a pack registered after start-up)."""
