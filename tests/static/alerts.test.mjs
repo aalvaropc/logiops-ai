@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { moduleUrl } from "./helpers.mjs";
 
-const { createAlerts, bellText } = await import(moduleUrl("app/alerts.js"));
+const { createAlerts, bellText, SEEN_KEY } = await import(moduleUrl("app/alerts.js"));
 
 const alertFor = (incident, id = `${incident}-v2`) => ({ id, incident_id: incident, message: `Heads up on ${incident}`, spoken: "Heads up", new_plan: { plan_id: `${incident}-plan` } });
 
@@ -77,5 +77,25 @@ test("overlapping checks read the alerts once and announce each alert once", asy
   assert.equal(await alerts.announce(alertFor("SHIP-421")), false, "an alert already announced is not announced again");
   await alerts.check();
   assert.deepEqual(announced, ["SHIP-421-v2"], "a list that still carries the dismissed alert does not repeat it");
+});
+
+test("a page that does not acknowledge shows each alert once and leaves it for the other pages", async () => {
+  const calls = [];
+  const announced = [];
+  const backing = new Map();
+  const storage = {
+    getJson: (key) => JSON.parse(backing.get(key) || "null"),
+    set: (key, value) => backing.set(key, value),
+  };
+  const make = () => createAlerts({
+    request: async (path, method) => { calls.push(`${method || "GET"} ${path}`); return { alerts: [alertFor("SHIP-421")] }; },
+    incidentId: () => "SHIP-421", onAnnounce: async (alert) => announced.push(alert.id), acknowledge: false, storage,
+  });
+  await make().check();
+  assert.deepEqual(calls, ["GET /alerts"], "nothing is dismissed on the server");
+  assert.deepEqual(announced, ["SHIP-421-v2"]);
+  assert.deepEqual(JSON.parse(backing.get(SEEN_KEY)), ["SHIP-421-v2"]);
+  await make().check();
+  assert.deepEqual(announced, ["SHIP-421-v2"], "a reload of the same tab does not say it again");
 });
 

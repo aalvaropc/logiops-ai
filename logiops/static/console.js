@@ -80,7 +80,7 @@ const storedPurchase = () => purchase.stored();
 const forgetPurchase = () => purchase.forget();
 
 const alerts = createAlerts({
-  request, incidentId: () => state.incidentId, isBusy: () => state.busy, isHidden: () => document.hidden,
+  request, acknowledge: false, storage: createStorage(), incidentId: () => state.incidentId, isBusy: () => state.busy, isHidden: () => document.hidden,
   onAlerts: () => renderAlertBell(),
   onAnnounce: async (alert) => {
     state.pendingApproval = null;

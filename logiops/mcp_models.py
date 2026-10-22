@@ -9,9 +9,14 @@ from __future__ import annotations
 
 from typing import Annotated, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, BeforeValidator, ConfigDict, Field
 
-ShipmentId = Annotated[str, Field(
+def spoken_number(value: object) -> object:
+    """A shipment number a client sent as a JSON number, such as 433, read as the text the ids are matched on."""
+    return str(value) if isinstance(value, int) and not isinstance(value, bool) else value
+
+
+ShipmentId = Annotated[str, BeforeValidator(spoken_number), Field(
     description="Incident (shipment) id, such as SHIP-433. Also accepted: 433, ship 433, ship-433, case 433.",
     min_length=1, max_length=40,
 )]

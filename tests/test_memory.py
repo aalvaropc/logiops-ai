@@ -198,3 +198,27 @@ def test_a_full_demo_reset_forgets_the_shared_operator_memory_but_an_incident_re
 
     kept, cleared = asyncio.run(run())
     assert kept["welcome"] is not None and cleared["welcome"] is None and cleared["turns"] == []
+
+
+def test_a_memory_outage_never_leaves_a_full_reset_half_done(tmp_path):
+    from botocore.exceptions import ClientError
+
+    class Unreachable(SqliteMemory):
+        def forget(self, key):
+            raise ClientError({"Error": {"Code": "ThrottlingException", "Message": "slow down"}}, "ListSessions")
+
+    path = tmp_path / "reset.sqlite3"
+
+    async def run():
+        app = create_app(path, memory=MemoryService(path, backend=Unreachable(path)))
+        async with app.router.lifespan_context(app):
+            async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://127.0.0.1:8000") as http:
+                investigated = await http.post("/incidents/SHIP-421/investigate")
+                reset = await http.post("/demo/reset")
+                after = await http.get("/incidents/SHIP-421")
+                return investigated, reset, after
+
+    investigated, reset, after = asyncio.run(run())
+    assert investigated.status_code == 200 and investigated.json()["plans"]
+    assert reset.status_code == 200
+    assert after.json()["plans"] == [], "the incidents were reset even though the memory could not be cleared"

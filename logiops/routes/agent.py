@@ -126,6 +126,8 @@ def router(ctx: Context) -> APIRouter:
         on_restart: Callable[[], Awaitable[None]] | None = None,
     ) -> dict[str, Any]:
         snapshot = service.get(incident_id)
+        if snapshot["executions"]:
+            raise WorkflowError("The incident has already been executed")
         source_version = snapshot["source_version"]
         facts = with_preference_figures(known_figures(snapshot["state"]), preferences.get(profile_of(actor_of(http_request))))
 

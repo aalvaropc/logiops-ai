@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import base64
 import hashlib
+import inspect
 import json
 import re
 from pathlib import Path
@@ -121,6 +122,11 @@ def create_mcp_server(
     )
     server._mcp_server.version = __version__
 
+    def tool(**options: Any) -> Any:
+        def register(fn: Any) -> Any:
+            return server.tool(description=inspect.cleandoc(fn.__doc__ or ""), **options)(fn)
+        return register
+
     def fail(exc: Exception, next_step: str) -> ToolError:
         return ToolError(f"{str(exc).rstrip('.')}. Next step: {next_step}")
 
@@ -155,6 +161,12 @@ def create_mcp_server(
         except (AttributeError, ValueError):
             return OPERATOR
 
+    def permitted(ctx: Context, permission: str) -> bool:
+        try:
+            return has_permission(ctx.request_context.request, permission)
+        except (AttributeError, ValueError):
+            return actor(ctx).kind == "operator"
+
     def approval_elicitation(ctx: Context, incident: str, plan: dict[str, Any], version: int, action: str, tail: str) -> UrlElicitationRequiredError:
         url = panel_url(ctx, incident)
         text = (f"A person must approve “{plan['label']}” for {incident} in the LogiOps operator panel before it can "
@@ -167,18 +179,18 @@ def create_mcp_server(
         return UserMessage(EmbeddedResource(type="resource", resource=TextResourceContents(
             uri=SKILL_URI, mimeType=SKILL_MIME_TYPE, text=SKILL_TEXT)))
 
-    @server.tool(title="List incidents", annotations=READ, icons=[LIST])
+    @tool(title="List incidents", annotations=READ, icons=[LIST])
     async def list_incidents() -> IncidentList:
         """List every incident with its kind, priority, due time, status and critical units at risk, in the
         order to work them: open first, then the most critical units at risk, priority and due time."""
         return {"incidents": service.list_incidents()}
 
-    @server.tool(title="Get shipment", annotations=READ, icons=[SHIPMENT])
+    @tool(title="Get shipment", annotations=READ, icons=[SHIPMENT])
     async def get_shipment(shipment_id: ShipmentId) -> Shipment:
         """Read the shipment behind an incident: route, delayed ETA, its order ids and its local warehouse."""
         return shipment_view(snapshot_of(shipment_id)["state"])
 
-    @server.tool(title="Get customer order", annotations=READ, icons=[ORDER])
+    @tool(title="Get customer order", annotations=READ, icons=[ORDER])
     async def get_order(order_id: OrderId) -> Order:
         """Read a customer order (quantity, priority, due time); order ids look like ORD-421."""
         states = [service.get(item)["state"] for item in incident_ids()]
@@ -190,7 +202,7 @@ def create_mcp_server(
         hint = orders_hint(linked) if linked else "Read the shipment first; it lists its order ids."
         raise ToolError(f"Unknown order: {order_id}. Next step: {hint}")
 
-    @server.tool(title="Get warehouse stock", annotations=READ, icons=[STOCK])
+    @tool(title="Get warehouse stock", annotations=READ, icons=[STOCK])
     async def get_inventory(
         warehouse_id: Annotated[str, Field(description="Warehouse id from get_shipment, such as arequipa.")],
         sku: Annotated[str, Field(description="Product SKU from get_shipment, such as LAPTOP-01.")],
@@ -208,12 +220,12 @@ def create_mcp_server(
         hint = inventory_hint(candidates[0]) if len(candidates) == 1 else "Read the shipment first; it names its warehouse."
         raise ToolError(f"Unknown warehouse or SKU. Next step: {hint}")
 
-    @server.tool(title="Find alternative carriers", annotations=READ, icons=[CARRIERS])
+    @tool(title="Find alternative carriers", annotations=READ, icons=[CARRIERS])
     async def find_alternative_carriers(shipment_id: ShipmentId) -> dict[str, CarrierQuote]:
         """Read alternative carrier and service quotes for the incident's route: capacity, ETA and incremental cost."""
         return snapshot_of(shipment_id)["state"]["carriers"]
 
-    @server.tool(
+    @tool(
         title="Investigate incident and calculate plans", icons=[ROUTE],
         annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, idempotentHint=True, openWorldHint=False),
         meta={"ui": {"resourceUri": UI_URI, "invoking": UI_INVOKING, "invoked": UI_INVOKED}, "ui/resourceUri": UI_URI},
@@ -234,13 +246,13 @@ def create_mcp_server(
             _meta={"ui": {"resourceUri": UI_URI, "invoked": UI_INVOKED}},
         )
 
-    @server.tool(title="List proactive alerts", annotations=READ, icons=[BELL])
+    @tool(title="List proactive alerts", annotations=READ, icons=[BELL])
     async def list_alerts() -> AlertList:
         """Read open alerts: incidents whose data changed after they were investigated, re-planned on the new data.
         Each names what changed, the plan it affects and the new pick; an alert never approves anything."""
         return {"alerts": alerts.open_alerts()}
 
-    @server.tool(title="Get execution status", annotations=READ, icons=[STATUS])
+    @tool(title="Get execution status", annotations=READ, icons=[STATUS])
     async def get_execution_status(shipment_id: ShipmentId) -> ExecutionStatus:
         """Read the current approval, execution status, and audit event names."""
         snapshot = snapshot_of(shipment_id)
@@ -255,7 +267,7 @@ def create_mcp_server(
             ],
         }
 
-    @server.tool(
+    @tool(
         title="Execute approved plan", icons=[CHECK],
         annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=True, idempotentHint=True, openWorldHint=False),
         meta={"ui": {"visibility": ["model"]}},
@@ -278,7 +290,7 @@ def create_mcp_server(
                 raise fail(exc, "a person approves the exact plan and version in the operator panel; no tool can approve") from exc
             raise approval_elicitation(ctx, incident, plan, source_version, "run", "No tool can approve.") from exc
 
-    @server.tool(
+    @tool(
         title="Quote a carrier booking", icons=[RECEIPT],
         annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, idempotentHint=True, openWorldHint=False),
     )
@@ -295,7 +307,7 @@ def create_mcp_server(
         except WorkflowError as exc:
             raise fail(exc, "investigate the incident and price one of its current plans") from exc
 
-    @server.tool(
+    @tool(
         title="Book and pay a carrier quote", icons=[RECEIPT],
         annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=True, idempotentHint=True, openWorldHint=False),
         meta={"ui": {"visibility": ["model"]}},
@@ -322,13 +334,13 @@ def create_mcp_server(
                                            "Nothing was charged.") from exc
             raise fail(exc, "ask for a new quote with quote_carrier_booking, read it back, and confirm its exact total") from exc
 
-    @server.tool(title="Get booking", annotations=READ, icons=[RECEIPT])
+    @tool(title="Get booking", annotations=READ, icons=[RECEIPT])
     async def get_booking(
         number: Annotated[str, Field(description="Confirmation number, such as LGO-7K2M9Q.", min_length=3, max_length=20)],
         ctx: Context,
     ) -> Booking:
         """Read a booking and its receipt by confirmation number."""
-        if not has_permission(ctx.request_context.request, "incidents.operate"):
+        if not permitted(ctx, "incidents.operate"):
             raise ToolError("Sign in with incidents.operate to read a booking")
         try:
             return bookings.get(number)
@@ -377,7 +389,7 @@ def create_mcp_server(
         mime_type="text/markdown",
     )
     def booking_receipt(number: str, ctx: Context) -> str:
-        if not has_permission(ctx.request_context.request, "incidents.operate"):
+        if not permitted(ctx, "incidents.operate"):
             raise PermissionError("Sign in with incidents.operate to read a receipt")
         try:
             return receipt_text(bookings.get(number))
