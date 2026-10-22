@@ -686,3 +686,17 @@ def test_a_large_spend_cap_is_read_back_with_a_thousands_separator(page, replay_
     expect(page.locator("#connection")).to_have_text("Connected")
     say_on_device(page, "What's happening with SHIP-421?")
     assert "$1,500" in say_on_device(page, "remember my spend cap is $1,500")
+
+
+@pytest.mark.parametrize("size", ((390, 844), (360, 740), (320, 700)))
+def test_the_top_bar_fits_a_phone_with_the_account_button(page, replay_server, size):
+    config = {"enabled": True, "client_id": "demo", "authorize_endpoint": "https://idp.example.com/oauth2/authorize", "scope": "openid"}
+    page.route("**/auth/config", lambda route: route.fulfill(json=config))
+    page.set_viewport_size({"width": size[0], "height": size[1]})
+    page.goto(f"{replay_server}/demo")
+    expect(page.locator("#connection")).to_have_text("Connected")
+    expect(page.locator("#account")).to_be_visible()
+    assert page.evaluate("document.documentElement.scrollWidth <= window.innerWidth"), "no sideways scroll with Link account shown"
+    box = page.locator("#connection").bounding_box()
+    assert box["x"] + box["width"] <= size[0], "the connection status stays on screen"
+
