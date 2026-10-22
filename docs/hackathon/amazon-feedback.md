@@ -315,7 +315,7 @@ that follow from them, with priorities, are in `feature-requests.md`.
 
 ## Model Context Protocol — official Python SDK
 
-- **Used for:** the self-hosted server at `/mcp` (version 1.28.1, stateless,
+- **Used for:** the self-hosted server at `/mcp` (1.28.1, then 1.30.0 from 2026-10-21; stateless,
   JSON responses): 12 tools with titles, annotations and output schemas from
   Pydantic models, 2 prompts, resource templates, completions, the MCP Apps
   view and URL elicitation (`-32042`). The agent's in-process client and the

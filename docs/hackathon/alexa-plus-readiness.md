@@ -11,7 +11,7 @@ tools are partner-only. What we expect is left is listed below.
 
 | Alexa+ expectation | LogiOps AI today | Verified by |
 |---|---|---|
-| A self-hosted MCP server over Streamable HTTP | `/mcp`, stateless, MCP 2025-11-25, official Python SDK 1.28.1; `initialize` returns server instructions with the workflow and the human-approval rule | `tests/test_mcp_contract.py`, `scripts/check_mcp.py` against the CloudFront URL |
+| A self-hosted MCP server over Streamable HTTP | `/mcp`, stateless, MCP 2025-11-25, official Python SDK 1.30.0; `initialize` returns server instructions with the workflow and the human-approval rule | `tests/test_mcp_contract.py`, `scripts/check_mcp.py` against the CloudFront URL |
 | Tools with titles, descriptions, annotations and typed outputs | 12 tools: 8 read-only (`readOnlyHint`), 2 destructive and idempotent (`execute_approved_plan`, `book_carrier`), inputs that accept "433" or "ship 433", `outputSchema` on each | `tests/test_mcp.py`, `tests/test_mcp_contract.py` |
 | Agentic orchestration: the agent chooses tools and acts within limits | The agent runs on Strands Agents with a model adapter over Bedrock Converse, one tool per allowed MCP tool, guard hooks and a turn budget; investigate, follow-up and briefing are three jobs on the same loop; every answer passes a deterministic data check and gets one revision | `tests/test_strands_runtime.py`, `tests/test_agent*.py`, live runs on 2026-10-12 |
 | A human approves; the agent never does | No approval tool exists; `execute_approved_plan` is `visibility: ["model"]` and refuses a plan no person approved with MCP error `-32042` (URL elicitation) that carries the console URL; approval binds plan id and data version | `tests/test_mcp_prompts.py`, `tests/test_security.py` |
