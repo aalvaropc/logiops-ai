@@ -141,9 +141,11 @@ function restoreFocus() {
   focusBeforeBusy = null;
   if (!before) return;
   stage.whenGone(() => {
-    if (document.activeElement && document.activeElement !== document.body) return;
+    const usable = (node) => Boolean(node?.isConnected && !node.disabled && !node.closest("[hidden], [inert]"));
+    const active = document.activeElement;
+    if (active && active !== document.body && usable(active)) return;
     const chips = $("chips");
-    const target = before.node?.isConnected && !before.node.disabled ? before.node
+    const target = usable(before.node) ? before.node
       : before.say !== null ? chips.querySelector(`[data-say="${CSS.escape(before.say)}"]`) || chips.querySelector(".chip") : null;
     target?.focus({ preventScroll: true });
   });

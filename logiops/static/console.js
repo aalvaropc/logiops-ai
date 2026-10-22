@@ -53,8 +53,9 @@ function setBusy(busy) {
 function restoreFocus() {
   const before = focusBeforeBusy;
   focusBeforeBusy = null;
-  if (!before || (document.activeElement && document.activeElement !== document.body)) return;
   const usable = (node) => Boolean(node?.isConnected && !node.disabled && !node.closest("[hidden]"));
+  const active = document.activeElement;
+  if (!before || (active && active !== document.body && usable(active))) return;
   const next = before.id ? $(NEXT_FOCUS[before.id]) : null;
   const target = usable(before) ? before : usable(next) ? next : null;
   target?.focus({ preventScroll: true });
