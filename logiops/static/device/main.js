@@ -34,7 +34,7 @@ const intent = window.LogiOpsIntent;
 const CLOCK = new Intl.DateTimeFormat("en-US", { timeZone: TIME_ZONE, weekday: "short", hour: "2-digit", minute: "2-digit", hourCycle: "h23", timeZoneName: "short" });
 const reducedMotion = () => matchMedia("(prefers-reduced-motion: reduce)").matches;
 const hashIncident = () => decodeURIComponent(location.hash.slice(1)).trim().toUpperCase() || null;
-const MCP_APP = { uriPrefix: "ui://logiops/resolution-options", proxyPath: "/mcp-app/sandbox.html" };
+const MCP_APP = { uriPrefix: "ui://logiops/resolution-options", proxyPath: "/mcp-app/sandbox.html", readyTimeout: 15000 };
 const SANDBOX_ORIGIN = (() => {
   const value = document.querySelector('meta[name="logiops-sandbox-origin"]')?.content || "";
   try {
@@ -254,9 +254,15 @@ function hostContext() {
 const mcpHost = createMcpAppHost({
   sandboxOrigin: SANDBOX_ORIGIN, hostOrigin: location.origin, proxyPath: MCP_APP.proxyPath, slot: $("mcp-app-slot"),
   mcp: mcpClient, uriPrefix: MCP_APP.uriPrefix, hostInfo: { name: "LogiOps Alexa+ device (simulated)", version: "2.0.0" },
-  hostContext, maxHeight: 2400, frameTitle: "Resolution options (MCP App)", rejectMessage: "Unknown or unavailable plan, or the device is busy",
+  hostContext, maxHeight: 2400, readyTimeout: MCP_APP.readyTimeout, frameTitle: "Resolution options (MCP App)", rejectMessage: "Unknown or unavailable plan, or the device is busy",
   onMessage: (params) => selectFromApp(params),
-  onHide: () => { $("mcp-app").hidden = true; $("plans").hidden = false; },
+  onHide: (reason) => {
+    if (reason === "replaced") return;
+    $("mcp-app").hidden = true;
+    $("plans").hidden = false;
+  },
+  onReady: () => { $("plans").hidden = Boolean(state.app); },
+  onError: () => showMcpAppNote("The interactive card is unavailable. The plans are listed below."),
 });
 
 function decisionOf(snapshot) {
@@ -271,6 +277,7 @@ async function showMcpApp(run) {
       + "Open the demo on 127.0.0.1 or localhost, or on the deployed hostname. The plans are listed below.");
     return;
   }
+  const swapping = Boolean(state.app) && $("plans").hidden;
   const decision = decisionOf(state.snapshot);
   const wanted = { incidentId: state.incidentId, version: step.output.source_version, run, ...decision };
   const resource = await mcpHost.show({
@@ -289,7 +296,7 @@ async function showMcpApp(run) {
   state.app = wanted;
   $("mcp-app").classList.toggle("borderless", !resource.prefersBorder);
   $("mcp-app").hidden = false;
-  $("plans").hidden = true;
+  $("plans").hidden = swapping || mcpHost.ready();
 }
 
 function hideMcpApp(reason = "hidden") {

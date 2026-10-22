@@ -1,8 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { moduleUrl } from "./helpers.mjs";
+import { createMcpAppHost, MCP_APPS_PROTOCOL } from "../../logiops/static/app/mcp-host.js";
 
-const { createMcpAppHost, MCP_APPS_PROTOCOL } = await import(moduleUrl("app/mcp-host.js"));
 const settled = () => new Promise((resolve) => setImmediate(resolve));
 const SANDBOX = "http://localhost:8000";
 const HOST = "http://127.0.0.1:8000";
@@ -14,6 +13,7 @@ function fakeWindow() {
     addEventListener: (type, fn) => { if (type === "message") listeners.add(fn); },
     removeEventListener: (type, fn) => { listeners.delete(fn); },
     setTimeout: (fn, ms) => { timers.push({ fn, ms }); return timers.length; },
+    clearTimeout: (id) => { if (timers[id - 1]) timers[id - 1].cancelled = true; },
     document: { createElement: (tag) => fakeFrame(tag) },
     dispatch: (event) => { for (const fn of [...listeners]) fn(event); },
     timers,
@@ -49,7 +49,7 @@ function fakeMcp({ uri = "ui://logiops/resolution-options.abc.html", mime = "tex
   };
 }
 
-async function shown({ mcp = fakeMcp(), onMessage, hostContext } = {}) {
+async function shown({ mcp = fakeMcp(), onMessage, hostContext, onReady, onError, readyTimeout } = {}) {
   const win = fakeWindow();
   const slot = fakeSlot();
   const hidden = [];
@@ -57,6 +57,7 @@ async function shown({ mcp = fakeMcp(), onMessage, hostContext } = {}) {
     window: win, sandboxOrigin: SANDBOX, hostOrigin: HOST, slot, mcp, uriPrefix: "ui://logiops/resolution-options",
     hostInfo: { name: "test host", version: "1" }, hostContext: hostContext ?? (() => ({ theme: "dark" })),
     onMessage: onMessage ?? (() => true), onHide: (reason) => hidden.push(reason), frameTitle: "Resolution options (MCP App)",
+    onReady, onError, readyTimeout,
   });
   const result = { content: [], structuredContent: { plans: [] }, _meta: { "logiops/recommended_plan_id": "p1" } };
   const resource = await host.show({ toolName: "investigate_incident", input: { shipment_id: "SHIP-421" }, result });
@@ -200,7 +201,194 @@ test("teardown asks an initialized view first and removes the frame on its reply
   third.win.timers.at(-1).fn();
   await slow;
   assert.equal(third.frame.removed, true);
-  assert.equal(win.timers.length, 1);
+  assert.equal(win.timers.filter((timer) => !timer.cancelled).length, 0);
+});
+
+test("readiness is reported once after tool input and result are delivered", async () => {
+  const ready = [];
+  const view = await shown({ readyTimeout: 5000, onReady: (resource) => ready.push(resource) });
+  assert.equal(view.host.ready(), false);
+  assert.deepEqual(ready, []);
+  assert.equal(view.win.timers[0].ms, 5000);
+  view.fromView({ jsonrpc: "2.0", method: "ui/notifications/initialized" });
+  view.fromView({ jsonrpc: "2.0", method: "ui/notifications/initialized" });
+  assert.deepEqual(ready, [view.resource]);
+  assert.equal(view.frame.sent.length, 2);
+  assert.equal(view.host.ready(), true);
+  assert.equal(view.win.timers[0].cancelled, true);
+});
+
+test("an unresponsive sandbox is removed and reports a timeout", async () => {
+  const errors = [];
+  const view = await shown({ readyTimeout: 123, onError: (error) => errors.push(error) });
+  assert.equal(view.win.timers[0].ms, 123);
+  view.win.timers[0].fn();
+  assert.equal(errors.length, 1);
+  assert.match(errors[0].message, /initializ/i);
+  assert.equal(view.host.isShowing(), false);
+  assert.equal(view.frame.removed, true);
+  view.fromView({ jsonrpc: "2.0", method: "ui/notifications/initialized" });
+  assert.equal(view.host.ready(), false);
+});
+
+test("hiding, replacing and destroying views cancels pending readiness callbacks", async () => {
+  const errors = [];
+  const view = await shown({ readyTimeout: 5000, onError: (error) => errors.push(error) });
+  const first = view.win.timers[0];
+  await view.host.show({ toolName: "investigate_incident", input: {}, result: {} });
+  assert.equal(first.cancelled, true);
+  first.fn();
+  assert.deepEqual(errors, []);
+  await view.host.hide();
+  assert.equal(view.win.timers[1].cancelled, true);
+  await view.host.show({ toolName: "investigate_incident", input: {}, result: {} });
+  await view.host.destroy();
+  assert.equal(view.win.timers[2].cancelled, true);
+  view.win.timers[2].fn();
+  assert.deepEqual(errors, []);
+});
+
+test("iframe load errors report failure and remove the pending view", async () => {
+  const errors = [];
+  const view = await shown({ readyTimeout: 5000, onError: (error) => errors.push(error) });
+  view.frame.onerror();
+  assert.equal(errors.length, 1);
+  assert.equal(view.frame.removed, true);
+  assert.equal(view.win.timers[0].cancelled, true);
+});
+
+test("tools on later pages are discovered and cursor cycles are rejected", async () => {
+  const backing = fakeMcp();
+  const cursors = [];
+  const mcp = { request: async (method, params) => {
+    if (method !== "tools/list") return backing.request(method, params);
+    cursors.push(params.cursor);
+    return params.cursor ? backing.request(method, params) : { tools: [], nextCursor: "second" };
+  } };
+  const view = await shown({ mcp });
+  assert.ok(view.resource);
+  assert.deepEqual(cursors, [undefined, "second"]);
+  const looping = { request: async () => ({ tools: [], nextCursor: "again" }) };
+  await assert.rejects(shown({ mcp: looping }), /cursor/i);
+});
+
+test("a null or empty nextCursor ends the listing", async () => {
+  for (const nextCursor of [null, ""]) {
+    const requests = [];
+    const mcp = { request: async (method, params) => { requests.push(params); return { tools: [], nextCursor }; } };
+    const host = createMcpAppHost({ window: fakeWindow(), sandboxOrigin: SANDBOX, hostOrigin: HOST, slot: fakeSlot(), mcp });
+    assert.equal(await host.loadResource("investigate_incident"), null);
+    assert.equal(requests.length, 1);
+  }
+  const numeric = { request: async () => ({ tools: [], nextCursor: 7 }) };
+  const host = createMcpAppHost({ window: fakeWindow(), sandboxOrigin: SANDBOX, hostOrigin: HOST, slot: fakeSlot(), mcp: numeric });
+  await assert.rejects(host.loadResource("investigate_incident"), /cursor/i);
+});
+
+test("the readiness budget restarts when the sandbox page has loaded, and only once", async () => {
+  const errors = [];
+  const view = await shown({ readyTimeout: 200, onError: (error) => errors.push(error) });
+  const [mounted] = view.win.timers;
+  assert.equal(mounted.ms, 200);
+  view.frame.onload();
+  assert.equal(mounted.cancelled, true);
+  const [, loaded] = view.win.timers;
+  assert.equal(loaded.ms, 200);
+  view.frame.onload();
+  assert.equal(view.win.timers.length, 2, "a second load does not extend the budget");
+  loaded.fn();
+  assert.equal(errors.length, 1);
+  assert.match(errors[0].message, /timed out/);
+});
+
+test("a view that initializes after its sandbox loaded slowly is still reported ready", async () => {
+  const ready = [];
+  const errors = [];
+  const view = await shown({ readyTimeout: 200, onReady: (resource) => ready.push(resource), onError: (error) => errors.push(error) });
+  view.frame.onload();
+  view.fromView({ jsonrpc: "2.0", method: "ui/notifications/initialized" });
+  assert.equal(ready.length, 1);
+  assert.equal(view.win.timers[1].cancelled, true);
+  view.frame.onload();
+  assert.equal(view.win.timers.length, 2, "a load after initialization arms nothing");
+  assert.deepEqual(errors, []);
+});
+
+test("the default readyTimeout, zero and Infinity never arm a timer", async () => {
+  for (const readyTimeout of [undefined, 0, Infinity]) {
+    const errors = [];
+    const view = await shown({ readyTimeout, onError: (error) => errors.push(error) });
+    view.frame.onload();
+    assert.equal(view.win.timers.length, 0);
+    assert.equal(view.host.isShowing(), true);
+    assert.deepEqual(errors, []);
+  }
+});
+
+test("a timeout of the old view does not cancel a newer show that is still loading", async () => {
+  const view = (name) => ({ name, _meta: { ui: { resourceUri: `ui://logiops/resolution-options.${name}.html` } } });
+  let gate = null;
+  const mcp = { request: async (method, params) => {
+    if (method === "tools/list") {
+      if (gate) await gate;
+      return { tools: [view("first"), view("second")] };
+    }
+    return { contents: [{ uri: params.uri, mimeType: "text/html;profile=mcp-app", text: `<p>${params.uri}</p>` }] };
+  } };
+  const win = fakeWindow();
+  const slot = fakeSlot();
+  const errors = [];
+  const host = createMcpAppHost({ window: win, sandboxOrigin: SANDBOX, hostOrigin: HOST, slot, mcp, readyTimeout: 200, uriPrefix: "ui://logiops/resolution-options", onError: (error) => errors.push(error) });
+  await host.show({ toolName: "first", input: {}, result: {} });
+  const [stale] = slot.children;
+  let release;
+  gate = new Promise((resolve) => { release = resolve; });
+  const second = host.show({ toolName: "second", input: {}, result: {} });
+  win.timers[0].fn();
+  assert.equal(errors.length, 1);
+  assert.equal(stale.removed, true);
+  release();
+  assert.match((await second).uri, /second/);
+  assert.notEqual(slot.children[0], stale);
+  assert.equal(host.isShowing(), true);
+});
+
+test("a tool that declares no view is not listed again, while a missing tool is", async () => {
+  let listings = 0;
+  const mcp = { request: async (method) => {
+    if (method !== "tools/list") throw new Error(`unexpected ${method}`);
+    listings += 1;
+    return { tools: [{ name: "plain", _meta: {} }] };
+  } };
+  const host = createMcpAppHost({ window: fakeWindow(), sandboxOrigin: SANDBOX, hostOrigin: HOST, slot: fakeSlot(), mcp });
+  assert.equal(await host.loadResource("plain"), null);
+  assert.equal(await host.loadResource("plain"), null);
+  assert.equal(listings, 1);
+  assert.equal(await host.loadResource("absent"), null);
+  assert.equal(await host.loadResource("absent"), null);
+  assert.equal(listings, 3);
+});
+
+test("a missing or temporarily invalid resource is retried on the next request", async () => {
+  const backing = fakeMcp();
+  let available = false;
+  const mcp = { request: async (method, params) => {
+    if (method === "tools/list" && !available) return { tools: [] };
+    return backing.request(method, params);
+  } };
+  const view = await shown({ mcp });
+  assert.equal(view.resource, null);
+  available = true;
+  assert.ok(await view.host.loadResource("investigate_incident"));
+  let correct = false;
+  const invalid = { request: async (method, params) => {
+    if (method === "resources/read" && !correct) return { contents: [] };
+    return backing.request(method, params);
+  } };
+  const other = await shown({ mcp: invalid });
+  assert.equal(other.resource, null);
+  correct = true;
+  assert.ok(await other.host.loadResource("investigate_incident"));
 });
 
 test("a view that navigates away is torn down", async () => {
