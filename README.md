@@ -39,7 +39,7 @@ and verifies the result.
 Two pages share one backend: `/demo`, a simulated Alexa+ device (voice, one card
 at a time, the plans as an MCP App), and `/console`, the operator console.
 
-![The operator console: the session's measured outcomes in one row, the incident inbox with SHIP-433 executed and verified, its shipment details, and the agent panel offering to reset the incident](docs/img/console.png)
+![The operator console as a three-column desk: the incident queue with SHIP-433 verified, the incident's route map and promise tracks above the plans table with the executed plan, the agent rail with each MCP call lit as a station, and the session's outcomes along the top bar](docs/img/console.png)
 
 **Who it is for (illustrative):** the exceptions desk of a regional distributor
 that ships electronics and medical supplies to hospitals and stores. Four
