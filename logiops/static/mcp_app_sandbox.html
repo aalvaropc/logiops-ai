@@ -18,7 +18,7 @@
   const hostOrigin = new URLSearchParams(location.search).get("host") || "";
   const ancestor = location.ancestorOrigins && location.ancestorOrigins.length ? location.ancestorOrigins[0] : null;
   if (!/^https?:\/\/[^/?#]+$/.test(hostOrigin) || hostOrigin === location.origin || window.parent === window
-      || (ancestor !== null && ancestor !== hostOrigin)) {
+      || (ancestor !== null && ancestor !== "null" && ancestor !== hostOrigin)) {
     return;
   }
   let view = null;
