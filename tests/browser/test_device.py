@@ -306,7 +306,7 @@ def test_the_echo_show_reads_each_decision_without_scrolling(page, replay_server
     assert page_errors == []
 
 
-@pytest.mark.parametrize("size", ((320, 700), (360, 740)))
+@pytest.mark.parametrize("size", ((320, 700), (360, 740), (960, 480)))
 def test_the_yes_of_a_confirmation_is_in_reach_on_small_phones(page, replay_server, page_errors, reset_demo, size):
     page.set_viewport_size({"width": size[0], "height": size[1]})
     page.goto(f"{replay_server}/demo#SHIP-433")
@@ -634,3 +634,48 @@ def test_losing_the_network_says_so_in_plain_words_and_recovers(page, replay_ser
     say_on_device(page, "show the incident")
     say_on_device(page, "Any delays today?")
     expect(page.locator("#connection")).to_have_text("Connected")
+
+
+def test_a_chip_keeps_the_keyboard_focus_when_the_card_stays(page, replay_server, reset_demo):
+    page.set_viewport_size({"width": 1440, "height": 1000})
+    page.goto(f"{replay_server}/demo#SHIP-421")
+    expect(page.locator("#connection")).to_have_text("Connected")
+    say_on_device(page, "What's happening with SHIP-421?")
+    chip = page.locator("#chips .chip", has_text="Why")
+    chip.focus()
+    page.keyboard.press("Enter")
+    page.wait_for_function("() => !document.querySelector('#ask').disabled && document.querySelector('#agent-stage').hidden")
+    expect(page.locator("#chips .chip").first).to_be_attached()
+    page.wait_for_function("() => document.activeElement.classList.contains('chip')")
+
+
+def test_plan_buttons_name_their_plan_and_the_result_map_keeps_its_legend(page, replay_server, reset_demo):
+    page.route("**/mcp-app/sandbox.html*", lambda route: route.fulfill(status=404, body=""))
+    page.set_viewport_size({"width": 1440, "height": 1000})
+    page.goto(f"{replay_server}/demo#SHIP-421")
+    expect(page.locator("#connection")).to_have_text("Connected")
+    say_on_device(page, "What's happening with SHIP-421?")
+    names = page.locator("#plans .plan-select").evaluate_all("(buttons) => buttons.map((button) => button.getAttribute('aria-label'))")
+    assert names and all(re.match(r"^(Select|Selected): .+", name) for name in names), names
+    say_on_device(page, "approve the recommended plan")
+    page.click("#confirm-yes")
+    expect(page.locator("#plans-state")).to_contain_text("Approved by you")
+    say_on_device(page, "execute it")
+    expect(page.locator(".result-map figcaption")).not_to_be_empty()
+
+
+def test_a_guest_refused_on_yes_lands_on_link_account(page, replay_server, reset_demo):
+    config = {"enabled": True, "client_id": "demo", "authorize_endpoint": "https://idp.example.com/oauth2/authorize", "scope": "openid"}
+    page.route("**/auth/config", lambda route: route.fulfill(json=config))
+    page.goto(f"{replay_server}/demo#SHIP-421")
+    expect(page.locator("#connection")).to_have_text("Connected")
+    say_on_device(page, "What's happening with SHIP-421?")
+    say_on_device(page, "approve the recommended plan")
+    page.route("**/incidents/SHIP-421/approvals", lambda route: route.fulfill(
+        status=401, content_type="application/json", body='{"detail": "Sign in to do this; guests can only read."}',
+        headers={"WWW-Authenticate": 'Bearer resource_metadata="x", scope="incidents.operate"'}))
+    page.locator("#confirm-yes").focus()
+    page.keyboard.press("Enter")
+    expect(page.locator("#message")).to_contain_text("Sign in to do that")
+    expect(page.locator("#account")).to_be_focused()
+

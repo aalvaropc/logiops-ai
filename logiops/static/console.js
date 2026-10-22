@@ -40,9 +40,25 @@ function message(text, success = false) {
   box.setAttribute("aria-live", success || !text ? "polite" : "assertive");
 }
 
+const NEXT_FOCUS = { approve: "execute", execute: "banner-reset", "banner-reset": "ask-input" };
+let focusBeforeBusy = null;
+
 function setBusy(busy) {
+  if (busy && !state.busy) focusBeforeBusy = document.activeElement;
   store.set({ busy });
   renderControls();
+  if (!busy) restoreFocus();
+}
+
+function restoreFocus() {
+  const before = focusBeforeBusy;
+  focusBeforeBusy = null;
+  const usable = (node) => Boolean(node?.isConnected && !node.disabled && !node.closest("[hidden]"));
+  const active = document.activeElement;
+  if (!before || (active && active !== document.body && usable(active))) return;
+  const next = before.id ? $(NEXT_FOCUS[before.id]) : null;
+  const target = usable(before) ? before : usable(next) ? next : null;
+  target?.focus({ preventScroll: true });
 }
 
 function explainError(status, detail) {
@@ -127,6 +143,7 @@ function recommendedPlan(snapshot) {
 
 function renderPlans(snapshot) {
   const container = $("plans");
+  const hadFocus = container.contains(document.activeElement);
   container.replaceChildren();
   container.setAttribute("role", "radiogroup");
   container.setAttribute("aria-label", "Resolution plans");
@@ -163,6 +180,7 @@ function renderPlans(snapshot) {
       renderPlans(snapshot);
       renderControls();
     });
+    if (hadFocus && radio.checked) queueMicrotask(() => radio.focus({ preventScroll: true }));
     const description = document.createElement("div");
     const title = document.createElement("strong");
     distinguishing(plan.label, labels).forEach(([text, marked], index) => {
@@ -371,6 +389,7 @@ function renderControls() {
 
 function renderInbox() {
   const list = $("inbox");
+  const focused = list.contains(document.activeElement) ? document.activeElement.dataset.incident : null;
   list.replaceChildren();
   const tag = (className, text) => {
     const node = document.createElement("span");
@@ -383,6 +402,7 @@ function renderInbox() {
     const card = document.createElement("button");
     card.type = "button";
     card.className = "incident-card";
+    card.dataset.incident = item.incident_id;
     card.setAttribute("aria-pressed", String(item.incident_id === state.incidentId));
     const top = tag("incident-top", "");
     top.append(tag("incident-id", item.incident_id), tag("kind", item.kind_label));
@@ -396,6 +416,7 @@ function renderInbox() {
     card.addEventListener("click", () => selectIncident(item.incident_id).catch(() => {}));
     entry.append(card);
     list.append(entry);
+    if (focused === item.incident_id) card.focus({ preventScroll: true });
   }
 }
 

@@ -127,9 +127,28 @@ function device(method, ...args) {
   }
 }
 
+let focusBeforeBusy = null;
+
 function setBusy(busy) {
+  if (busy && !state.busy) focusBeforeBusy = { node: document.activeElement, say: document.activeElement?.dataset?.say ?? null };
   store.set({ busy });
   renderControls();
+  if (!busy) restoreFocus();
+}
+
+function restoreFocus() {
+  const before = focusBeforeBusy;
+  focusBeforeBusy = null;
+  if (!before) return;
+  stage.whenGone(() => {
+    const usable = (node) => Boolean(node?.isConnected && !node.disabled && !node.closest("[hidden], [inert]"));
+    const active = document.activeElement;
+    if (active && active !== document.body && usable(active)) return;
+    const chips = $("chips");
+    const target = usable(before.node) ? before.node
+      : before.say !== null ? chips.querySelector(`[data-say="${CSS.escape(before.say)}"]`) || chips.querySelector(".chip") : null;
+    target?.focus({ preventScroll: true });
+  });
 }
 
 function explainError(status, detail) {
@@ -455,6 +474,7 @@ function paintLifecycle(surface) {
 
 function renderChips(surface) {
   const box = $("chips");
+  const focused = box.contains(document.activeElement) ? document.activeElement.dataset.say : null;
   box.replaceChildren();
   const pick = surfaces.current().payload.pick ?? state.briefingPick;
   for (const [text, utterance, kind] of chipsFor(surface, { snapshot: state.snapshot, incidentId: state.incidentId, inbox: state.inbox, plan: currentPlan(), pick })) {
@@ -465,6 +485,7 @@ function renderChips(surface) {
     chip.addEventListener("click", () => handleUtterance(utterance));
     box.append(chip);
   }
+  if (focused !== null) (box.querySelector(`[data-say="${CSS.escape(focused)}"]`) || box.querySelector(".chip"))?.focus({ preventScroll: true });
 }
 
 function paintTalk() {
@@ -590,7 +611,7 @@ async function act(work, success) {
     message(error.message || String(error));
     if (error.status === 401 && state.auth.enabled) {
       if (state.session) keepSession(null);
-      $("account").focus();
+      focusBeforeBusy = { node: $("account"), say: null };
     } else if (error.status === 401) {
       storeToken("");
       $("connection").textContent = "Token required";
