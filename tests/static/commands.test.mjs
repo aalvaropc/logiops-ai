@@ -308,3 +308,14 @@ test("going home is a closed command that keeps the conversation and calls nothi
   assert.ok(!h.events.includes("hideMcpApp"), "going home clears nothing");
   assert.equal(h.calls.length, 0);
 });
+
+test("signing in and out is not kept in memory as conversation", async () => {
+  const { commands, store, events } = harness({ auth: { enabled: true }, session: { username: "judge" } });
+  await commands.handle("sign out");
+  assert.equal(store.state.forgetting, true, "the account command and its answer are not remembered");
+  assert.ok(events.includes("signOut"));
+  await commands.handle("link my account");
+  assert.equal(store.state.forgetting, true);
+  await commands.handle("any delays today?").catch(() => {});
+  assert.equal(store.state.forgetting, false, "an ordinary question is remembered again");
+});

@@ -190,7 +190,7 @@ def test_the_demo_host_negotiates_mcp_and_sends_its_context(tmp_path):
     assert "hostContext: hostContext()" in host and '"ui/notifications/host-context-changed"' in host
     assert "theme: state.cardTheme" in script and "safeAreaInsets" in script and "containerDimensions" in script
     assert "uri.startsWith(uriPrefix)" in host and "uriPrefix: MCP_APP.uriPrefix" in script
-    assert 'id="mcp-app-theme"' in page and 'aria-pressed="false"' in page
+    assert 'id="mcp-app-theme"' not in page, "the card follows the device's theme; there is no theme button"
 
 
 def test_the_demo_mcp_client_follows_the_negotiated_version(tmp_path):

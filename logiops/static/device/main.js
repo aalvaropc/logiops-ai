@@ -316,11 +316,6 @@ function showMcpAppNote(text) {
   $("plans").hidden = false;
 }
 
-$("mcp-app-theme").addEventListener("click", () => {
-  state.cardTheme = state.cardTheme === "dark" ? "light" : "dark";
-  $("mcp-app-theme").setAttribute("aria-pressed", String(state.cardTheme === "light"));
-  mcpHost.notifyContext();
-});
 let contextTimer = 0;
 window.addEventListener("resize", () => {
   clearTimeout(contextTimer);
@@ -654,7 +649,7 @@ async function recallMemory() {
 
 function say(role, text, meta, spoken, check) {
   state.conversation.push({ role, text, meta, check, spoken });
-  if (!state.forgetting && !String(meta || "").startsWith("welcome back")) remember(role, role === "assistant" ? (spoken || markdown.plainText(text)) : text);
+  if (!state.forgetting && !/^(welcome back|account)/.test(String(meta || ""))) remember(role, role === "assistant" ? (spoken || markdown.plainText(text)) : text);
   if (!$("sheet").hidden) paintSheet();
   if (role !== "assistant") {
     device("heard", text);
@@ -875,7 +870,7 @@ const authStartup = createStartup({
     $("auth-status").classList.remove("visible");
     if (retryFocused && !$("account").hidden) $("account").focus();
     if (state.signInNote) {
-      say("assistant", state.signInNote);
+      say("assistant", state.signInNote, "account");
       state.signInNote = null;
     }
     if (state.snapshot) recallMemory();

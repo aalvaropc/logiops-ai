@@ -50,7 +50,7 @@ export function createCommands({
       await selectIncident(mentioned).catch(() => {});
       if (state.incidentId !== mentioned) return;
     }
-    state.forgetting = intent.isForgetMe(text);
+    state.forgetting = intent.isForgetMe(text) || ["link", "unlink"].includes(intent.parseCommand(text));
     say("user", text);
     const lower = text.toLowerCase();
     if (intent.isStartOver(text)) {
