@@ -187,8 +187,6 @@ input:focus-visible { outline: 0; border-color: var(--focus); }
 .plan-select:hover:not(:disabled), .secondary:hover:not(:disabled) { background: var(--sunken); }
 .primary { border: 2px solid var(--shell); background: var(--shell); color: var(--shell-ink); }
 .primary:hover:not(:disabled) { background: var(--shell-deep); border-color: var(--shell-deep); }
-.mcp-app-theme { min-height: 32px; margin-left: 6px; padding: 0 12px; border: 1.5px solid var(--ink-3); border-radius: var(--radius-pill); background: transparent; color: var(--ink-2); font-size: var(--type-meta); font-weight: 700; }
-.mcp-app-theme[aria-pressed="true"] { border-color: var(--ink); background: var(--ink); color: var(--surface); }
 
 .confirm-card, .receipt-card, .alert-card, .result-card { max-width: 640px; }
 .confirm-figure, .result-figure { margin: 12px 0 0; color: var(--ink-2); font-size: var(--type-meta); }
@@ -406,7 +404,6 @@ input::placeholder { color: var(--ink-3); }
   .stage { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; padding: 16px; }
   .device { width: min(100%, 1180px); height: auto; aspect-ratio: 16 / 10; max-height: calc(100vh - 92px); min-height: 560px; border: 10px solid var(--bezel); border-radius: 28px; box-shadow: 0 24px 48px rgba(17, 20, 24, .28); overflow: hidden; }
   .stage-note { display: flex; align-items: center; justify-content: center; gap: 12px; max-width: 1180px; margin: 0; color: var(--ink-2); font-size: var(--type-meta); line-height: 1.5; text-align: center; }
-  .stage-note .mcp-app-theme { flex: 0 0 auto; margin: 0; }
   .stage-note a { color: var(--shell); }
 }
 @media (max-width: 399px) {

@@ -362,7 +362,7 @@ def test_the_demo_shows_preferences_briefings_and_speaks_the_short_line():
     assert "Any delays today?" in surfaces and "Approve the recommended plan" in surfaces
     assert 'value="cheapest_unless_critical_late"' in html
     commands = _static("app", "commands.js")
-    assert commands.index("intent.parsePreference(text)") < commands.index("intent.parseCommand(text)")
+    assert commands.index("intent.parsePreference(text)") < commands.index("let command = intent.parseCommand(text);")
     assert 'request("/agent/briefing", "POST"' in commands and 'tag("start-here", "Start here")' in script
     assert 'tags.push(["start-here", "Start here"]);' in (root / "device" / "surfaces.js").read_text()
     assert '"Your preference", "badge preference"' in script and "never approve" in script
@@ -523,8 +523,8 @@ def test_memory_commands_and_hooks():
 
     script = _static("device", "main.js")
     assert "if (!id || !allowed()) return false;" in (Path(__file__).resolve().parents[1] / "logiops" / "static" / "app" / "memory.js").read_text()
-    assert 'if (!state.forgetting && !String(meta || "").startsWith("welcome back")) remember(' in script
-    assert "state.forgetting = intent.isForgetMe(text);" in _static("app", "commands.js")
+    assert 'if (!state.forgetting && !/^(welcome back|account)/.test(String(meta || ""))) remember(' in script
+    assert 'state.forgetting = intent.isForgetMe(text) || ["link", "unlink"].includes(intent.parseCommand(text));' in _static("app", "commands.js")
     assert 'request("/memory", "DELETE")' in _static("app", "commands.js") and "recallMemory();" in script
     cases = {"forget me": "forget_me", "forget our conversations": "forget_me", "delete my memory": "forget_me",
              "pick up where we left off": "pick_up", "where were we": "pick_up", "pick up there": "pick_up",
