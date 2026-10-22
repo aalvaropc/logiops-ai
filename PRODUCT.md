@@ -173,8 +173,9 @@ Success means:
 - **Earlier runs.** 13.6 s to the recommendation on 2026-10-12; 13.0 s on
   2026-10-17, with axe at 0 on desktop and phone.
 - **Live figures.** `GET /metrics` reports the decision and execution times,
-  the outcomes, the bookings, and the model calls and tokens from the recorded
-  events.
+  the outcomes, the model calls and tokens, and the session total booked from
+  recorded events. Booking numbers and amounts per incident require operator
+  access through the incident, booking or receipt endpoints.
 - **Screens.** Screenshots generated in replay are in `docs/img/`:
   `device-home.png`, `device-agent.png`, `device-plans.png`,
   `device-journey.png`, `device-confirm.png`, `device-result.png`,

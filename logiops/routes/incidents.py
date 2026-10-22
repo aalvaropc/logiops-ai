@@ -58,8 +58,6 @@ def router(ctx: Context) -> APIRouter:
 
     @routes.get("/metrics")
     async def metrics() -> dict[str, Any]:
-        """Outcome metrics from the recorded events and bookings, per incident and for the session. Nothing is estimated.
-        The page is public, so a booking shows only in the session's booked total; its number and amount need incidents.operate."""
         items = [incident_metrics(service.get(incident_id), bookings.for_incident(incident_id)) for incident_id in incident_ids()]
         public = [{key: value for key, value in item.items() if key not in ("booking_number", "booking_total_usd")} for item in items]
         return {"incidents": public, "session": session_metrics(items)}
