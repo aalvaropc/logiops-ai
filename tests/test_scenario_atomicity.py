@@ -98,13 +98,13 @@ def test_an_incident_is_visible_only_after_its_playbook_and_kind_label(monkeypat
 
 
 def test_text_that_looks_like_a_timestamp_does_not_break_seeding():
-    definition = pack_incident(title="2026-10-12T14:00 strike", **{"orders.0.customer": "2026-10-12T14:00:00-05:00 Piura"})
+    definition = pack_incident(title="2026-10-12T14:00 strike", **{"orders.0.customer": "2026-10-12T14:00:00-05:00 Harbor"})
     definition["shipment"]["disruption"] = "2026-10-12T14:00 the port is closed"
     try:
         register_pack({"version": 1, "incidents": [definition]})
         state = seed_state("SHIP-470", date(2026, 10, 22))
         assert state["title"] == "2026-10-12T14:00 strike"
-        assert state["orders"][0]["customer"] == "2026-10-12T14:00:00-05:00 Piura"
+        assert state["orders"][0]["customer"] == "2026-10-12T14:00:00-05:00 Harbor"
         assert state["shipment"]["disruption"] == "2026-10-12T14:00 the port is closed"
         assert state["shipment"]["original_eta"].startswith("2026-10-22T14:00:00")
     finally:
