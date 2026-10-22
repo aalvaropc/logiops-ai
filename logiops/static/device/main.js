@@ -11,6 +11,7 @@ import { createAlerts, bellText } from "../app/alerts.js";
 import { createCommands, approvalReadback } from "../app/commands.js";
 import { createStore } from "../app/store.js";
 import { createStartup } from "../app/startup.js";
+import { createFocusKeeper, loadAuthInto, openHtml, parkedPurchaseLine, showMessage } from "../app/page.js";
 import {
   visibleVersion, visibleApproval, visiblePlans, latestAgentEvent, namedPlanKinds, plural,
   recommendedPlan as pickRecommended, planFromUtterance as pickFromUtterance, TIME_ZONE,
@@ -60,11 +61,7 @@ let inFlight = false;
 let hushes = 0;
 
 function message(text, success = false) {
-  const box = $("message");
-  box.textContent = text;
-  box.className = text ? `message visible${success ? " success" : ""}` : "message";
-  box.setAttribute("role", success || !text ? "status" : "alert");
-  box.setAttribute("aria-live", success || !text ? "polite" : "assertive");
+  showMessage($("message"), text, success);
 }
 
 function tick() {
@@ -127,28 +124,19 @@ function device(method, ...args) {
   }
 }
 
-let focusBeforeBusy = null;
+const focus = createFocusKeeper({
+  defer: (work) => stage.whenGone(work),
+  fallback: (before) => {
+    const say = before?.dataset?.say;
+    return say === undefined ? null : $("chips").querySelector(`[data-say="${CSS.escape(say)}"]`) || $("chips").querySelector(".chip");
+  },
+});
 
 function setBusy(busy) {
-  if (busy && !state.busy) focusBeforeBusy = { node: document.activeElement, say: document.activeElement?.dataset?.say ?? null };
+  if (busy && !state.busy) focus.remember();
   store.set({ busy });
   renderControls();
-  if (!busy) restoreFocus();
-}
-
-function restoreFocus() {
-  const before = focusBeforeBusy;
-  focusBeforeBusy = null;
-  if (!before) return;
-  stage.whenGone(() => {
-    const usable = (node) => Boolean(node?.isConnected && !node.disabled && !node.closest("[hidden], [inert]"));
-    const active = document.activeElement;
-    if (active && active !== document.body && usable(active)) return;
-    const chips = $("chips");
-    const target = usable(before.node) ? before.node
-      : before.say !== null ? chips.querySelector(`[data-say="${CSS.escape(before.say)}"]`) || chips.querySelector(".chip") : null;
-    target?.focus({ preventScroll: true });
-  });
+  if (!busy) focus.restore();
 }
 
 function explainError(status, detail) {
@@ -222,12 +210,8 @@ function renderAccount() {
   button.textContent = state.session ? state.session.username : "Link account";
   button.setAttribute("aria-label", state.session ? `Signed in as ${state.session.username}; sign out` : "Guest, read only; link your account");
 }
-async function loadAuth() {
-  const auth = await api.loadAuth();
-  if (auth.unavailable) throw new Error("The sign-in settings could not be read.");
-  state.auth = auth;
-  if (!state.auth.enabled) keepSession(null);
-  renderAccount();
+function loadAuth() {
+  return loadAuthInto({ api, state, keepSession, renderAccount });
 }
 async function linkAccount() {
   if (!state.auth.enabled) {
@@ -611,7 +595,7 @@ async function act(work, success) {
     message(error.message || String(error));
     if (error.status === 401 && state.auth.enabled) {
       if (state.session) keepSession(null);
-      focusBeforeBusy = { node: $("account"), say: null };
+      focus.handTo($("account"));
     } else if (error.status === 401) {
       storeToken("");
       $("connection").textContent = "Token required";
@@ -640,10 +624,7 @@ function planFromUtterance(text) {
 }
 
 async function openReceipt(number) {
-  const html = await purchase.openReceipt(number);
-  const url = URL.createObjectURL(new Blob([html], { type: "text/html" }));
-  window.open(url, "_blank");
-  setTimeout(() => URL.revokeObjectURL(url), 60000);
+  openHtml(await purchase.openReceipt(number));
 }
 
 function renderAlertBell() {
@@ -916,8 +897,7 @@ function afterConnected() {
   checkAlerts().catch(() => {});
   const parked = purchase.stored();
   if (parked) {
-    say("assistant", `A booking is waiting for “${parked.quote.plan_label}” on ${parked.incidentId} (${dollars(parked.quote.total_usd)}). `
-      + "Say “resume” to hear the price again, or “no” to drop it. Nothing was charged.");
+    say("assistant", parkedPurchaseLine(parked, dollars));
   }
 }
 

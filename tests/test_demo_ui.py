@@ -218,7 +218,7 @@ def test_demo_has_basic_accessibility_hooks():
     assert "prefers-reduced-motion: reduce" in style and "prefers-reduced-motion: reduce" in (root / "demo.css").read_text()
     assert "grid-template-columns: minmax(0, 1fr)" in style
     assert 'aria-label="Conversation" tabindex="0"' in (root / "demo.html").read_text()
-    assert 'box.setAttribute("role", success || !text ? "status" : "alert")' in script
+    assert 'box.setAttribute("role", success || !text ? "status" : "alert")' in (root / "app" / "page.js").read_text() and "showMessage(" in script
     assert 'container.setAttribute("role", "radiogroup")' in (root / "console.js").read_text()
     html = (root / "demo.html").read_text()
     assert 'lang="en"' in html and 'aria-live="polite"' in html and 'frameTitle: "Resolution options (MCP App)"' in script
