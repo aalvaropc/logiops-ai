@@ -155,6 +155,7 @@ def capture(base: str, out: Path) -> list[Path]:
         visit(page, "/console#SHIP-433")
         page.wait_for_function("document.querySelector('#connection').textContent === 'Connected'")
         page.wait_for_selector("#metrics:not([hidden])")
+        settled(page)
         shot(page, "console", clip={"x": 0, "y": 0, "width": DESKTOP["width"], "height": 900})
         reset(page)
         browser.close()

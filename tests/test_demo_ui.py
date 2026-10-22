@@ -314,7 +314,7 @@ def test_the_demo_is_an_inbox_of_incidents():
 def test_the_inbox_and_the_greeting_name_the_critical_units_at_risk():
     root = Path(__file__).resolve().parents[1] / "logiops" / "static"
     script, style = (root / "console.js").read_text(), (root / "demo.css").read_text()
-    assert 'tag("at-risk", `${item.critical_units_at_risk} critical units at risk`)' in script
+    assert 'tag("at-risk", `${item.critical_units_at_risk} critical`)' in script and 'tag("visually-hidden", " units at risk")' in script
     assert 'tags.push(["at-risk", `${card.critical_units_at_risk} critical units at risk`]);' in (root / "device" / "surfaces.js").read_text()
     assert "critical units nothing on hand delivers in time" in (root / "app" / "greeting.js").read_text()
     assert ".incident-card .at-risk {" in style and ".incident-top .at-risk {" in (root / "device.css").read_text()
@@ -376,7 +376,7 @@ def test_the_demo_shows_preferences_briefings_and_speaks_the_short_line():
 
 def test_replies_show_whether_they_passed_the_data_check():
     root = Path(__file__).resolve().parents[1] / "logiops" / "static"
-    script, style, badges = (root / "console.js").read_text(), (root / "demo.css").read_text(), (root / "app" / "run-badges.js").read_text()
+    script, style, badges = (root / "console.js").read_text(), (root / "console.css").read_text(), (root / "app" / "run-badges.js").read_text()
     assert "export function checkBadge(run)" in badges and '"Checked against the data"' in badges
     assert "Did not pass the data check: ${issue}" in badges and "badges.noteCheck(run);" in _static("app", "commands.js")
     assert "check: checkBadge(agentEvent.data)" in script and "check: checkBadge(agentEvent.data)" in _static("device", "main.js")

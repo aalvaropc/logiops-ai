@@ -14,7 +14,7 @@ def test_console_walkthrough(page, replay_server, page_errors, reset_demo, width
     page.goto(f"{replay_server}/console#SHIP-421")
     expect(page.locator("#connection")).to_have_text("Connected")
     expect(page.locator("#inbox > li > button")).to_have_count(4)
-    expect(page.locator("#metrics")).to_contain_text("No plan approved yet this session")
+    expect(page.locator("#metrics")).to_contain_text("0 plans approved")
 
     say(page, "What's happening with SHIP-421?")
     expect(page.locator("#plans input[type=radio]")).to_have_count(3)
@@ -206,4 +206,4 @@ def test_times_read_the_same_24_hour_way_everywhere(page, replay_server, reset_d
     shown = page.locator("main").inner_text()
     assert not re.search(r"\d{1,2}:\d{2}\s?(AM|PM)", shown), re.findall(r".{20}\d{1,2}:\d{2}\s?(?:AM|PM)", shown)[:3]
     assert re.search(r"\b\d{2}:\d{2}\b", shown)
-    assert " h delay" in shown and not re.search(r"\dh delay", shown)
+    assert re.search(r"\+\d+ h\b", shown) and not re.search(r"\+\d+h\b", shown)

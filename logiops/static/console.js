@@ -10,16 +10,18 @@ import { recordedNote } from "./app/approval.js";
 import { createCommands } from "./app/commands.js";
 import { createStore } from "./app/store.js";
 import {
-  EVENT_LABELS, formatDate, visibleVersion, visibleApproval, visiblePlans, latestAgentEvent, byRank, allocationSummary,
+  EVENT_LABELS, formatDate, visibleVersion, visibleApproval, visiblePlans, latestAgentEvent, byRank,
   localWarehouse, namedPlanKinds, distinguishing, money, recommendedPlan as pickRecommended, planFromUtterance as pickFromUtterance,
 } from "./app/selectors.js";
 import { welcomeText as greeting } from "./app/greeting.js";
 import { checkBadge, checkNote, fallbackNote, traceSummary, executionSummary } from "./app/run-badges.js";
 import { renderMarkdown } from "./app/markdown-dom.js";
-import { sessionFigures, EMPTY_SESSION } from "./app/metrics.js";
+import { sessionFigures } from "./app/metrics.js";
 import { drawField } from "./app/field-dom.js";
 import { createStartup } from "./app/startup.js";
 import { createFocusKeeper, loadAuthInto, openHtml, parkedPurchaseLine, showMessage } from "./app/page.js";
+import { drawMap, drawBars, stepLabel } from "./device/render.js";
+import { displayPlan } from "./device/surfaces.js";
 
 const $ = (id) => document.getElementById(id);
 const DEFAULT_INCIDENT = "SHIP-421";
@@ -97,11 +99,16 @@ const checkAlerts = () => alerts.check();
 
 function renderAccount() {
   const box = $("account");
+  const name = state.session?.username || "";
   box.hidden = !state.auth.enabled;
   box.classList.toggle("signed-in", Boolean(state.session));
-  $("account-status").textContent = state.session ? `Signed in as ${state.session.username}` : "Guest · read only";
+  $("account-status").textContent = state.session ? `Signed in as ${name}` : "Guest · read only";
   $("link-account").hidden = Boolean(state.session);
-  $("sign-out").hidden = !state.session;
+  $("account-menu").hidden = !state.session;
+  if (!state.session) $("account-menu").open = false;
+  $("account-name").textContent = name;
+  document.querySelector("#account-menu .avatar").textContent = name.slice(0, 1);
+  $("account-detail").textContent = `Signed in as ${name}. You can approve, execute and book.`;
 }
 function loadAuth() {
   return loadAuthInto({ api, state, keepSession, renderAccount });
@@ -130,6 +137,12 @@ function renderPlans(snapshot) {
   container.setAttribute("role", "radiogroup");
   container.setAttribute("aria-label", "Resolution plans");
   const plans = visiblePlans(snapshot);
+  const cell = (className, text) => {
+    const node = document.createElement("span");
+    node.className = className;
+    node.textContent = text;
+    return node;
+  };
   if (!plans.length) {
     drawField($("plans-field"), [], null, { shapes: window.LogiOpsField });
     const empty = document.createElement("div");
@@ -139,6 +152,7 @@ function renderPlans(snapshot) {
     return;
   }
   const approval = visibleApproval(snapshot);
+  const executedId = snapshot.executions[0]?.plan_id;
   const recommended = recommendedPlan(snapshot);
   if (approval) {
     state.selectedPlanId = approval.plan_id;
@@ -146,6 +160,25 @@ function renderPlans(snapshot) {
     state.selectedPlanId = recommended?.id || plans[0].id;
   }
   drawField($("plans-field"), plans, state.selectedPlanId, { shapes: window.LogiOpsField, id: "plans-field" });
+  const orders = plans[0].orders || [];
+  const columns = orders.length && orders.length <= 3 ? orders : null;
+  container.style.setProperty("--orders", String(columns ? columns.length : 1));
+  const head = document.createElement("div");
+  head.className = "plan-head";
+  head.setAttribute("aria-hidden", "true");
+  head.append(cell("", ""), cell("", "Plan"));
+  for (const order of columns || [{ customer: "Delay" }]) {
+    const name = cell("order-head", order.customer);
+    if (order.priority === "critical") name.prepend(cell("critical-tag", "Critical"));
+    head.append(name);
+  }
+  head.append(cell("", "Extra"));
+  container.append(head);
+  const outcome = (hours, who) => {
+    const node = cell(`outcome${hours ? " late" : ""}`, hours ? `+${hours} h` : "On time");
+    if (who) node.prepend(cell("visually-hidden", `${who}: `));
+    return node;
+  };
   const labels = plans.map((plan) => plan.label);
   for (const plan of plans) {
     const isRecommended = plan.id === recommended?.id;
@@ -160,10 +193,10 @@ function renderPlans(snapshot) {
     radio.addEventListener("change", () => {
       state.selectedPlanId = plan.id;
       renderPlans(snapshot);
+      renderJourney(snapshot);
       renderControls();
     });
     if (hadFocus && radio.checked) queueMicrotask(() => radio.focus({ preventScroll: true }));
-    const description = document.createElement("div");
     const title = document.createElement("strong");
     distinguishing(plan.label, labels).forEach(([text, marked], index) => {
       const space = index ? " " : "";
@@ -177,45 +210,23 @@ function renderPlans(snapshot) {
       title.append(...[space, mark].filter(Boolean));
     });
     const badges = [];
+    if (executedId === plan.id) badges.push(["Executed", "badge done"]);
+    else if (approval?.plan_id === plan.id) badges.push(["Approved", "badge done"]);
     if (isRecommended) badges.push(["Agent pick", "badge"]);
     if (plan.id === snapshot.preference?.preferred_plan_id) badges.push(["Your preference", "badge preference"]);
-    if (plan.projected_customer_delay_hours === 0) badges.push(["Zero delay", "badge"]);
-    for (const [text, className] of badges) {
-      const badge = document.createElement("span");
-      badge.className = className;
-      badge.textContent = text;
-      title.append(badge);
-    }
-    const allocation = document.createElement("small");
-    allocation.textContent = allocationSummary(plan);
-    description.append(title, allocation);
-    if ((plan.orders || []).length > 1) {
-      const lines = document.createElement("div");
-      lines.className = "order-lines";
-      for (const order of plan.orders) {
-        const line = document.createElement("span");
-        line.textContent = `${order.order_id} · ${order.customer}${order.priority === "critical" ? " (critical)" : ""}`;
-        const outcome = document.createElement("span");
-        outcome.className = `outcome${order.delay_hours ? " late" : ""}`;
-        outcome.textContent = order.delay_hours ? `+${order.delay_hours} h` : "on time";
-        line.append(outcome);
-        lines.append(line);
+    for (const [text, className] of badges) title.append(cell(className, text));
+    card.append(radio, title);
+    if (columns) {
+      for (const column of columns) {
+        const order = (plan.orders || []).find((item) => item.order_id === column.order_id);
+        card.append(outcome(order?.delay_hours || 0, column.customer));
       }
-      description.append(lines);
+    } else {
+      card.append(outcome(plan.projected_customer_delay_hours, "Delay"));
     }
-    const eta = document.createElement("div");
-    eta.className = "plan-value";
-    eta.textContent = formatDate(plan.projected_completion_eta);
-    const etaLabel = document.createElement("small");
-    etaLabel.textContent = `${plan.projected_customer_delay_hours} h delay`;
-    eta.append(etaLabel);
-    const cost = document.createElement("div");
-    cost.className = "plan-value";
-    cost.textContent = money(plan.incremental_cost_usd);
-    const costLabel = document.createElement("small");
-    costLabel.textContent = "extra";
-    cost.append(costLabel);
-    card.append(radio, description, eta, cost);
+    const cost = cell("plan-value", money(plan.incremental_cost_usd));
+    cost.prepend(cell("visually-hidden", "Extra: "));
+    card.append(cost);
     container.append(card);
   }
 }
@@ -272,13 +283,28 @@ function renderConversation() {
   const entries = state.conversation.length ? state.conversation : [{ role: "assistant", text: welcomeText() }];
   for (const entry of entries) {
     const item = document.createElement("li");
-    item.className = `turn ${entry.role}`;
+    const note = String(entry.meta || "").startsWith("welcome back");
+    item.className = `turn ${entry.role}${note ? " note" : ""}`;
     const who = document.createElement("span");
     who.className = "turn-role";
     who.textContent = entry.role === "user" ? "You" : "LogiOps";
-    const text = entry.role === "assistant" ? renderMarkdown(entry.text) : document.createElement("p");
-    if (entry.role !== "assistant") text.textContent = entry.text;
-    item.append(who, text);
+    item.append(who);
+    if (entry.role !== "assistant") {
+      const text = document.createElement("p");
+      text.textContent = entry.text;
+      item.append(text);
+    } else if (entry.text.length > 280 && !note) {
+      const lead = document.createElement("p");
+      lead.className = "spoken";
+      lead.textContent = entry.spoken || leadSentence(entry.text);
+      const full = document.createElement("details");
+      const summary = document.createElement("summary");
+      summary.textContent = "Full answer";
+      full.append(summary, renderMarkdown(entry.text));
+      item.append(lead, full);
+    } else {
+      item.append(renderMarkdown(entry.text));
+    }
     if (entry.check) {
       const badge = document.createElement("span");
       badge.className = `check-badge${entry.check.passed ? "" : " failed"}`;
@@ -292,7 +318,66 @@ function renderConversation() {
     }
     list.append(item);
   }
-  list.scrollTop = list.scrollHeight;
+  if (list.scrollHeight > list.clientHeight) list.scrollTop = list.scrollHeight;
+}
+
+function leadSentence(text) {
+  const plain = window.LogiOpsMarkdown.plainText(text).replace(/\s+/g, " ").trim();
+  const first = plain.match(/^.{20,200}?[.!?](?=\s|$)/);
+  return first ? first[0] : `${plain.slice(0, 180).trim()}…`;
+}
+
+const stations = {
+  live: false,
+  steps: [],
+  start() {
+    this.live = true;
+    this.steps = [];
+    paintStations([], { waiting: true });
+  },
+  step(step, kind) {
+    if (kind === "restart") this.steps = [];
+    else this.steps.push(step);
+    paintStations(this.steps, { waiting: true, fresh: true });
+  },
+  stop() {
+    this.live = false;
+  },
+};
+
+function renderStations(run) {
+  paintStations(run?.tool_trace || [], { check: run ? checkBadge(run) : null });
+}
+
+function paintStations(steps, { waiting = false, check = null, fresh = false } = {}) {
+  const list = $("agent-steps");
+  list.replaceChildren();
+  const station = (className, label, detail) => {
+    const item = document.createElement("li");
+    if (className) item.className = className;
+    const name = document.createElement("b");
+    name.textContent = label;
+    item.append(name);
+    if (detail) {
+      const small = document.createElement("span");
+      small.textContent = detail;
+      item.append(small);
+    }
+    list.append(item);
+  };
+  steps.forEach((step, index) => {
+    const last = fresh && index === steps.length - 1;
+    station([step.is_error ? "error" : "", last ? "fresh" : ""].filter(Boolean).join(" "), stepLabel(step).replace(/ · (\d+) (?:quotes|plans|incidents)\b/, " · $1"), step.tool);
+  });
+  if (waiting) station("waiting", steps.length ? "Working" : "Reading the incident", null);
+  else if (check && steps.length) station(`check${check.passed ? "" : " failed"}`, check.text, null);
+}
+
+function renderJourney(snapshot) {
+  const plan = displayPlan(snapshot, state.selectedPlanId, recommendedPlan(snapshot));
+  const marks = { route: window.LogiOpsRoute, journey: window.LogiOpsJourney };
+  drawMap($("console-map-svg"), $("console-map-caption"), snapshot, plan, { ...marks, id: "console-map" });
+  drawBars($("console-bars"), plan, marks, snapshot.state.shipment, document, snapshot.state.orders);
 }
 
 function welcomeText() {
@@ -317,7 +402,7 @@ async function recallMemory() {
 }
 
 function say(role, text, meta, spoken, check) {
-  state.conversation.push({ role, text, meta, check });
+  state.conversation.push({ role, text, meta, check, spoken });
   renderConversation();
   if (!state.forgetting && !String(meta || "").startsWith("welcome back")) remember(role, role === "assistant" ? (spoken || window.LogiOpsMarkdown.plainText(text)) : text);
   if (role !== "assistant") return;
@@ -357,7 +442,7 @@ function renderControls() {
   for (const chip of document.querySelectorAll(".chip")) chip.disabled = state.busy || !snapshot;
   $("approve").disabled = state.busy || !hasCurrentPlan || !state.selectedPlanId || approved || executed;
   const selected = snapshot && !approved && !executed && visiblePlans(snapshot).find((plan) => plan.id === state.selectedPlanId);
-  $("approve").textContent = selected ? `Approve “${selected.label}”` : "Approve selected plan";
+  $("approve").textContent = selected && selected.id === recommendedPlan(snapshot)?.id ? "Approve the pick" : "Approve selected plan";
   $("execute").disabled = state.busy || !approved || executed;
   $("reset").disabled = state.busy;
   $("banner-reset").disabled = state.busy;
@@ -372,6 +457,7 @@ function renderControls() {
 function renderInbox() {
   const list = $("inbox");
   const focused = list.contains(document.activeElement) ? document.activeElement.dataset.incident : null;
+  const longestDelay = Math.max(1, ...state.inbox.map((item) => item.delay_hours || 0));
   list.replaceChildren();
   const tag = (className, text) => {
     const node = document.createElement("span");
@@ -386,15 +472,28 @@ function renderInbox() {
     card.className = "incident-card";
     card.dataset.incident = item.incident_id;
     card.setAttribute("aria-pressed", String(item.incident_id === state.incidentId));
+    const done = item.status === "executed";
+    card.classList.toggle("done", done);
     const top = tag("incident-top", "");
-    top.append(tag("incident-id", item.incident_id), tag("kind", item.kind_label));
-    if (item.priority === "critical") top.append(tag("critical", "Critical order"));
-    if (item.critical_units_at_risk > 0) top.append(tag("at-risk", `${item.critical_units_at_risk} critical units at risk`));
-    top.append(tag("state", item.status));
-    if (item.incident_id === state.briefingPick) top.append(tag("start-here", "Start here"));
-    const due = document.createElement("small");
-    due.textContent = `${item.route} · ${item.units} units · due ${formatDate(item.due_eta)}`;
-    card.append(top, tag("incident-text", item.title), due);
+    top.append(tag("incident-id", item.incident_id));
+    if (item.critical_units_at_risk > 0) {
+      const risk = tag("at-risk", `${item.critical_units_at_risk} critical`);
+      risk.append(tag("visually-hidden", " units at risk"));
+      top.append(risk);
+    } else if (item.priority === "critical") {
+      top.append(tag("critical", "Critical order"));
+    }
+    const trail = tag("mini", "");
+    trail.style.setProperty("--delay", `${Math.round((item.delay_hours || 0) / longestDelay * 48)}%`);
+    trail.setAttribute("aria-hidden", "true");
+    const delayLabel = document.createElement("b");
+    delayLabel.textContent = `+${item.delay_hours || 0} h`;
+    trail.append(document.createElement("i"), delayLabel);
+    const foot = tag("incident-foot", "");
+    foot.append(trail);
+    if (item.incident_id === state.briefingPick) foot.append(tag("start-here", "Start here"));
+    else if (item.status !== "detected") foot.append(tag("state", item.status));
+    card.append(top, tag("incident-text", `${item.kind_label} · ${item.route.split("→").pop().trim()}`), foot);
     card.addEventListener("click", () => selectIncident(item.incident_id).catch(() => {}));
     entry.append(card);
     list.append(entry);
@@ -415,11 +514,11 @@ function render(snapshot) {
   $("incident-title").textContent = incident.title;
   $("incident-route").textContent = `${shipment.origin} → ${shipment.destination} · ${units} units of ${shipment.sku} · `
     + (incident.orders.length === 1 ? "1 order" : `${incident.orders.length} orders`);
-  $("incident-status").textContent = incident.status;
-  $("promise-label").textContent = incident.orders.length === 1 ? "Customer promise" : "Shipment's original ETA";
+  $("incident-status").textContent = incident.status[0].toUpperCase() + incident.status.slice(1);
+  $("promise-label").textContent = incident.orders.length === 1 ? "Customer promise" : "Original ETA";
   const warehouse = localWarehouse(snapshot);
   $("stock-value").textContent = warehouse ? `${incident.inventory[warehouse].available} units` : "None";
-  $("stock-label").textContent = warehouse ? `${warehouse[0].toUpperCase()}${warehouse.slice(1)} warehouse` : "No local warehouse";
+  $("stock-label").textContent = warehouse ? `Stock at ${warehouse[0].toUpperCase()}${warehouse.slice(1)}` : "Local stock";
   $("stock-scope").textContent = warehouse ? `(${warehouse[0].toUpperCase()}${warehouse.slice(1)} warehouse; invalidates approvals)` : "(this incident has no local warehouse)";
   if (state.stockFor !== incident.incident_id) {
     state.stockFor = incident.incident_id;
@@ -427,16 +526,23 @@ function render(snapshot) {
     $("stock-input").value = warehouse ? String(Math.max(0, incident.inventory[warehouse].available - 1)) : "";
   }
   $("chip-status").dataset.say = `What's happening with shipment ${incident.incident_id}, and which plan should we choose?`;
-  $("chip-status").textContent = `What's happening with ${incident.incident_id}?`;
+  $("chip-status").textContent = `Status of ${incident.incident_id}`;
   $("original-eta").textContent = formatDate(shipment.original_eta);
   $("delayed-eta").textContent = formatDate(shipment.delayed_eta);
   const delay = Math.round((new Date(shipment.delayed_eta) - new Date(shipment.original_eta)) / 3600000);
-  $("delay-hours").textContent = `+${delay} hours`;
+  $("delay-hours").textContent = `+${delay} h`;
   const agentEvent = latestAgentEvent(snapshot);
-  $("agent-mode").textContent = agentEvent ? agentEvent.data.mode : "Agent";
+  const mode = agentEvent?.data.mode;
+  $("agent-mode").textContent = mode === "bedrock" ? "Live · Amazon Bedrock" : mode === "replay" ? "Replay · scripted model" : mode || "Ready";
+  $("agent-mode").classList.toggle("live", mode === "bedrock");
   if (!state.conversation.length && agentEvent) {
-    state.conversation.push({ role: "assistant", text: agentEvent.data.display_answer || agentEvent.data.answer, meta: traceSummary(agentEvent.data), check: checkBadge(agentEvent.data) });
+    state.conversation.push({
+      role: "assistant", text: agentEvent.data.display_answer || agentEvent.data.answer, meta: traceSummary(agentEvent.data), check: checkBadge(agentEvent.data),
+      spoken: agentEvent.data.spoken,
+    });
   }
+  if (!stations.live) renderStations(agentEvent?.data || null);
+  renderJourney(snapshot);
   renderConversation();
   renderPreferenceLine(snapshot);
   renderPreferences(snapshot);
@@ -480,21 +586,15 @@ async function refresh() {
 async function loadMetrics() {
   const metrics = await request("/metrics");
   const box = $("metrics");
-  const figures = sessionFigures(metrics.session);
+  const figures = sessionFigures(metrics.session, { always: true });
   box.replaceChildren();
-  box.classList.toggle("empty", !figures.length);
-  if (!figures.length) {
-    const item = document.createElement("li");
-    item.textContent = EMPTY_SESSION;
-    box.append(item);
-  }
   for (const [value, label] of figures) {
     const item = document.createElement("li");
     const figure = document.createElement("strong");
     figure.textContent = value;
     const caption = document.createElement("span");
     caption.textContent = label;
-    item.append(figure, caption);
+    item.append(figure, " ", caption);
     box.append(item);
   }
   box.hidden = false;
@@ -631,6 +731,10 @@ const commands = createCommands({
   preferences: { describe: describePreferences, effect: effectOf },
   say, act, stopSpeaking, selectIncident, onInbox: () => renderInbox(),
   approvePlan, executeApproved, savePreferences, linkAccount, signOut,
+  investigate: (path, body) => {
+    stations.start();
+    return api.streamed(`${path}/stream`, body, (step, kind) => stations.step(step, kind)).finally(() => stations.stop());
+  },
 });
 
 function handleUtterance(raw) {
@@ -757,6 +861,14 @@ $("set-stock").addEventListener("click", () => act(async () => {
   state.selectedPlanId = null;
 }, "Stock changed. Earlier plans and approvals no longer apply.").then(checkAlerts).catch(() => {}));
 $("link-account").addEventListener("click", () => { linkAccount().catch((error) => message(error.message || String(error))); });
+document.addEventListener("click", (event) => {
+  if ($("account-menu").open && !$("account-menu").contains(event.target)) $("account-menu").open = false;
+});
+document.addEventListener("keydown", (event) => {
+  if (event.key !== "Escape" || !$("account-menu").open) return;
+  $("account-menu").open = false;
+  $("account-menu").querySelector("summary").focus();
+});
 $("sign-out").addEventListener("click", () => {
   signOut();
   message("Signed out. You're a guest: you can read and ask, but not act.", true);

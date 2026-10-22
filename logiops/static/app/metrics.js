@@ -11,8 +11,8 @@ export function seconds(value) {
 
 export const EMPTY_SESSION = "No plan approved yet this session. Outcomes appear here as you decide.";
 
-export function sessionFigures(totals) {
-  if (!totals.decided && !totals.executed && !totals.booked_usd) return [];
+export function sessionFigures(totals, { always = false } = {}) {
+  if (!always && !totals.decided && !totals.executed && !totals.booked_usd) return [];
   return [
     [`${totals.executed} of ${totals.incidents}`, plural(totals.incidents, "incident executed", "incidents executed")],
     [String(totals.decided), plural(totals.decided, "plan approved", "plans approved")],
