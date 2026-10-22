@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 import re
+import threading
 from copy import deepcopy
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
@@ -163,6 +164,8 @@ ORDER_ID_PATTERN = re.compile(r"ORD-\d+[A-Z]?")
 NAME_PATTERN = re.compile(r"[a-z][a-z0-9-]*")
 KIND_PATTERN = re.compile(r"[a-z][a-z_-]*")
 PACK_VERSION = 1
+FIRST_YEAR, LAST_YEAR = 2000, 2099
+REGISTRY_LOCK = threading.Lock()
 
 
 class ScenarioPackError(ValueError):
@@ -186,21 +189,23 @@ def builtin_incidents() -> list[dict[str, Any]]:
 
 def reset_registry() -> None:
     """Forget every registered pack; the built-ins stay."""
-    for incident_id in [item for item in INCIDENTS if item not in BUILTIN_DEFINITIONS]:
-        del INCIDENTS[incident_id]
-        PLAYBOOKS.pop(incident_id, None)
-    for kind in [item for item in KIND_LABELS if item not in BUILTIN_KINDS]:
-        del KIND_LABELS[kind]
+    with REGISTRY_LOCK:
+        for incident_id in [item for item in INCIDENTS if item not in BUILTIN_DEFINITIONS]:
+            del INCIDENTS[incident_id]
+            PLAYBOOKS.pop(incident_id, None)
+        for kind in [item for item in KIND_LABELS if item not in BUILTIN_KINDS]:
+            del KIND_LABELS[kind]
 
 
 def _timestamp(value: Any) -> bool:
+    """An ISO 8601 time with the -05:00 offset in a year the scenario clock can move whole days from and to."""
     if not isinstance(value, str) or not ISO_TIMESTAMP.match(value) or not value.endswith("-05:00"):
         return False
     try:
-        datetime.fromisoformat(value)
+        moment = datetime.fromisoformat(value)
     except ValueError:
         return False
-    return True
+    return moment.utcoffset() == LIMA.utcoffset(None) and FIRST_YEAR <= moment.year <= LAST_YEAR
 
 
 def _problems(definition: Any, incidents: dict[str, dict[str, Any]], kind_labels: dict[str, str]) -> list[dict[str, str]]:
@@ -348,31 +353,34 @@ def register_incident(definition: dict[str, Any]) -> str:
 
 
 def register_pack(pack: Any) -> list[str]:
-    """Register every incident of a pack {"version": 1, "incidents": [...]}; nothing is kept if any fails."""
+    """Register every incident of a pack {"version": 1, "incidents": [...]}; nothing is kept if any fails.
+    One registration at a time runs from the snapshot to the commit, so two packs cannot both claim an id."""
     if not isinstance(pack, dict) or pack.get("version") != PACK_VERSION or not isinstance(pack.get("incidents"), list):
         raise ScenarioPackError([{"incident": "?", "path": "", "message": f'a pack is {{"version": {PACK_VERSION}, "incidents": [...]}}'}])
     problems: list[dict[str, str]] = []
-    incidents, playbooks, kind_labels = dict(INCIDENTS), dict(PLAYBOOKS), dict(KIND_LABELS)
     registered: list[str] = []
-    for definition in pack["incidents"]:
-        errors = _problems(definition, incidents, kind_labels)
-        if errors:
-            problems.extend(errors)
-            continue
-        incident_id = definition["id"]
-        stored = {key: deepcopy(value) for key, value in definition.items() if key not in ("id", "options", "kind_label")}
-        stored.setdefault("inventory", {})
-        stored.setdefault("carriers", {})
-        incidents[incident_id] = stored
-        playbooks[incident_id] = deepcopy(definition["options"])
-        if definition["kind"] not in kind_labels:
-            kind_labels[definition["kind"]] = definition["kind_label"]
-        registered.append(incident_id)
-    if problems:
-        raise ScenarioPackError(problems)
-    INCIDENTS.update(incidents)
-    PLAYBOOKS.update(playbooks)
-    KIND_LABELS.update(kind_labels)
+    with REGISTRY_LOCK:
+        incidents, playbooks, kind_labels = dict(INCIDENTS), dict(PLAYBOOKS), dict(KIND_LABELS)
+        for definition in pack["incidents"]:
+            errors = _problems(definition, incidents, kind_labels)
+            if errors:
+                problems.extend(errors)
+                continue
+            incident_id = definition["id"]
+            stored = {key: deepcopy(value) for key, value in definition.items() if key not in ("id", "options", "kind_label")}
+            stored.setdefault("inventory", {})
+            stored.setdefault("carriers", {})
+            incidents[incident_id] = stored
+            playbooks[incident_id] = deepcopy(definition["options"])
+            if definition["kind"] not in kind_labels:
+                kind_labels[definition["kind"]] = definition["kind_label"]
+            registered.append(incident_id)
+        if problems:
+            raise ScenarioPackError(problems)
+        # Readers take no lock, so an incident is added last: whoever sees it also finds its playbook and kind label.
+        PLAYBOOKS.update(playbooks)
+        KIND_LABELS.update(kind_labels)
+        INCIDENTS.update(incidents)
     return registered
 
 
@@ -391,12 +399,12 @@ def _seed(incident_id: str) -> dict[str, Any]:
 
 def _shifted(value: Any, days: int) -> Any:
     """The seed with every timestamp in it moved by whole days (times of day and offsets kept).
-    Any ISO timestamp moves, so a field added later can never be left behind."""
+    Any timestamp moves, so a field added later can never be left behind; text that only starts like one stays."""
     if isinstance(value, dict):
         return {key: _shifted(item, days) for key, item in value.items()}
     if isinstance(value, list):
         return [_shifted(item, days) for item in value]
-    if isinstance(value, str) and ISO_TIMESTAMP.match(value):
+    if _timestamp(value):
         return (datetime.fromisoformat(value) + timedelta(days=days)).isoformat()
     return value
 
