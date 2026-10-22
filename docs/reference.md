@@ -484,7 +484,11 @@ It scans right after `POST /demo/inventory`, and in the background every
 `LOGIOPS_ALERT_SCAN_SECONDS` (30 by default; 0 turns it off). The endpoints
 are `GET /alerts` and `POST /alerts/{id}/dismiss`, and MCP clients read the
 alerts with `list_alerts`. The device is one of them: every ten seconds it calls
-`list_alerts` over `/mcp` (the console reads `GET /alerts`), and then:
+`list_alerts` over `/mcp` (and `GET /alerts` if MCP refuses; the console reads
+`GET /alerts`). The device acknowledges an alert it shows, which dismisses it for
+MCP clients too; the console shows it without acknowledging and remembers it for
+the tab, so a stock change applied from the console still reaches the device.
+Then:
 - an alert for the open incident is spoken and written in the conversation,
   with the new pick preselected for approval;
 - an alert for another incident lights up a bell in the top bar that opens
@@ -578,7 +582,8 @@ botocore's service model without a paid call. The browser walkthroughs
 violations at 1440 and 390 px) need the `browser` extra and a browser:
 `uv sync --extra dev --extra browser`, `uv run playwright install --only-shell chromium`,
 then `LOGIOPS_BROWSER=1 uv run pytest -q tests/browser`. CI runs them in the
-`browser` job.
+`browser` job, in Chromium and again in Firefox (`uv run playwright install firefox`,
+then `--browser firefox`).
 
 A public HTTPS deployment runs on AWS (CloudFront, EC2, Bedrock); its URL and
 access token are in the submission's testing instructions. The infrastructure

@@ -325,8 +325,16 @@ that follow from them, with priorities, are in `feature-requests.md`.
     between the official client and server with no glue code.
   - `TransportSecuritySettings` checks Host and Origin: a foreign `Origin` gets
     403 on the deployment (checked 2026-10-21).
-- **Needs work:** guidance for self-hosted servers that are not OAuth
-  providers (a bearer token behind a CDN) is thin.
+- **Needs work:**
+  - Guidance for self-hosted servers that are not OAuth providers (a bearer
+    token behind a CDN) is thin.
+  - With `stateless_http=True` the server still answers `GET /mcp` with an event
+    stream that can never carry a message and stays open, a ping every 15 s,
+    until the client leaves; each one holds a socket. We answer 405 ourselves,
+    as the transport allows (found 2026-10-22 with MCP Inspector, which opens
+    that stream after connecting). A numeric argument such as `433` for a
+    `str` parameter also fails validation before the tool runs, with a raw
+    pydantic message.
 - **Onboarding:** on 2026-10-05 a local official client negotiated 2025-11-25
   and called `get_shipment`.
 - **Would build with it again:** yes.
@@ -362,6 +370,12 @@ that follow from them, with priorities, are in `feature-requests.md`.
     every host author the same work.
   - Tool `visibility` defaults to `["model", "app"]`, so a state-changing tool
     is callable from views unless you opt out.
+  - Firefox reports the host's origin in `location.ancestorOrigins` as
+    `"null"` when the host frame sends no referrer, as the HTML specification
+    says. Our proxy checked that list against the host and stayed silent, so
+    no view loaded in Firefox until we found it on 2026-10-22 (library 1.3.1).
+    A reference proxy, and a note that `ancestorOrigins` may be masked, would
+    spare other host authors the same bug.
 - **Onboarding:** we wrote the host bridge (about 130 lines) and the sandbox
   page (about 90 lines) from the specification text, with no SDK.
 - **Would build with it again:** yes.

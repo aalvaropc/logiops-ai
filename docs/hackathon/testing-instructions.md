@@ -214,6 +214,8 @@ at 1440 and 390 px) run with the `browser` extra and a Chromium headless shell:
 uv sync --extra dev --extra browser
 uv run playwright install --only-shell chromium
 LOGIOPS_BROWSER=1 uv run pytest -q tests/browser
+uv run playwright install firefox
+LOGIOPS_BROWSER=1 uv run pytest -q tests/browser --browser firefox
 ```
 
 `scripts/clean_room.sh <ref>` clones a ref into a temporary directory and runs the
