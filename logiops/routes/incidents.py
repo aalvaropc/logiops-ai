@@ -7,7 +7,7 @@ from typing import Any
 
 from fastapi import APIRouter, Request
 
-from ..identity import OPERATOR, actor_of, profile_of
+from ..identity import OPERATOR, actor_of, has_permission, profile_of
 from ..metrics import incident_metrics, session_metrics
 from ..preferences import preference_for
 from ..presentation import customer_text
@@ -58,9 +58,9 @@ def router(ctx: Context) -> APIRouter:
 
     @routes.get("/metrics")
     async def metrics() -> dict[str, Any]:
-        """Outcome metrics from the recorded events and bookings, per incident and for the session. Nothing is estimated."""
         items = [incident_metrics(service.get(incident_id), bookings.for_incident(incident_id)) for incident_id in incident_ids()]
-        return {"incidents": items, "session": session_metrics(items)}
+        public = [{key: value for key, value in item.items() if key not in ("booking_number", "booking_total_usd")} for item in items]
+        return {"incidents": public, "session": session_metrics(items)}
 
     @routes.get("/incidents/{incident_id}")
     async def get_incident(incident_id: str, request: Request) -> dict[str, Any]:
@@ -73,7 +73,7 @@ def router(ctx: Context) -> APIRouter:
         return {
             **snapshot, "operator_preferences": saved,
             "preference": preference_for(visible_plans(snapshot), saved),
-            "bookings": bookings.for_incident(incident_id),
+            "bookings": bookings.for_incident(incident_id) if has_permission(request, "incidents.operate") else [],
         }
 
     @routes.post("/incidents/{incident_id}/investigate")

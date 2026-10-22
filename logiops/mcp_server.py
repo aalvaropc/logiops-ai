@@ -23,7 +23,7 @@ from pydantic import Field
 from . import __version__
 from .alerts import AlertWatcher
 from .booking import BookingStore, receipt_text
-from .identity import OPERATOR, Actor, actor_of, profile_of
+from .identity import OPERATOR, Actor, actor_of, has_permission, profile_of
 from .mcp_models import (
     AlertList, Booking, CarrierQuote, Execution, ExecutionStatus, IncidentList, Investigation, Order, OrderId, Quote, Shipment,
     ShipmentId, Stock,
@@ -325,8 +325,11 @@ def create_mcp_server(
     @server.tool(title="Get booking", annotations=READ, icons=[RECEIPT])
     async def get_booking(
         number: Annotated[str, Field(description="Confirmation number, such as LGO-7K2M9Q.", min_length=3, max_length=20)],
+        ctx: Context,
     ) -> Booking:
         """Read a booking and its receipt by confirmation number."""
+        if not has_permission(ctx.request_context.request, "incidents.operate"):
+            raise ToolError("Sign in with incidents.operate to read a booking")
         try:
             return bookings.get(number)
         except WorkflowError as exc:
@@ -373,7 +376,9 @@ def create_mcp_server(
         description="A booking's receipt as Markdown: the price breakdown, payment and confirmation number.",
         mime_type="text/markdown",
     )
-    def booking_receipt(number: str) -> str:
+    def booking_receipt(number: str, ctx: Context) -> str:
+        if not has_permission(ctx.request_context.request, "incidents.operate"):
+            raise PermissionError("Sign in with incidents.operate to read a receipt")
         try:
             return receipt_text(bookings.get(number))
         except WorkflowError as exc:

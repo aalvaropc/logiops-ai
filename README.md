@@ -61,9 +61,11 @@ carrier outage SHIP-433:
 | Booking | $466.10 with tax, charged once |
 | Cost of the run | about US$0.04 of Bedrock usage |
 
-`GET /metrics` reports the times, outcomes, bookings, model calls and tokens per
-incident and per session, from the recorded events. The answer and streaming
-times are what the client measured through CloudFront.
+`GET /metrics` publicly reports times, outcomes, model calls and tokens per
+incident and per session, plus the session total booked. Booking numbers and
+amounts per incident require operator access through the incident, booking or
+receipt endpoints. All metrics come from recorded events. The answer and
+streaming times are what the client measured through CloudFront.
 
 ## Run it locally
 
