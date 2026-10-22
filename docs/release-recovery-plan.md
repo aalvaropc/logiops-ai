@@ -3,7 +3,7 @@
 The read-only plan was generated from the deployed local state copied to a
 private temporary file, using Terraform 1.15.1 and the locked AWS provider
 6.67.0. Existing notification input was preserved. The configuration reviewed
-was commit `d22d656` on `chore/release-recovery`.
+was commit `862d94d` on `chore/release-recovery`.
 
 The result is **7 creates, 0 updates, 0 replacements, 0 deletes**:
 
@@ -27,7 +27,9 @@ syntax and ShellCheck, a consistent backup while WAL contains committed and
 uncommitted writes, temporary restoration, failed-backup preservation, cleanup
 after verification failures, and repeatable archive metadata.
 
-A later change adds a delete-marker cleanup rule to the lifecycle resource and
-`s3:AbortMultipartUpload` to the role policy. Both live inside resources already
-in the table, so the plan stays at 7 creates by construction, but it was not
-generated again: re-plan before applying.
+The refreshed plan includes the delete-marker cleanup rule and
+`s3:AbortMultipartUpload` permission. It confirms the same seven creates with
+no changes to existing resources. The reviewed scripts also require a verified
+pre-deployment backup, reject sidecar symlink traversal during ownership cleanup,
+and check the reset unit before installing files. No Terraform apply, SSM
+installation or deployment was performed.
