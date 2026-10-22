@@ -5,14 +5,23 @@ export function createStartup({
 } = {}) {
   let turn = 0;
   let failed = false;
+  let attempting = false;
 
   async function start() {
+    if (attempting) return false;
     const mine = ++turn;
     for (let index = 0; ; index += 1) {
+      let error = null;
+      attempting = true;
       try {
         await attempt();
-      } catch (error) {
-        if (mine !== turn) return false;
+      } catch (caught) {
+        error = caught ?? new Error("The attempt failed");
+      } finally {
+        attempting = false;
+      }
+      if (mine !== turn) return false;
+      if (error) {
         failed = true;
         const retryIn = retryable(error) ? delays[index] ?? null : null;
         onFailure(error, { retryIn });
@@ -21,7 +30,6 @@ export function createStartup({
         if (mine !== turn) return false;
         continue;
       }
-      if (mine !== turn) return false;
       const recovered = failed;
       failed = false;
       onSuccess(recovered);

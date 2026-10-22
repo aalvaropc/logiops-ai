@@ -141,15 +141,16 @@ export function createApi({ fetch: doFetch, storage, crypto: webCrypto, origin, 
     const failure = params.get("error");
     if (!code && !failure) return null;
     const pending = vault.getJson(OAUTH_KEY);
-    vault.remove(OAUTH_KEY);
     const outcome = { session: null, note: "", path: `${pending?.returnTo || SIGN_IN_PATH}${pending?.hash || hash}` };
     if (failure || !pending || params.get("state") !== pending.state || !current().auth.enabled) {
+      vault.remove(OAUTH_KEY);
       outcome.note = failure
         ? "Sign-in was cancelled, so you're still a guest."
         : "That sign-in didn't match this browser's request, so I ignored it. Say “link my account” to try again.";
       return outcome;
     }
     const body = await tokenGrant({ grant_type: "authorization_code", code, redirect_uri: `${origin}${SIGN_IN_PATH}`, code_verifier: pending.verifier });
+    vault.remove(OAUTH_KEY);
     if (!body) {
       outcome.note = "Sign-in didn't complete. Say “link my account” to try again.";
       return outcome;

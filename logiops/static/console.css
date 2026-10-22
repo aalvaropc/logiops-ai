@@ -26,3 +26,4 @@
 @media (max-width: 760px) {
   .console-head { grid-template-columns: minmax(0, 1fr); align-items: start; padding: 26px 0 18px; }
 }
+.retry { margin: 0 0 16px; }

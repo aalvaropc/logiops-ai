@@ -311,7 +311,7 @@ async function recallMemory() {
   const recalled = await memory.recall();
   if (!recalled) return;
   state.memoryIncident = recalled.last_incident || null;
-  if (recalled.welcome && !state.conversation.some((turn) => turn.role === "user")) {
+  if (recalled.welcome && !state.conversation.some((turn) => turn.role === "user" || String(turn.meta || "").startsWith("welcome back"))) {
     say("assistant", recalled.welcome, "welcome back · from memory", recalled.welcome);
   }
 }
@@ -366,6 +366,7 @@ function renderControls() {
   $("import-pack").disabled = state.busy;
   $("stock-input").disabled = state.busy || !snapshot || !localWarehouse(snapshot);
   $("connect").disabled = state.busy;
+  $("retry").disabled = state.busy;
 }
 
 function renderInbox() {
@@ -657,7 +658,10 @@ function setUpVoice() {
 
 $("connect").addEventListener("click", () => {
   state.token = $("access-token").value.trim();
-  act(async () => { storeToken(state.token); }, "Connected to the incident.").catch(() => {});
+  act(async () => { storeToken(state.token); }, "Connected to the incident.").then(() => {
+    $("retry").hidden = true;
+    afterConnected();
+  }).catch(() => {});
 });
 $("access-token").addEventListener("keydown", (event) => {
   if (event.key === "Enter") $("connect").click();
@@ -772,8 +776,16 @@ if (resumed) {
   state.token = resumed.access;
 }
 setInterval(() => { checkAlerts().catch(() => {}); }, 5000);
+let authSettled = () => {};
+const authReady = new Promise((resolve) => { authSettled = resolve; });
 const authStartup = createStartup({
-  attempt: loadAuth,
+  attempt: async () => {
+    try {
+      await loadAuth();
+    } finally {
+      authSettled();
+    }
+  },
   onFailure: () => {
     $("auth-status").hidden = false;
     $("auth-status").classList.add("visible");
@@ -789,7 +801,11 @@ const authStartup = createStartup({
 });
 $("auth-retry").addEventListener("click", () => authStartup.start());
 authStartup.start();
-act(async () => {}, "").catch(() => {}).then(() => {
+
+let connectedOnce = false;
+function afterConnected() {
+  if (connectedOnce) return;
+  connectedOnce = true;
   lockApprover(state.session);
   loadVoice();
   recallMemory();
@@ -799,4 +815,37 @@ act(async () => {}, "").catch(() => {}).then(() => {
     say("assistant", `A booking is waiting for “${parked.quote.plan_label}” on ${parked.incidentId} (${dollars(parked.quote.total_usd)}). `
       + "Say “resume” to hear the price again, or “no” to drop it. Nothing was charged.");
   }
-}).catch(() => {});
+}
+
+let retryHadFocus = false;
+const startup = createStartup({
+  attempt: async () => {
+    await authReady;
+    $("connection").textContent = "Connecting";
+    $("connection").className = "connection";
+    await act(async () => {}, "");
+  },
+  retryable: (error) => error.status !== 401,
+  onFailure: (error, { retryIn }) => {
+    $("retry").hidden = false;
+    if (error.status === 401) return;
+    $("connection").textContent = "Offline";
+    $("connection").className = "connection error";
+    if (!state.snapshot) $("incident-status").textContent = "Offline";
+    const reason = error instanceof TypeError ? "I couldn't reach LogiOps." : error.message || String(error);
+    message(`${reason} ${retryIn ? "Trying again shortly." : "Press Retry to try again."}`);
+  },
+  onSuccess: (recovered) => {
+    $("retry").hidden = true;
+    if (recovered) message("Connected.", true);
+    if (retryHadFocus) $("ask-input").focus({ preventScroll: true });
+    retryHadFocus = false;
+    afterConnected();
+  },
+});
+$("retry").addEventListener("click", () => {
+  if (state.busy) return;
+  retryHadFocus = document.activeElement === $("retry");
+  startup.start();
+});
+startup.start();
