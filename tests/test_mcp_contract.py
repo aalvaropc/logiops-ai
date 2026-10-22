@@ -169,3 +169,34 @@ def test_the_approval_link_uses_the_public_host_when_one_is_set(tmp_path):
 
     [request] = asyncio.run(run())
     assert request.url == "https://demo.example.com/demo#SHIP-421" and request.mode == "url"
+
+
+def test_a_shipment_number_sent_as_a_json_number_is_understood(tmp_path):
+    async def work(session, _initialized, _http):
+        return await session.call_tool("get_shipment", {"shipment_id": 433})
+
+    result = _session(tmp_path, work)
+    assert not result.isError and result.structuredContent["id"] == "SHIP-433"
+
+
+def test_tool_descriptions_carry_no_source_indentation(tmp_path):
+    async def work(session, _initialized, _http):
+        return (await session.list_tools()).tools
+
+    for tool in _session(tmp_path, work):
+        assert "\n " not in tool.description, tool.name
+
+
+def test_a_booking_is_read_without_an_http_request_by_an_in_process_caller(tmp_path):
+    from logiops.booking import BookingStore
+    from logiops.mcp_server import create_mcp_server
+    from logiops.service import LogiOpsService
+
+    async def run():
+        service = LogiOpsService(tmp_path / "inproc.sqlite3")
+        server = create_mcp_server(service, bookings=BookingStore(tmp_path / "inproc.sqlite3", service))
+        with pytest.raises(Exception) as raised:
+            await server.call_tool("get_booking", {"number": "LGO-NONE00"})
+        return str(raised.value)
+
+    assert "Next step" in asyncio.run(run())
