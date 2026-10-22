@@ -1,7 +1,7 @@
 {
   "repository": "aalvaropc/mcp-apps-web-host",
-  "commit": "125f1796c80b7e816aad5259c84cb6069a2fc7a4",
-  "version": "1.3.0",
+  "commit": "6a3ead7a3857a8d0c40a6aefd4900cbf434564ab",
+  "version": "1.3.1",
   "files": [
     {
       "source": "src/host.js",
@@ -11,7 +11,7 @@
     {
       "source": "sandbox/sandbox.html",
       "path": "logiops/static/mcp_app_sandbox.html",
-      "sha256": "3770d070a67e026589409a5c8e797e3e31f1ef829acb0098267fa58b6e0cb406"
+      "sha256": "29d13f4fe515d5c38c2039abdedc98c854b2207f43fa46690e2b4744a78e715d"
     }
   ]
 }
