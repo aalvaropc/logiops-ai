@@ -26,12 +26,12 @@ def free_port() -> int:
         return probe.getsockname()[1]
 
 
-def start_replay_server(tmp_path_factory: pytest.TempPathFactory):
+def start_replay_server(tmp_path_factory: pytest.TempPathFactory, **settings: str):
     """A replay-mode API on a free port with a fresh database; no model or speech call is ever made."""
     port = free_port()
     env = {name: value for name, value in os.environ.items() if not name.startswith(("LOGIOPS_", "AWS_"))}
     env.update(LOGIOPS_AGENT_MODE="replay", LOGIOPS_AGENT_LIMIT_PER_MINUTE="60", LOGIOPS_MCP_LIMIT_PER_MINUTE="600",
-               LOGIOPS_DB_PATH=str(tmp_path_factory.mktemp("replay") / "logiops.sqlite3"))
+               LOGIOPS_DB_PATH=str(tmp_path_factory.mktemp("replay") / "logiops.sqlite3"), **settings)
     log = (tmp_path_factory.mktemp("logs") / "server.log").open("w")
     process = subprocess.Popen([sys.executable, "-m", "uvicorn", "logiops.api:app", "--host", "127.0.0.1", "--port", str(port)],
                                cwd=ROOT, env=env, stdout=log, stderr=subprocess.STDOUT)
@@ -63,6 +63,11 @@ def replay_server(tmp_path_factory: pytest.TempPathFactory):
 def fresh_replay_server(tmp_path_factory: pytest.TempPathFactory):
     """A server of its own for a test that changes the process, such as registering a scenario pack."""
     yield from start_replay_server(tmp_path_factory)
+
+
+@pytest.fixture
+def token_server(tmp_path_factory: pytest.TempPathFactory):
+    yield from start_replay_server(tmp_path_factory, LOGIOPS_ACCESS_TOKEN="t" * 40)
 
 
 @pytest.fixture

@@ -6,6 +6,7 @@ import { createMemory } from "./app/memory.js";
 import { describePreferences, mergedPreferences, preferenceLine, preferenceEffect as effectOf } from "./app/preferences.js";
 import { createPurchase, dollars, bookingRows } from "./app/purchase.js";
 import { createAlerts, bellText } from "./app/alerts.js";
+import { recordedNote } from "./app/approval.js";
 import { createCommands } from "./app/commands.js";
 import { createStore } from "./app/store.js";
 import {
@@ -53,7 +54,7 @@ const api = createApi({
   onSession: (session) => {
     state.session = session;
     state.token = session ? session.access : api.storedToken();
-    if (session) $("approver").value = session.username;
+    lockApprover(session);
     renderAccount();
   },
   onAgentCall: (phase) => {
@@ -530,12 +531,22 @@ async function act(work, success) {
   } finally { setBusy(false); }
 }
 
+function lockApprover(session) {
+  $("approver").readOnly = Boolean(session);
+  if (session) $("approver").value = session.username;
+}
+
 async function approvePlan(plan) {
   const approvedBy = $("approver").value.trim();
   if (!plan || !approvedBy) throw new Error("Select a plan and enter an approver name.");
-  await request(incidentPath("/approvals"), "POST", {
+  const approval = await request(incidentPath("/approvals"), "POST", {
     plan_id: plan.id, source_version: plan.source_version, approved_by: approvedBy,
   });
+  const note = recordedNote(approvedBy, approval);
+  if (note) {
+    $("approver").value = approval.approved_by;
+    say("assistant", note, "audit · who approved");
+  }
 }
 
 async function executeApproved() {
@@ -759,7 +770,7 @@ if (resumed) {
 }
 setInterval(() => { checkAlerts().catch(() => {}); }, 5000);
 loadAuth().catch(() => {}).then(() => act(async () => {}, "").catch(() => {})).then(() => {
-  if (state.session) $("approver").value = state.session.username;
+  lockApprover(state.session);
   loadVoice();
   recallMemory();
   checkAlerts().catch(() => {});

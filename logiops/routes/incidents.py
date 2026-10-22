@@ -12,6 +12,7 @@ from ..metrics import incident_metrics, session_metrics
 from ..preferences import preference_for
 from ..presentation import customer_text
 from ..scenario import incident_ids
+from ..service import APPROVER_MAX_LENGTH
 from .context import Context, visible_plans
 from .models import ApprovalRequest, ExecutionRequest, InventoryChange, ResetRequest
 
@@ -82,8 +83,17 @@ def router(ctx: Context) -> APIRouter:
         return {"plans": plans, "source_version": plans[0]["source_version"]}
 
     @routes.post("/incidents/{incident_id}/approvals")
-    async def approve(incident_id: str, request: ApprovalRequest) -> dict[str, Any]:
-        return service.approve(incident_id, request.plan_id, request.source_version, request.approved_by)
+    async def approve(incident_id: str, request: ApprovalRequest, http_request: Request) -> dict[str, Any]:
+        actor = actor_of(http_request)
+        identified = actor.kind == "user" or bool(ctx.access_token) or ctx.public
+        if actor.kind == "user":  # a label for people: approved_subject keeps the exact identity if the name is cut short
+            approved_by = (actor.name.strip() or actor.subject)[:APPROVER_MAX_LENGTH]
+        else:
+            approved_by = actor.subject if identified else request.approved_by
+        return service.approve(
+            incident_id, request.plan_id, request.source_version, approved_by,
+            approved_subject=actor.subject if identified else None,
+        )
 
     @routes.post("/incidents/{incident_id}/execute")
     async def execute(incident_id: str, request: ExecutionRequest) -> dict[str, Any]:

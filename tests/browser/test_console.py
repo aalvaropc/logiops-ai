@@ -72,3 +72,16 @@ def test_a_scenario_pack_imported_from_the_drawer_reaches_the_device(page, fresh
     assert card_lead(page).startswith("pick: ")
     assert_accessible(page)
     assert page_errors == []
+
+
+def test_the_console_says_who_the_server_recorded_as_approver(page, token_server, page_errors):
+    page.add_init_script("sessionStorage.setItem('logiops-access-token', 't'.repeat(40))")
+    page.goto(f"{token_server}/console#SHIP-421")
+    expect(page.locator("#connection")).to_have_text("Connected")
+    say(page, "What's happening with SHIP-421?")
+    page.fill("#approver", "Maria")
+    page.click("#approve")
+    expect(page.locator("#execute")).to_be_enabled()
+    expect(page.locator("#approver")).to_have_value("demo-operator")
+    expect(page.locator("#conversation > li").last).to_contain_text("Recorded as “demo-operator”, not “Maria”")
+    assert page_errors == []
