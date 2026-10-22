@@ -78,6 +78,10 @@ test("the focus comes back after busy work, or moves on when its control is gone
   keeper.handTo(node("account"));
   keeper.restore();
   assert.equal(doc.activeElement.name, "account", "a disabled focused control counts as lost, and a hand-off wins");
+  doc.activeElement = node("yes");
+  keeper.handTo(node("account"));
+  keeper.restore();
+  assert.equal(doc.activeElement.name, "account", "a hand-off moves the focus even from a control that came back");
   doc.activeElement = doc.body;
   keeper.remember(node("hidden", { hidden: true }));
   keeper.restore();

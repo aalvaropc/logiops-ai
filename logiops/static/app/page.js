@@ -26,18 +26,21 @@ export async function loadAuthInto({ api, state, keepSession, renderAccount }) {
 
 export function createFocusKeeper({ doc = globalThis.document, fallback = () => null, defer = (work) => work() } = {}) {
   let kept = null;
+  let handed = false;
   const usable = (node) => Boolean(node?.isConnected && !node.disabled && !node.closest?.("[hidden], [inert]"));
 
   return {
-    remember(node = doc.activeElement) { kept = node; },
-    handTo(node) { kept = node; },
+    remember(node = doc.activeElement) { kept = node; handed = false; },
+    handTo(node) { kept = node; handed = true; },
     restore() {
       const before = kept;
+      const forced = handed;
       kept = null;
+      handed = false;
       if (!before) return;
       defer(() => {
         const active = doc.activeElement;
-        if (active && active !== doc.body && usable(active)) return;
+        if (!forced && active && active !== doc.body && usable(active)) return;
         const target = usable(before) ? before : fallback(before);
         if (usable(target)) target.focus({ preventScroll: true });
       });
