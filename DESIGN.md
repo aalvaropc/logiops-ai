@@ -145,6 +145,39 @@ components:
     backgroundColor: "{colors.surface}"
     textColor: "{colors.ink}"
     rounded: "{rounded.sheet}"
+  agent-rail:
+    backgroundColor: "{colors.surface}"
+    textColor: "{colors.ink}"
+    padding: "18px 20px 0"
+  queue-row:
+    backgroundColor: "transparent"
+    textColor: "{colors.ink}"
+    padding: "12px 20px 14px"
+  queue-row-hover:
+    backgroundColor: "{colors.shell-tint}"
+  queue-row-selected:
+    backgroundColor: "{colors.surface}"
+  plan-table-row:
+    backgroundColor: "transparent"
+    textColor: "{colors.ink}"
+    rounded: "{rounded.label}"
+    padding: "8px 12px"
+    height: "50px"
+  plan-table-row-hover:
+    backgroundColor: "{colors.shell-tint}"
+  plan-table-row-selected:
+    backgroundColor: "{colors.surface}"
+  input-desk:
+    backgroundColor: "{colors.sunken}"
+    textColor: "{colors.ink}"
+    rounded: "{rounded.soft}"
+    padding: "0 14px"
+    height: "40px"
+  avatar:
+    backgroundColor: "{colors.shell}"
+    textColor: "{colors.shell-ink}"
+    rounded: "{rounded.pill}"
+    size: "28px"
 ---
 
 # Design System: LogiOps AI
@@ -184,9 +217,9 @@ A near-black ground, warm headlight white for everything that is good or chosen,
 ### Neutral
 - **Night Asphalt** (`ground`): every screen's background; also the inside of hollow markers so they read as holes in the light.
 - **Outer Dark** (`outer`): the page behind the bezel on desktop.
-- **Night Blue** (`surface`): the dock, plan rows, sheet, MCP frame, and hover on queue rows. The only lifted plane.
+- **Night Blue** (`surface`): on the device, the dock, plan rows, sheet and MCP frame; on the console, the agent rail, the selected queue row, the selected plan row and the account menu. The only lifted plane.
 - **Sunken** (`sunken`): input field, chat turns, secondary hover, code.
-- **Shell Tint** (`shell-tint`, alias `--ok-tint`): hover of outlined chips, the user's own chat turn.
+- **Shell Tint** (`shell-tint`, alias `--ok-tint`): hover of outlined chips and of console queue and plan rows, the user's own chat turn on the device.
 - **Moonlight** (`ink-2`): secondary text, place labels, promise ticks.
 - **Slate Moonlight** (`ink-3`): tertiary text, outlined control borders, done/settled lanes, "some late" dots.
 - **Rule** (`rule`): ghost trails, the agent track, axis lines.
@@ -220,6 +253,7 @@ A near-black ground, warm headlight white for everything that is good or chosen,
 - **Stat** (800, `--type-stat`): queue IDs and plan costs.
 - **Body / Meta** (`--type-body`, `--type-meta`): text and secondary facts. Both drop to 15/14px between 768 and 1023px and return to 16/15px on fine-pointer desktops. A touch screen of 1024px or more (a real Echo Show, read from arm's length) uses 18/16px, and tags 14px.
 - **Tag** (800, `--type-tag`, 0.06em, uppercase): tags, verdicts, lane keys, the lifecycle stop names (700, sentence case).
+- **Console desk sizes** (literal px in `console.css` and `demo.css`, not the device ladder): incident ID 40px/700 (32px at 760px and below); the latest spoken answer 17px/700 at 1.35; queue IDs and session figures 17px/800, the figures over 12px `ink-3` labels; plan names 14px/700; facts 16px/800 under 12px/700 `ink-3` terms; column heads (Queue, Plans, Agent, drawers) 12px/800 uppercase at 0.08em in `ink-3`; tags, badges and verdict heads 11px/800 uppercase at 0.06em. The console carries no hero figure; its largest type is the incident ID.
 
 ### Named Rules
 **The Ladder Rule.** In `device.css` every size comes from a `--type-*` token. Only SVG map labels (in viewBox units) and the 16px input (to stop zoom) are literal.
@@ -232,18 +266,19 @@ A near-black ground, warm headlight white for everything that is good or chosen,
 - **Gutter:** 16px, 24px from 768px.
 - **Two columns from 900px:** home puts the hero and lanes left, the queue right; the incident puts the map and its figure left, the heading and time tracks right; confirm, alert and result split text left and rows right.
 - **Budgets:** one figure per screen; at most two bordered or filled boxes visible on a device screen; under about 40 words per screen; confirm and result fit the Echo Show viewport without scrolling (the surface fade mask is switched off on confirm). On phones below 480px the confirm actions stick to the bottom.
-- **Console:** 1500px shell, 32px padding (16px below 650px); a workbench of 1.65fr / 0.85fr that stacks below 1050px.
+- **Console desk:** a full-height grid (`100dvh`) of a 56px top bar, a notices row, then three columns that each scroll on their own: queue (`clamp(232px, 17vw, 280px)`) | work column (`minmax(0, 1fr)`, 20px 28px padding) | agent rail (`clamp(344px, 26vw, 400px)`, on `surface`). Columns are split by 1px hairlines, not gaps. At 1180px and below it becomes two columns (a 248px queue beside the work column, the rail under the work column) and the page scrolls; at 760px and below it is one column (top bar, queue, work, rail), the queue becomes a horizontal snapping scroller of rows at 78% width, and the gutter drops to 16px.
+- **Work column:** incident head (name left, facts right), then the route map beside the promise tracks (1.05fr / 1fr, stacked at 760px and below), then Plans, the action bar, and the audit trail. Inside Plans the decision field sits left of the table (280px | 1fr) only when the work column's container is at least 1000px wide; otherwise the table comes first and the field under it.
 - **Density:** secondary facts sit tight on one line joined by middle dots; rows separate with 1px hairlines rather than gaps or boxes.
 
 ## Elevation & Depth
 
-Flat. Depth comes from light, not shadow: a lit trail sits on dark ground, a hollow marker reads as a hole, settled data dims to `ink-3`. The only lifted plane is `surface` (the dock, plan rows, sheet). Two real shadows exist: the desktop bezel's neutral drop (`0 24px 48px rgba(17,20,24,.28)`), and the inset 2px headlight ring on a selected plan row. Blur appears only on data marks (an SVG Gaussian blur under lit trails and the decision pick, and a 5px blur on the agent comet). Forced colours hide every glow.
+Flat. Depth comes from light, not shadow: a lit trail sits on dark ground, a hollow marker reads as a hole, settled data dims to `ink-3`. The only lifted plane is `surface` (the device dock, plan rows and sheet; the console's agent rail and selected rows). Three real shadows exist: the desktop bezel's neutral drop (`0 24px 48px rgba(17,20,24,.28)`), the console account menu's neutral drop (`0 16px 32px rgba(0,0,0,.45)`), and the inset 2px headlight ring on a selected plan row. The console's sticky action bar is separated from the scrolling work above it by a 24px fade from transparent to `ground`, not by a shadow. Blur appears only on data marks (an SVG Gaussian blur under lit trails and the decision pick, a 5px blur on the agent comet, and a soft headlight halo, `0 0 10px rgba(244,241,232,.4)`, on lit console station dots). Forced colours hide every glow.
 
-**The Glow Belongs To Data Rule.** Glow is an SVG filter on a lit mark at reduced opacity (0.35 trails, 0.45 pick). Never a coloured `box-shadow` on a control or container.
+**The Glow Belongs To Data Rule.** Glow sits on a lit data mark: an SVG filter at reduced opacity (0.35 trails, 0.45 pick), or the station dot's soft headlight halo. Never a coloured `box-shadow` on a control or container.
 
 ## Shapes
 
-Pills for everything you press (999px); soft 12px for message lines and queue-row hover; 16px for plan rows, chat turns and the MCP frame; 20px for the sheet top (all corners at 768px and up). Square (0) for quoted blocks and the "simulated" badge. Data marks are round: 2-4px stroke trails with round caps, dot stations, circular stops. Borders are 1.5px `ink-3` on outlined controls and 1px `hairline` on dividers.
+Pills for everything you press (999px), the avatar a 28px circle; soft 12px for message lines, console inputs, the account menu and the console's tinted state lines; 16px for device plan rows, device chat turns and the MCP frame; console queue rows, plan table rows and chat turns are square, divided by hairlines; 20px for the sheet top (all corners at 768px and up). Square (0) for quoted blocks and the "simulated" badge. Data marks are round: 2-4px stroke trails with round caps, dot stations, circular stops. Borders are 1.5px `ink-3` on outlined controls and 1px `hairline` on dividers.
 
 ## Components
 
@@ -277,6 +312,20 @@ State is a short coloured phrase under a heading, not a band: white for executed
 ### Tags
 Uppercase 12px coloured text with no fill: white for "Agent pick" and on-time verdicts, amber for "Critical order" and "Your preference", red with a 2px dashed underline for late. Look-alike plan names underline the differing words with a 3px headlight underline.
 
+### Console desk
+
+**Top bar.** 56px, hairline under it: the brand (18px/800 with a 13px `ink-3` "Operator console"), then a strip of session figures that is shown from the first load with zeros before any approval (four figures, three at 1360px and below, hidden at 1180px and below), then right-aligned the amber alerts bell when needed, the Alexa+ device link, the connection dot (amber connecting, white ready, red error) and the account control. Signed in, the account is a disclosure: a 36px outlined pill holding a 28px headlight avatar initial, the name and a chevron that turns on open; the menu is a 240px `surface` panel with a short line and Sign out. A guest sees a Link account button instead.
+
+**Queue rows.** Full-width buttons divided by hairlines, not cards: the ID at 17px/800 with at most one coloured tag beside it (`N critical` in red with a dashed underline when critical units are at risk, otherwise `Critical order` in amber), then `kind · destination` in `ink-2`, then a mini trail: a lit booked segment, a 2px promise tick, a red dashed delay scaled to the longest delay, and `+N h` in red; the state (uppercase `ink-3`) or `Start here` (white) sits at its right. Executed rows dim the trail to `ink-3`. Preferences and Developer are closed disclosures under the list.
+
+**Incident head.** The ID at 40px, one line of state phrase and title, a muted route line, and facts on the right: the promise, Projected in red with `+N h` dashed-underlined beneath, and Local stock.
+
+**Plans table.** A subgrid table under an uppercase hairline head: radio | plan name (distinguishing words with the 3px headlight underline, then badges) | one verdict column per order (up to three, critical orders headed by an amber `Critical`) | Extra, right aligned at 16px/800. Verdicts are `On time` in headlight white or `+N h` in red with a dashed underline. Rows are 50px minimum, hairline divided; hover `shell-tint`; selected `surface` with the inset 2px headlight ring. When the table's container is 560px or narrower the head hides and each row stacks: radio, name and cost on the first line, then each order's verdict with the order's name shown.
+
+**Action bar.** Approved by, the approver input, Approve (the one filled primary), Execute plan (outlined) and the state phrase pushed right. Sticky at the bottom of the work column with a 24px fade above it; static, full-width controls at 760px and below. The audit trail under it is a closed disclosure whose timeline is a 2px rule with dots, the newest lit.
+
+**Agent rail.** On `surface`. A column head with the mode chip (`Live · Amazon Bedrock` in white, `Replay · scripted model` in `ink-3`, uppercase). Then the MCP call stations: 12px dots on a 2px headlight line, both drawn with pseudo-elements, each with a bold label and the tool name in 12px `ink-3`; lit dots carry the soft halo, errors are red, a waiting station is a hollow `rule` ring that breathes, new stations drop in (0.32s), and the last is the hollow `Checked against the data` ring (red if it failed). Then the conversation, which scrolls on its own: user turns as `You · ...` in `ink-3`; a long answer leads with its spoken line at 17px/700 with the full answer folded in a `Full answer` disclosure; the check result as an uppercase badge; `welcome back` memory notes are quiet 13px `ink-2` clamped to two lines. The ask dock sits at the bottom of the rail over a hairline: wrapping outlined chips, then the input, Speak, Send, and a Read replies aloud checkbox.
+
 ### Buttons
 - **Primary:** filled headlight pill, 48px (44px in the console), weight 800, `shell-deep` on hover. One per screen.
 - **Secondary:** outlined pill, 1.5px `ink-3`, transparent; `sunken` on hover.
@@ -284,7 +333,7 @@ Uppercase 12px coloured text with no fill: white for "Agent pick" and on-time ve
 - **Disabled:** 45% opacity.
 
 ### Chips
-Outlined 44px pills in a horizontally scrolling, snapping row. The first action chip is filled like a primary button; any later action chip is outlined in white. Hover lifts to `shell-tint`.
+On the device, outlined 44px pills in a horizontally scrolling, snapping row; in the console rail they wrap at 36px (44px at 760px and below). The first action chip is filled like a primary button; any later action chip is outlined in white. Hover lifts to `shell-tint`.
 
 ### Dock and ask field
 `surface` panel with the voice bar, the heard line (inline "You said" label), the spoken sentence (tap or "More" to expand), chips, then orb, mic (48px filled circle, red while listening), a pill input on `sunken`, and Send (filled once text is entered; an arrow icon below 400px).
@@ -298,7 +347,7 @@ Dark by default with the device values; when the host reports a light theme it s
 - **Do** take every colour from `tokens.css` and every device size from the `--type-*` ladder.
 - **Do** draw data as light: lit white for recommended and on time, red dashed for late, amber for attention.
 - **Do** give every SVG `role="img"` and a sentence (`aria-label` or a `<title>`), and put an accessible list or text beside it carrying the same facts.
-- **Do** keep every interactive target at least 44px tall; keep axe at zero violations at 390 and 1440 widths.
+- **Do** keep every interactive target at least 44px tall on the device and on phones. The console desk is used with a pointer: its secondary controls (chips, small buttons, disclosures, the account pill) may be 36px, while Approve, Execute and plan rows stay at 44px or more. Keep axe at zero violations at 390 and 1440 widths.
 - **Do** reveal trails once per state with a clip-path wipe (1.4s, `cubic-bezier(.16, 1, .3, 1)`); redraws of the same state are marked settled and do not animate.
 - **Do** step agent stations and trace rows at a 120ms cadence.
 - **Do** honour reduced motion (animations reduced to 0.01ms and one iteration; voice bar, trail reveal and comet removed; the stage shows stations at once) and forced colours (all marks to `CanvasText`, dashes kept, glows hidden, the current lifecycle stop in `Highlight`).

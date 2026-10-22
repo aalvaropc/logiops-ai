@@ -32,7 +32,7 @@ def test_the_console_has_the_operator_view_without_the_device_or_the_hero():
                    'id="pref-form"', 'id="timeline"', 'id="alerts-bell"', 'id="account"', 'id="developer"', 'id="access-token"',
                    'id="stock-input"', 'id="reset"', 'href="/mcp"', 'href="/demo"'):
         assert marker in console, marker
-    for absent in ('id="device"', "A delay is a decision", 'id="mcp-app"', "logiops-sandbox-origin", "/assets/device.js", "/assets/route.js"):
+    for absent in ('id="device"', "A delay is a decision", 'id="mcp-app"', "logiops-sandbox-origin", "/assets/device.js"):
         assert absent not in console, absent
     assert '<script src="/assets/console.js" type="module"></script>' in console
     assert console.index("/assets/intent.js") < console.index("/assets/console.js")
