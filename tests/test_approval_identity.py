@@ -7,7 +7,6 @@ from tests.test_oauth import BASE_URL, bearer, run_app, token
 
 
 def run_plain(tmp_path, work, base_url=BASE_URL, **app_kwargs):
-    """The app without sign-in: local use, or the public deployment behind its access token."""
     async def run():
         app = create_app(tmp_path / "plain.sqlite3", **app_kwargs)
         async with app.router.lifespan_context(app):

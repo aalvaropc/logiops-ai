@@ -67,7 +67,6 @@ def fresh_replay_server(tmp_path_factory: pytest.TempPathFactory):
 
 @pytest.fixture
 def token_server(tmp_path_factory: pytest.TempPathFactory):
-    """A server that needs an access token, so the console's approver is named by the server."""
     yield from start_replay_server(tmp_path_factory, LOGIOPS_ACCESS_TOKEN="t" * 40)
 
 

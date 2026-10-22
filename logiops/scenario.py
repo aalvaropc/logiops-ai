@@ -198,7 +198,6 @@ def reset_registry() -> None:
 
 
 def _timestamp(value: Any) -> bool:
-    """An ISO 8601 time with the -05:00 offset in a year the scenario clock can move whole days from and to."""
     if not isinstance(value, str) or not ISO_TIMESTAMP.match(value) or not value.endswith("-05:00"):
         return False
     try:
@@ -352,9 +351,9 @@ def register_incident(definition: dict[str, Any]) -> str:
     return register_pack({"version": PACK_VERSION, "incidents": [definition]})[0]
 
 
-def register_pack(pack: Any) -> list[str]:
-    """Register every incident of a pack {"version": 1, "incidents": [...]}; nothing is kept if any fails.
-    One registration at a time runs from the snapshot to the commit, so two packs cannot both claim an id."""
+def register_pack(
+    pack: Any, *, persist: Callable[[dict[str, dict[str, Any]]], None] | None = None,
+) -> list[str]:
     if not isinstance(pack, dict) or pack.get("version") != PACK_VERSION or not isinstance(pack.get("incidents"), list):
         raise ScenarioPackError([{"incident": "?", "path": "", "message": f'a pack is {{"version": {PACK_VERSION}, "incidents": [...]}}'}])
     problems: list[dict[str, str]] = []
@@ -377,7 +376,8 @@ def register_pack(pack: Any) -> list[str]:
             registered.append(incident_id)
         if problems:
             raise ScenarioPackError(problems)
-        # Readers take no lock, so an incident is added last: whoever sees it also finds its playbook and kind label.
+        if persist is not None:
+            persist({incident_id: incidents[incident_id] for incident_id in registered})
         PLAYBOOKS.update(playbooks)
         KIND_LABELS.update(kind_labels)
         INCIDENTS.update(incidents)
@@ -398,8 +398,6 @@ def _seed(incident_id: str) -> dict[str, Any]:
 
 
 def _shifted(value: Any, days: int) -> Any:
-    """The seed with every timestamp in it moved by whole days (times of day and offsets kept).
-    Any timestamp moves, so a field added later can never be left behind; text that only starts like one stays."""
     if isinstance(value, dict):
         return {key: _shifted(item, days) for key, item in value.items()}
     if isinstance(value, list):
@@ -430,8 +428,10 @@ def scenario_clock(
     return lambda: pinned
 
 
-def seed_state(incident_id: str = INCIDENT_ID, day: date | None = None) -> dict[str, Any]:
-    seed = _seed(incident_id)
+def seed_state(
+    incident_id: str = INCIDENT_ID, day: date | None = None, *, definition: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    seed = _seed(incident_id) if definition is None else deepcopy(definition)
     if day is not None and day != SEED_DAY:
         seed = _shifted(seed, (day - SEED_DAY).days)
     anchor = day or SEED_DAY

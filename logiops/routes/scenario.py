@@ -6,7 +6,7 @@ from typing import Any
 
 from fastapi import APIRouter, HTTPException
 
-from ..scenario import PACK_VERSION, ScenarioPackError, builtin_incidents, register_pack
+from ..scenario import PACK_VERSION, ScenarioPackError, builtin_incidents
 from .context import Context
 from .models import ScenarioPack
 
@@ -25,10 +25,9 @@ def router(ctx: Context) -> APIRouter:
         """Register the incidents of a scenario pack and seed them; they live in this process until it restarts
         (set LOGIOPS_SCENARIO_PACK to load a pack at every start). A pack with one bad incident registers nothing."""
         try:
-            registered = register_pack(pack.model_dump())
+            registered = service.register_pack(pack.model_dump())
         except ScenarioPackError as exc:
             raise HTTPException(status_code=422, detail={"message": "The pack was not registered", "errors": exc.errors}) from exc
-        service.seed_missing()
         return {"registered": registered, "incidents": service.list_incidents()}
 
     return routes
