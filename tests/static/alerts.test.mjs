@@ -57,3 +57,25 @@ test("failures leave the alerts as they were", async () => {
   const hidden = createAlerts({ request: async () => { throw new Error("should not fetch"); }, incidentId: () => "x", isHidden: () => true, onAnnounce: async () => {} });
   assert.deepEqual(await hidden.check(), []);
 });
+
+test("overlapping checks read the alerts once and announce each alert once", async () => {
+  const calls = [];
+  const announced = [];
+  let release;
+  const opened = new Promise((resolve) => { release = resolve; });
+  const alerts = createAlerts({
+    request: async (path, method) => { calls.push(`${method || "GET"} ${path}`); return {}; },
+    list: async () => { calls.push("list"); await opened; return { alerts: [alertFor("SHIP-421")] }; },
+    incidentId: () => "SHIP-421", onAnnounce: async (alert) => announced.push(alert.id),
+  });
+  const first = alerts.check();
+  const second = alerts.check();
+  release();
+  await Promise.all([first, second]);
+  assert.deepEqual(calls, ["list", "POST /alerts/SHIP-421-v2/dismiss"]);
+  assert.deepEqual(announced, ["SHIP-421-v2"]);
+  assert.equal(await alerts.announce(alertFor("SHIP-421")), false, "an alert already announced is not announced again");
+  await alerts.check();
+  assert.deepEqual(announced, ["SHIP-421-v2"], "a list that still carries the dismissed alert does not repeat it");
+});
+

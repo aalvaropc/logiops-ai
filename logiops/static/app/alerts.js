@@ -8,11 +8,16 @@ export function bellText(alerts, incidentId) {
 
 export function createAlerts({ request, list = () => request("/alerts"), incidentId, isBusy = () => false, isHidden = () => false, onAlerts = () => {}, onAnnounce }) {
   let alerts = [];
+  let checking = null;
+  const announced = new Set();
 
   async function announce(alert) {
+    if (announced.has(alert.id)) return false;
+    announced.add(alert.id);
     try {
       await request(`/alerts/${encodeURIComponent(alert.id)}/dismiss`, "POST");
     } catch (_) {
+      announced.delete(alert.id);
       return false;
     }
     alerts = alerts.filter((item) => item.id !== alert.id);
@@ -21,10 +26,10 @@ export function createAlerts({ request, list = () => request("/alerts"), inciden
     return true;
   }
 
-  async function check() {
+  async function poll() {
     if (isBusy() || isHidden()) return alerts;
     try {
-      alerts = (await list()).alerts;
+      alerts = (await list()).alerts.filter((alert) => !announced.has(alert.id));
     } catch (_) {
       return alerts;
     }
@@ -32,6 +37,11 @@ export function createAlerts({ request, list = () => request("/alerts"), inciden
     const here = alerts.find((alert) => alert.incident_id === incidentId());
     if (here && !isBusy()) await announce(here);
     return alerts;
+  }
+
+  function check() {
+    checking ??= poll().finally(() => { checking = null; });
+    return checking;
   }
 
   function elsewhere() {

@@ -1,5 +1,7 @@
 """The operator console: investigate, approve, execute and pay in replay, at desktop and phone widths."""
 
+import re
+
 import pytest
 from playwright.sync_api import expect
 
@@ -85,3 +87,15 @@ def test_the_console_says_who_the_server_recorded_as_approver(page, token_server
     expect(page.locator("#approver")).to_have_value("demo-operator")
     expect(page.locator("#conversation > li").last).to_contain_text("Recorded as “demo-operator”, not “Maria”")
     assert page_errors == []
+
+
+def test_a_failed_switch_keeps_the_open_incident_on_the_console(page, replay_server, reset_demo):
+    page.goto(f"{replay_server}/console#SHIP-421")
+    expect(page.locator("#incident-id")).to_have_text("SHIP-421")
+    page.route("**/incidents/SHIP-433", lambda route: route.abort())
+    page.locator(".incident-card", has_text="SHIP-433").click()
+    expect(page.locator("#message")).not_to_have_text("")
+    expect(page).to_have_url(re.compile(r"#SHIP-421$"))
+    expect(page.locator("#incident-id")).to_have_text("SHIP-421")
+    expect(page.locator('.incident-card[aria-pressed="true"]')).to_contain_text("SHIP-421")
+
