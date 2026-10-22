@@ -18,6 +18,7 @@ import { checkBadge, checkNote, fallbackNote, traceSummary, executionSummary } f
 import { renderMarkdown } from "./app/markdown-dom.js";
 import { sessionFigures, EMPTY_SESSION } from "./app/metrics.js";
 import { drawField } from "./app/field-dom.js";
+import { createStartup } from "./app/startup.js";
 
 const $ = (id) => document.getElementById(id);
 const DEFAULT_INCIDENT = "SHIP-421";
@@ -101,7 +102,9 @@ function renderAccount() {
   $("sign-out").hidden = !state.session;
 }
 async function loadAuth() {
-  state.auth = await api.loadAuth();
+  const auth = await api.loadAuth();
+  if (auth.unavailable) throw new Error("The sign-in settings could not be read.");
+  state.auth = auth;
   if (!state.auth.enabled) keepSession(null);
   renderAccount();
 }
@@ -769,7 +772,24 @@ if (resumed) {
   state.token = resumed.access;
 }
 setInterval(() => { checkAlerts().catch(() => {}); }, 5000);
-loadAuth().catch(() => {}).then(() => act(async () => {}, "").catch(() => {})).then(() => {
+const authStartup = createStartup({
+  attempt: loadAuth,
+  onFailure: () => {
+    $("auth-status").hidden = false;
+    $("auth-status").classList.add("visible");
+  },
+  onSuccess: () => {
+    const retryFocused = document.activeElement === $("auth-retry");
+    $("auth-status").hidden = true;
+    $("auth-status").classList.remove("visible");
+    lockApprover(state.session);
+    if (retryFocused && state.auth.enabled) $(state.session ? "sign-out" : "link-account").focus();
+    if (state.snapshot) recallMemory();
+  },
+});
+$("auth-retry").addEventListener("click", () => authStartup.start());
+authStartup.start();
+act(async () => {}, "").catch(() => {}).then(() => {
   lockApprover(state.session);
   loadVoice();
   recallMemory();

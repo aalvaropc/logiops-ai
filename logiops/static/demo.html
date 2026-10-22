@@ -33,7 +33,12 @@
         <ol><li>Detected</li><li>Investigated</li><li>Approved</li><li>Executed</li></ol>
       </section>
       <main id="surface" class="surface" tabindex="0">
+        <div id="auth-status" class="message" role="status" aria-live="polite" hidden>
+          Sign-in is temporarily unavailable.
+          <button id="auth-retry" type="button" class="retry">Retry sign-in</button>
+        </div>
         <div id="message" class="message" role="status" aria-live="polite"></div>
+        <button id="retry" type="button" class="retry" hidden>Retry</button>
         <section data-surface="home" class="card home" aria-label="Home">
           <div id="inbox"></div>
         </section>
@@ -68,10 +73,10 @@
         <div id="chips" class="chips" aria-label="Suggested requests"></div>
         <form id="ask-form" class="ask-row">
           <div class="orb-row"><button id="device-orb" type="button" class="orb" data-state="ready" aria-pressed="false" aria-label="Read replies aloud" title="Read replies aloud" disabled><span></span></button><p id="device-state" class="orb-label" role="status" aria-live="polite">Ready</p><span id="device-elapsed" class="device-elapsed" aria-hidden="true"></span></div>
-          <button id="mic" type="button" class="mic" aria-pressed="false" aria-label="Speak" hidden><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg></button>
+          <button id="mic" type="button" class="mic" aria-pressed="false" aria-label="Speak" hidden disabled><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg></button>
           <label class="visually-hidden" for="ask-input">Message to LogiOps</label>
-          <input id="ask-input" type="text" maxlength="500" autocomplete="off" placeholder="Ask LogiOps">
-          <button id="ask" type="submit" class="send" aria-label="Send"><span class="send-label">Send</span><svg class="send-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M5 12h13M13 6l6 6-6 6"/></svg></button>
+          <input id="ask-input" type="text" maxlength="500" autocomplete="off" placeholder="Ask LogiOps" readonly>
+          <button id="ask" type="submit" class="send" aria-label="Send" disabled><span class="send-label">Send</span><svg class="send-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M5 12h13M13 6l6 6-6 6"/></svg></button>
         </form>
       </div>
       <div id="sheet" class="sheet" role="dialog" aria-modal="true" aria-labelledby="sheet-title" hidden>

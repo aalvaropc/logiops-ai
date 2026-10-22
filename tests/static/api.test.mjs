@@ -278,3 +278,12 @@ test("an expired sign-in refreshes once and streams again", async () => {
   assert.equal(calls[2].init.headers.Authorization, `Bearer ${fresh}`);
   assert.deepEqual(phases, ["request", "done"]);
 });
+
+test("a sign-in configuration that cannot be read is reported as unavailable, not as a server without sign-in", async () => {
+  const config = { enabled: true, client_id: "c1" };
+  assert.deepEqual(await setup({ routes: { "/auth/config": jsonResponse(200, config) } }).api.loadAuth(), config);
+  assert.deepEqual(await setup({ routes: { "/auth/config": jsonResponse(200, { enabled: false }) } }).api.loadAuth(), { enabled: false });
+  assert.deepEqual(await setup({ routes: { "/auth/config": jsonResponse(503, {}) } }).api.loadAuth(), { enabled: false, unavailable: true });
+  const offline = setup({ routes: { "/auth/config": () => { throw new TypeError("Failed to fetch"); } } });
+  assert.deepEqual(await offline.api.loadAuth(), { enabled: false, unavailable: true });
+});
