@@ -27,12 +27,14 @@ locally, the instance role on EC2). `logiops/replay.py` provides an explicit
 deterministic local replay. `logiops/security.py` enforces a bearer token when
 configured, per-viewer limits for MCP and for agent runs, and `no-store`
 responses. Two pages call the same API: `/demo` is the simulated Alexa+ device
-(one card at a time: the inbox as a queue of incident cards, the incident with its map and promise
+(one card at a time: the open incidents as light lanes beside a list, the incident with its map and promise
 bars, the plans with the MCP App inside, a confirmation with Yes / No, the
 receipt, a proactive alert and the result; voice, chips and a "More" sheet with
 the whole transcript and the tool trace), and `/console` is the operator
-console (plans with Approve, Execute, bookings, preferences, the audit trail,
-the session metrics and a Developer drawer). Both are ES modules without a
+console, a three-column desk. The incident queue has the preferences and a
+Developer drawer under it. The incident in the middle holds the plans table,
+Approve, Execute, the booking and the audit trail. An Agent rail shows the MCP
+calls. The session's metrics sit in the top bar. Both are ES modules without a
 build step (`logiops/static/app/*` shared, `device/*` for the device,
 `console.js` for the console) over `app/mcp-host.js`, a dependency-free MCP
 Apps host bridge. `logiops/metrics.py` derives outcome metrics per incident
@@ -117,9 +119,9 @@ execution through REST or MCP.
   every deployment.
 - **CloudFront:** gives judges a stable HTTPS address. The EC2 security group
   accepts origin traffic only from CloudFront's origin-facing prefix list;
-  CloudFront to EC2 currently uses HTTP, with bearer authentication on every
-  route except the page, its assets, the sandbox proxy, the API docs and the
-  health check.
+  CloudFront to EC2 currently uses HTTP. Without a token a visitor is a
+  guest who can read and ask; approving, executing and booking need the
+  operator token or a Cognito token with the right scope.
 - **AWS Budgets, Route 53, CloudWatch and SNS:** a budget action cuts Bedrock
   and Polly at the account level if a month's actual cost passes US$60, and a
   Route 53 health check with a CloudWatch alarm e-mails through SNS when the

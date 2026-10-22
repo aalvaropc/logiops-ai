@@ -1,37 +1,39 @@
 # Recording checklist
 
-The narration and timings are in `video-script.md`. This list covers the setup.
+What was checked for the published video (<https://youtu.be/h30PVrBO8d0>); the shots and the
+narration are in `video-script.md`.
 
-## Before recording
+## Before the take
 
-- [ ] Rehearse in replay: `scripts/rehearse.sh`, `uv run python scripts/rehearse_api.py` and `LOGIOPS_BROWSER=1 uv run pytest -q tests/browser` (zero cost), then the script by hand, including "Remember my spend cap is $250." and "Recheck".
-- [ ] New browser profile or a clean window: close work tabs, extensions and anything with personal data.
-- [ ] Chrome or Edge (the microphone and speech need it). Allow the microphone for the device page.
-- [ ] Three tabs: the device (`/demo`), the operator console (`/console`) and MCP Inspector (`npx @modelcontextprotocol/inspector`) connected to the deployed `/mcp` with the token pasted in its Authentication panel, the tool list already open. Locally, the two pages on `127.0.0.1` so the MCP App card shows (the deployed demo has its own sandbox origin).
-- [ ] Resolution 1920×1080, browser zoom 100%, notifications off, clock and e-mail not visible. The device fits the screen; the console is the second tab.
-- [ ] No access token, e-mail address, account id or key visible on screen at any point. The token goes into the console's Developer drawer before recording starts, or sign in with the demo user beforehand.
-- [ ] "Reset all incidents and preferences" (console, Developer drawer) just before each take, and `DELETE /memory` or "forget me" so the welcome-back line is the one you expect.
-- [ ] The opening shot passes over the "Alexa+ simulated" label in the device's top bar, with the caption "Simulated Alexa+ experience · self-hosted MCP server · Streamable HTTP · MCP 2025-11-25" ready in the editor.
-- [ ] No music, or only music you have the rights to; no third-party logos or footage on screen.
-- [ ] SHIP-421 investigated and approved before the take (the stock change at 1:36 needs an approved plan to invalidate), then back to home, where the take starts, with no preference saved.
+- [x] Rehearsed twice against a local replay server: the same flow, zero model calls.
+- [x] The day's model budget checked: two agent runs fit.
+- [x] The operator token reached the pages only through sessionStorage. It was never typed, shown
+  or logged, and the console's token field shows only its placeholder.
+- [x] "Reset all incidents and preferences" before the take. SHIP-421 was approved off camera
+  through the API, which calculates plans in code without a model call.
 
-## The real take (costs a few cents)
+## The take
 
-- [ ] The deployed demo (token or sign-in loaded, never shown), or locally: `aws login --region us-east-1`, then start the server without `LOGIOPS_AGENT_MODE`.
-- [ ] "More" shows **bedrock mode** and a non-zero token count. This cannot be rehearsed in replay.
-- [ ] Voice input is shown at least once ("Listening…"); if it fails, type the phrase: the flow is the same.
-- [ ] On the device: the agent stage lighting each tool call live with its seconds and "Live from the MCP tool calls", the spoken line in large type, the plans card with the MCP App, its decision field and "Agent pick", the incident's map with the agent's pick, the confirmation card, the result card with "Decided in …", the alert card, and in "More" the Agent Skill and the tool-trace steps with "Checked against the data".
-- [ ] Approval → execution → "30 units accounted for" on SHIP-433.
-- [ ] A stock change from the console raises the alert on the device (bell → card).
-- [ ] "Remember my spend cap is $250.", then "Recheck", moves the pick to the $240 plan with "Your preference", and the approval reads $240 back.
-- [ ] In Inspector: the 12 tools, one `get_shipment` call, and the guest `401` on `execute_approved_plan` with the Cognito sign-in (client id and scope from `GET /auth/config` entered beforehand).
-- [ ] "Read replies aloud" on for at least one reply: only the short spoken line is read.
+- [x] The deployed demo in bedrock mode. `/metrics` reports `mode: bedrock` for SHIP-433, and no
+  fallback notice (replay, guest budget, daily budget, model unavailable) appears on screen.
+- [x] On the device:
+  - the stations lit live, with "Live from the MCP tool calls";
+  - the plans card as an MCP App, with the pick;
+  - "Remember my spend cap is $250." and "Recheck", which move the pick to $240;
+  - the confirmation and the result, with 30 units accounted for;
+  - the alert after the console's stock change;
+  - "execute it" refused.
+- [x] The demo was reset after the take.
 
-## After recording
+## After the take
 
-- [ ] Under 3:00. Public on YouTube or Vimeo. English narration or captions.
-- [ ] Uploaded on 22 Oct in the morning, not at the last minute: uploads take longer than expected.
-- [ ] The first 14 seconds say it is a simulated Alexa+ experience and name the self-hosted MCP server, Streamable HTTP and the spec version.
-- [ ] Watch it once with the sound off to check nothing sensitive appears.
-- [ ] `POST /demo/reset` on the deployment.
-- [ ] From the deadline (23 Oct, 12:00 PT) until the winners are announced (3 Dec), nothing in the video, the repositories or the materials changes.
+- [x] 2:44, under 3:00. English narration and captions. Public on YouTube.
+- [x] The first seconds say it is a simulated Alexa+ experience and name the self-hosted MCP
+  server, Streamable HTTP and the spec version.
+- [x] Loudness -16 LUFS integrated, true peak -1.5 dBTP.
+- [x] Every caption and label inside the safe margins.
+- [x] One frame every 5 s reviewed: no token, e-mail address, account id or browser chrome on
+  screen.
+- [x] No third-party music, footage or logo.
+- [x] From the deadline (23 Oct, 12:00 PT) until the winners are announced (3 Dec), nothing in the
+  video, the repositories or the materials changes.

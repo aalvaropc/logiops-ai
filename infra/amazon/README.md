@@ -8,7 +8,9 @@ second is only the MCP Apps sandbox origin (`sandbox_domain` output, passed to
 the app as `LOGIOPS_SANDBOX_HOST`), where the app serves
 `/mcp-app/sandbox.html` and nothing else. It forwards to the EC2 origin over
 HTTP; the instance security group accepts port 8000 only from AWS's
-CloudFront origin-facing prefix list. The API requires a bearer token.
+CloudFront origin-facing prefix list. Without a token a visitor is a guest who
+reads and asks; approving, executing and booking need the operator token or a
+scoped Cognito sign-in.
 
 ## Before provisioning
 
@@ -38,8 +40,9 @@ uses boto3 and does not need the CLI.
    through Systems Manager. No GitHub or SSH credentials enter the instance.
 
 The first deployment starts Uvicorn after the EBS volume is mounted. The
-browser demo is at `https://<cloudfront-domain>/demo`; use the local
-`.secrets/access-token` in its access-token field. The web assets are bundled
+browser demo is at `https://<cloudfront-domain>/demo`. To act as the operator,
+paste the local `.secrets/access-token` in the Developer drawer of `/console`, or
+sign in with "Link account". The web assets are bundled
 in the same release archive as the API, so the deployed UI and backend share
 one version. The instance uses its role's temporary credentials for Bedrock
 Converse; no static AWS key is stored on disk. The SSM command fetches the bearer token
@@ -123,13 +126,15 @@ way an MCP client does, using no credentials:
    `resource_metadata` and `scope`;
 2. RFC 9728 names `<base>/mcp`;
 3. RFC 8414 offers S256;
-4. a PKCE authorization request opens Cognito's sign-in page. Restart EC2 through AWS, then repeat
-`GET /incidents/SHIP-421` with the token; the execution and trace must still
+4. a PKCE authorization request opens Cognito's sign-in page.
+
+Restart EC2 through AWS, then repeat `GET /incidents/SHIP-421` with the token; the execution and trace must still
 be present. Record the URL, deployed archive checksum, token usage, and test
 result in the decisions log.
 
 The demo has four incidents and one shared preference profile. Before each
-presentation, use "↺ Reset all incidents and preferences" (`POST /demo/reset`).
+presentation, use "Reset all incidents and preferences" in the console's Developer drawer
+(`POST /demo/reset`).
 The EBS data volume has Terraform `prevent_destroy`; take a snapshot before
 any intentional removal or replacement. Rotating the SSM token requires
 `python3 scripts/create_access_token.py --rotate` followed by another
@@ -154,10 +159,16 @@ again from `main` once the fix is merged.
 
 - Systems Manager Session Manager provides shell access without SSH ingress.
 - `systemctl status logiops` and `journalctl -u logiops` show service health.
-- Public without a token: `/healthz`, `/demo`, `/assets/*`,
-  `/mcp-app/sandbox.html`, `/docs`, `/openapi.json`, and `/redoc`. Every other
-  route (incidents, agent, operator preferences, demo controls and MCP)
-  requires the bearer token.
+- Public without a token:
+  - `/healthz`, `/demo`, `/console`, `/metrics` and `/assets/*`;
+  - `/mcp-app/sandbox.html`, `/docs`, `/openapi.json` and `/redoc`;
+  - with Cognito configured, also `/auth/config`, `/auth/token` and
+    `/.well-known/*`.
+
+  Other routes identify the caller. With Cognito configured, a request without a
+  token is a guest who can read and ask. Approving, executing and booking answer
+  `401` with the OAuth challenge until the operator token or a scoped Cognito
+  token is sent.
 - The CloudFront origin read timeout is 60 seconds, the default quota, so no
   increase is needed. The agent stops after 50 seconds and returns an error
   instead of letting CloudFront cut the request.
