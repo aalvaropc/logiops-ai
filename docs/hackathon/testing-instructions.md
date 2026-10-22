@@ -85,12 +85,13 @@ plans". It reads the shipment, asks before `investigate_incident`, and renders t
    opens the whole conversation with the Agent Skill (`logiops-exception-desk`,
    read over MCP) listed first, then the steps of the recorded tool trace one by
    one, each under the reply it belongs to, and the "Checked against the data" badge. The MCP App card highlights the
-   same plan as the operator console ("Agent pick"); on a desktop screen, "Light
-   plans card" under the device switches the card's theme through the MCP Apps
-   host context, without reloading it (phones and tablets keep the dark card). The
-   operator console at `/console` shows the same incident in full (the Approve
-   and Execute buttons, bookings, preferences, the audit trail and the Developer
-   drawer); the link in the top bar of each page keeps the incident.
+   same plan as the operator console ("Agent pick"). The operator console at
+   `/console` shows the same incident at desk density: the incident queue on the
+   left, the incident with its route, promise tracks and plans table in the
+   middle (the Approve and Execute buttons, bookings and the audit trail), and the
+   agent rail with each MCP call on the right; preferences and the Developer
+   drawer sit under the queue. The link in the top bar of each page keeps the
+   incident.
 4. **Ask.** Type, or speak in Chrome or Edge: "What's happening with SHIP-421?". With
    "Read replies aloud" on, the deployed demo speaks with Amazon Polly (the local replay
    uses the browser's voice), and typing or the microphone cuts it off. The
@@ -104,7 +105,9 @@ plans". It reads the shipment, asks before `investigate_incident`, and renders t
    on a confirmation card with Yes / No; so does saying "approve the recommended
    plan" (price, delay, and any critical order left late). Nothing is approved until
    you say or press "yes", and the approval is bound to that plan and data version.
-   On the console, the radio buttons select and the Approve button names the plan.
+   On the console, the radio buttons in the plans table select; each row shows
+   every order's verdict and the extra cost, and Approve stays in view at the
+   bottom of the incident.
 6. **Follow-ups.** Ask "How much is the reroute?". It is answered from the stored
    investigation (`POST /incidents/SHIP-421/agent/ask`) without re-running it.
    Questions never act: "Should we approve the split plan?" gets an answer, not an approval,
@@ -115,7 +118,7 @@ plans". It reads the shipment, asks before `investigate_incident`, and renders t
    plans. The allocations are applied once, notifications are
    simulated and all 20 units are accounted for; the device shows the result card
    with the seconds from the first investigation to the decision and to the verified
-   execution, and the console's timeline records each step. On the console a banner
+   execution, and the console's audit trail records each step. On the console a banner
    then says the incident was already executed and offers to reset it. `GET /metrics`
    reports the same times per incident and for the session.
 8. **Idempotence.** Repeat `POST /incidents/SHIP-421/execute` with the approved
