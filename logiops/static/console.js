@@ -540,7 +540,11 @@ async function act(work, success) {
       $("connection").textContent = "Token required";
       $("connection").className = "connection error";
       if (!state.snapshot) $("incident-status").textContent = "Locked";
+      $("developer").open = true;
       $("access-token").focus();
+    } else if (error.status === 0) {
+      $("connection").textContent = "Offline";
+      $("connection").className = "connection error";
     }
     throw error;
   } finally { setBusy(false); }
@@ -718,7 +722,9 @@ async function importPack(file) {
   try {
     pack = JSON.parse(await file.text());
   } catch (_) {
-    throw new Error("That file is not JSON. Start from the built-in incidents (JSON) below and keep the same shape.");
+    const text = "That file is not JSON. Start from the built-in incidents (JSON) below and keep the same shape.";
+    packResult(text, true);
+    throw new Error(text);
   }
   try {
     const result = await request("/scenario/packs", "POST", pack);
@@ -843,7 +849,8 @@ const startup = createStartup({
     $("connection").textContent = "Offline";
     $("connection").className = "connection error";
     if (!state.snapshot) $("incident-status").textContent = "Offline";
-    const reason = error instanceof TypeError ? "I couldn't reach LogiOps." : error.message || String(error);
+    const reason = error.status === 0 || error instanceof TypeError ? "I couldn't reach LogiOps."
+      : error.status >= 500 ? "LogiOps isn't answering right now." : error.message || String(error);
     message(`${reason} ${retryIn ? "Trying again shortly." : "Press Retry to try again."}`);
   },
   onSuccess: (recovered) => {

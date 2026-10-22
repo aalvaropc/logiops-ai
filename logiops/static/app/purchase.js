@@ -126,7 +126,15 @@ export function createPurchase({
     }
     let approvedNow = false;
     if (purchase.approve && !selectors.visibleApproval(current) && !current.executions.length) {
-      await act(() => approvePlan(plan), "");
+      try {
+        await act(() => approvePlan(plan), "");
+      } catch (error) {
+        const retry = !error.status || error.status >= 500;
+        if (retry) keep(purchase);
+        else forget();
+        say("assistant", `Nothing was approved or charged: ${error.message || error}` + (retry ? " Say “yes” to try again." : ""));
+        return null;
+      }
       approvedNow = true;
       keep({ ...purchase, approve: false });
     }
@@ -139,7 +147,8 @@ export function createPurchase({
       }, "");
     } catch (error) {
       const retry = !error.status || error.status >= 500;
-      if (!retry) forget();
+      if (retry) keep(approvedNow ? { ...purchase, approve: false } : purchase);
+      else forget();
       say("assistant", `${approvedNow ? `Approved “${plan.label}”, but the` : "The"} booking didn't go through: ${error.message || error}`
         + (retry ? " Say “yes” to try again; it never charges twice." : ""));
       return null;

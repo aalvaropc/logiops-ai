@@ -101,6 +101,35 @@ def test_a_failed_switch_keeps_the_open_incident_on_the_console(page, replay_ser
 
 
 
+def test_a_guest_sees_link_account_but_no_sign_out(page, replay_server):
+    config = {"enabled": True, "client_id": "demo", "authorize_endpoint": "https://idp.example.com/oauth2/authorize", "scope": "openid"}
+    page.route("**/auth/config", lambda route: route.fulfill(json=config))
+    page.goto(f"{replay_server}/console")
+    expect(page.locator("#link-account")).to_be_visible()
+    expect(page.locator("#sign-out")).to_be_hidden()
+
+
+def test_a_file_that_is_not_json_is_explained_under_import(page, replay_server, tmp_path):
+    broken = tmp_path / "pack.json"
+    broken.write_text("{ not json")
+    page.goto(f"{replay_server}/console")
+    expect(page.locator("#connection")).to_have_text("Connected")
+    page.locator("#developer summary").click()
+    page.click("#import-pack")
+    expect(page.locator("#pack-result")).to_contain_text("Choose a JSON scenario pack first")
+    page.set_input_files("#pack-file", str(broken))
+    page.click("#import-pack")
+    expect(page.locator("#pack-result")).to_contain_text("That file is not JSON")
+
+
+def test_without_the_token_the_console_opens_developer_and_says_where_to_paste_it(page, token_server):
+    page.goto(f"{token_server}/console")
+    expect(page.locator("#connection")).to_have_text("Token required")
+    expect(page.locator("#developer")).to_have_attribute("open", "")
+    expect(page.locator("#access-token")).to_be_focused()
+    expect(page.locator("#message")).to_contain_text("open Developer")
+
+
 def test_a_stock_change_on_the_console_still_reaches_the_device(page, replay_server, reset_demo):
     from tests.browser.test_device import say_on_device
 

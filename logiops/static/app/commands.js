@@ -163,7 +163,8 @@ export function createCommands({
       } else if (command === "book") {
         await purchase.start(lower);
       } else if (command === "confirm" && pendingPurchase) {
-        await purchase.confirm(pendingPurchase);
+        const booking = await purchase.confirm(pendingPurchase);
+        if (!booking && !purchase.pending()) onSurface("dismiss");
       } else if (command === "withdraw") {
         const id = state.incidentId;
         const approval = selectors.visibleApproval(state.snapshot);
@@ -314,6 +315,7 @@ export function createCommands({
         const fresh = !executed && (stale || FRESH_INVESTIGATION.test(lower));
         const history = state.conversation.slice(0, -1).slice(-6).map(({ role, text: turn }) => ({ role, text: turn.slice(0, 1000) }));
         let run;
+        if (fresh) state.selectedPlanId = null;
         await act(async () => {
           run = fresh
             ? await investigate(incidentPath("/agent/investigate"), { question: text })

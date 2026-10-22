@@ -120,3 +120,25 @@ test("resume reads a parked purchase back, or says none is waiting", async () =>
   assert.equal(purchase.pending().key, "buy-old");
   assert.equal(await purchase.openReceipt("LGO-ABC234"), "<html>receipt</html>");
 });
+
+test("a retry is waiting for the next yes, and a refused approval drops the purchase without paying", async () => {
+  const flaky = setup({ responses: { "/incidents/SHIP-421/bookings/quote": { ...quote, approved: true }, "/quotes/Q-1/confirm": () => { throw Object.assign(new Error("down"), { status: 502 }); } } });
+  await flaky.purchase.start("book it");
+  await flaky.purchase.confirm(flaky.purchase.take());
+  assert.equal(flaky.purchase.pending()?.key, "buy-1234", "the next yes retries the same purchase");
+  const approve = Object.assign(new Error("Another plan is already approved for this data."), { status: 409 });
+  const broken = setup({ responses: { "/incidents/SHIP-421/bookings/quote": quote } });
+  await broken.purchase.start("book the split plan");
+  const pending = broken.purchase.take();
+  const failing = createPurchase({
+    storage: broken.storage, request: async () => { throw new Error("must not pay"); }, crypto: { randomUUID: () => "1234" },
+    api: { token: () => "", fetch: async () => ({}), explain: () => "" }, selectors,
+    snapshot: () => broken.state.snapshot, incidentId: () => "SHIP-421", say: (role, text) => broken.said.push({ role, text }),
+    act: async (work) => work(), approvePlan: async () => { throw approve; },
+  });
+  assert.equal(await failing.confirm(pending), null);
+  assert.equal(broken.storage.get(PURCHASE_KEY), null, "a refused approval forgets the purchase");
+  assert.equal(failing.pending(), null);
+  assert.match(broken.said.at(-1).text, /^Nothing was approved or charged: Another plan is already approved/);
+});
+
