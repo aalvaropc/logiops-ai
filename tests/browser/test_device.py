@@ -604,7 +604,7 @@ def test_a_refused_approve_and_pay_closes_its_card_and_charges_nothing(page, rep
     page.click("#confirm-yes")
     expect(page.locator('[data-surface="confirm"]')).to_be_hidden()
     expect(page.locator("#device-spoken")).to_contain_text("Nothing was approved or charged")
-    assert page.evaluate("sessionStorage.getItem('logiops-purchase')") is None
+    assert page.evaluate("sessionStorage.getItem('logiops-pending-purchase')") is None
     assert "Nothing is waiting" in say_on_device(page, "yes")
 
 
@@ -679,3 +679,10 @@ def test_a_guest_refused_on_yes_lands_on_link_account(page, replay_server, reset
     expect(page.locator("#message")).to_contain_text("Sign in to do that")
     expect(page.locator("#account")).to_be_focused()
 
+
+
+def test_a_large_spend_cap_is_read_back_with_a_thousands_separator(page, replay_server, reset_demo):
+    page.goto(f"{replay_server}/demo#SHIP-421")
+    expect(page.locator("#connection")).to_have_text("Connected")
+    say_on_device(page, "What's happening with SHIP-421?")
+    assert "$1,500" in say_on_device(page, "remember my spend cap is $1,500")

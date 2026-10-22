@@ -11,7 +11,7 @@ import { createCommands } from "./app/commands.js";
 import { createStore } from "./app/store.js";
 import {
   EVENT_LABELS, formatDate, visibleVersion, visibleApproval, visiblePlans, latestAgentEvent, byRank, allocationSummary,
-  localWarehouse, namedPlanKinds, distinguishing, recommendedPlan as pickRecommended, planFromUtterance as pickFromUtterance,
+  localWarehouse, namedPlanKinds, distinguishing, money, recommendedPlan as pickRecommended, planFromUtterance as pickFromUtterance,
 } from "./app/selectors.js";
 import { welcomeText as greeting } from "./app/greeting.js";
 import { checkBadge, checkNote, fallbackNote, traceSummary, executionSummary } from "./app/run-badges.js";
@@ -225,11 +225,11 @@ function renderPlans(snapshot) {
     eta.className = "plan-value";
     eta.textContent = formatDate(plan.projected_completion_eta);
     const etaLabel = document.createElement("small");
-    etaLabel.textContent = `${plan.projected_customer_delay_hours}h delay`;
+    etaLabel.textContent = `${plan.projected_customer_delay_hours} h delay`;
     eta.append(etaLabel);
     const cost = document.createElement("div");
     cost.className = "plan-value";
-    cost.textContent = `$${plan.incremental_cost_usd}`;
+    cost.textContent = money(plan.incremental_cost_usd);
     const costLabel = document.createElement("small");
     costLabel.textContent = "extra";
     cost.append(costLabel);

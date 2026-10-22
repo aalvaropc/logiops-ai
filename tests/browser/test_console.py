@@ -196,3 +196,14 @@ def test_approve_and_execute_by_keyboard_keep_the_focus_moving_forward(page, rep
     expect(page.locator("#message")).to_contain_text("This incident was reset")
     expect(page.locator("#banner-reset, #ask-input").first).to_be_attached()
     assert page.evaluate("document.activeElement !== document.body")
+
+
+def test_times_read_the_same_24_hour_way_everywhere(page, replay_server, reset_demo):
+    page.goto(f"{replay_server}/console#SHIP-421")
+    expect(page.locator("#connection")).to_have_text("Connected")
+    say(page, "What's happening with SHIP-421?")
+    expect(page.locator("#plans .plan")).not_to_have_count(0)
+    shown = page.locator("main").inner_text()
+    assert not re.search(r"\d{1,2}:\d{2}\s?(AM|PM)", shown), re.findall(r".{20}\d{1,2}:\d{2}\s?(?:AM|PM)", shown)[:3]
+    assert re.search(r"\b\d{2}:\d{2}\b", shown)
+    assert " h delay" in shown and not re.search(r"\dh delay", shown)
