@@ -13,9 +13,6 @@ NO_STORE = {"Cache-Control": "no-store"}
 
 
 class McpRequestGuard:
-    """Checks an MCP request before the server reads it: who is calling (`admit` returns the response to send, or
-    None), the rate limit, the 4 MiB body limit and that the body is a JSON-RPC message. The order matters: a caller
-    that fails to authenticate neither uses up the limit nor has its body read."""
 
     def __init__(
         self, app: ASGIApp, admit: Callable[[Request], Awaitable[Response | None]], allow: Callable[[Request], bool],

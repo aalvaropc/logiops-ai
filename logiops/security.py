@@ -81,7 +81,6 @@ def install_security(
         return bool(sandbox_host) and request.headers.get("host", "").split(":")[0].lower() == sandbox_host
 
     async def identify(request: Request) -> tuple[Actor, set[str] | None] | JSONResponse:
-        """Who is calling and with which scopes, or the 401 to send. Worked out once per request."""
         known = getattr(request.state, "identity", None)
         if known is not None:
             return known
