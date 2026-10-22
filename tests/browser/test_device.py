@@ -457,6 +457,40 @@ def test_the_device_reads_its_inbox_from_the_api_when_mcp_refuses(page, replay_s
     expect(page.locator('[data-surface="home"] .incident-card')).to_have_count(4)
 
 
+def test_alerts_reach_the_device_from_the_api_when_mcp_refuses_them(page, replay_server, page_errors, reset_demo):
+    def refuse_alerts(route):
+        if (route.request.post_data_json or {}).get("params", {}).get("name") == "list_alerts":
+            route.fulfill(status=429, content_type="application/json", body="{}")
+        else:
+            route.continue_()
+
+    page.route("**/mcp", refuse_alerts)
+    page.set_viewport_size({"width": 1440, "height": 1000})
+    page.goto(f"{replay_server}/demo#SHIP-421")
+    expect(page.locator("#connection")).to_have_text("Connected")
+    say_on_device(page, "What's happening with SHIP-421?")
+    say_on_device(page, "open SHIP-433")
+    expect(page.locator('[data-surface="incident"] .incident-id')).to_have_text("SHIP-433")
+    changed = page.request.post(f"{replay_server}/demo/inventory", data={"incident_id": "SHIP-421", "available": 20})
+    assert changed.ok, changed.text()
+    expect(page.locator("#alerts-bell")).to_contain_text("SHIP-421", timeout=20000)
+    assert [error for error in page_errors if "429" not in error] == []
+
+
+def test_a_failed_switch_keeps_the_open_incident(page, replay_server, reset_demo):
+    page.goto(f"{replay_server}/demo#SHIP-421")
+    expect(page.locator('[data-surface="incident"] .incident-id')).to_have_text("SHIP-421")
+    page.route("**/incidents/SHIP-433", lambda route: route.abort())
+    page.evaluate("location.hash = '#SHIP-433'")
+    expect(page.locator("#message")).not_to_have_text("")
+    expect(page).to_have_url(re.compile(r"#SHIP-421$"))
+    expect(page.locator('[data-surface="incident"] .incident-id')).to_have_text("SHIP-421")
+    expect(page).to_have_title(re.compile("SHIP-421"))
+    page.unroute("**/incidents/SHIP-433")
+    say_on_device(page, "open SHIP-433")
+    expect(page.locator('[data-surface="incident"] .incident-id')).to_have_text("SHIP-433")
+
+
 def test_the_agent_stage_shows_the_work_before_the_answer_then_gives_way(page, replay_server, page_errors, reset_demo):
     page.goto(f"{replay_server}/demo#SHIP-433")
     expect(page.locator("#connection")).to_have_text("Connected")

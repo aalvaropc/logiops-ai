@@ -182,7 +182,7 @@ const purchase = createPurchase({
 const mcpClient = createMcpClient({ getToken: () => state.token });
 
 const alerts = createAlerts({
-  request, list: () => mcpClient.callTool("list_alerts"), incidentId: () => state.incidentId, isBusy: () => state.busy, isHidden: () => document.hidden,
+  request, list: () => mcpClient.callTool("list_alerts").catch(() => request("/alerts")), incidentId: () => state.incidentId, isBusy: () => state.busy, isHidden: () => document.hidden,
   onAlerts: () => renderAlertBell(),
   onAnnounce: async (alert) => {
     state.pendingApproval = null;
@@ -551,8 +551,9 @@ async function loadMetrics() {
 
 async function selectIncident(id) {
   if (state.busy || id === state.incidentId) return;
-  state.conversations[state.incidentId] = state.conversation;
-  state.selections[state.incidentId] = state.selectedPlanId;
+  const previous = state.incidentId;
+  state.conversations[previous] = state.conversation;
+  state.selections[previous] = state.selectedPlanId;
   state.incidentId = id;
   state.conversation = state.conversations[id] || [];
   state.selectedPlanId = state.selections[id] || null;
@@ -562,7 +563,19 @@ async function selectIncident(id) {
   history.replaceState(null, "", `#${encodeURIComponent(id)}`);
   hideMcpApp("incident changed");
   surfaces.show("incident");
-  await act(async () => {}, "");
+  try {
+    await act(async () => {}, "");
+  } catch (error) {
+    if (state.snapshot && state.snapshot.state.incident_id !== id) {
+      state.incidentId = state.snapshot.state.incident_id;
+      state.conversation = state.conversations[state.incidentId] || [];
+      state.selectedPlanId = state.selections[state.incidentId] || null;
+      history.replaceState(null, "", `#${encodeURIComponent(state.incidentId)}`);
+      paintTalk();
+      paintSurface();
+    }
+    throw error;
+  }
   renderAlertBell();
 }
 

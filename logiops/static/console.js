@@ -507,7 +507,18 @@ async function selectIncident(id) {
   state.pendingApproval = null;
   purchase.take();
   history.replaceState(null, "", `#${encodeURIComponent(id)}`);
-  await act(async () => {}, "");
+  try {
+    await act(async () => {}, "");
+  } catch (error) {
+    if (state.snapshot && state.snapshot.state.incident_id !== id) {
+      state.incidentId = state.snapshot.state.incident_id;
+      state.conversation = state.conversations[state.incidentId] || [];
+      state.selectedPlanId = state.selections[state.incidentId] || null;
+      history.replaceState(null, "", `#${encodeURIComponent(state.incidentId)}`);
+      render(state.snapshot);
+    }
+    throw error;
+  }
   renderAlertBell();
 }
 
