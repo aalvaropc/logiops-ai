@@ -206,7 +206,7 @@ def test_judges_see_why_and_what_to_do_next():
     assert "That access token was not accepted" in api
     assert "per-minute question limit" in api
     assert 'textContent = "Locked"' in script
-    assert "Open the operator console, paste it under Developer" in _static("device", "main.js")
+    assert "on the operator console, open Developer, paste it and press Connect" in api
     assert "vault.set(TOKEN_KEY, token || null);" in api and "globalThis.sessionStorage" in api
     assert not [path for path in root.rglob("*.js") if "localStorage" in path.read_text()]
     assert '<link rel="icon" href="data:,">' in html and '<link rel="icon" href="data:,">' in _static("demo.html")

@@ -40,9 +40,10 @@ export function explainError(status, detail, { authEnabled = false, signedIn = f
   if (status === 403 && authEnabled) return "Your sign-in does not allow that action.";
   if (status === 401) {
     return hasToken
-      ? "That access token was not accepted. Copy it again from the testing instructions, paste it above, and press Connect."
-      : "This public demo needs the access token from the testing instructions. Paste it above and press Connect.";
+      ? "That access token was not accepted. Copy it again from the testing instructions, paste it under Developer on the operator console, and press Connect."
+      : "This demo needs the access token from the testing instructions: on the operator console, open Developer, paste it and press Connect.";
   }
+  if (status === 0) return "I couldn't reach LogiOps. Check the connection and try again.";
   if (status === 429 && /agent/i.test(detail)) {
     return "That's the agent's per-minute question limit (each answer calls a paid model). Wait a minute and ask again; the plan panel and buttons still work.";
   }
@@ -174,7 +175,8 @@ export function createApi({ fetch: doFetch, storage, crypto: webCrypto, origin, 
   }
 
   function explained(status, detail, { token, session, auth }) {
-    const text = typeof detail === "string" ? detail : detail?.message || `HTTP ${status}`;
+    const listed = Array.isArray(detail) ? detail.map((item) => item?.msg).filter(Boolean).slice(0, 2).join("; ") : "";
+    const text = typeof detail === "string" ? detail : listed || detail?.message || `HTTP ${status}`;
     const error = new Error(explainError(status, text, { authEnabled: auth.enabled, signedIn: Boolean(session), hasToken: Boolean(token) }));
     error.status = status;
     error.detail = detail;
@@ -199,7 +201,9 @@ export function createApi({ fetch: doFetch, storage, crypto: webCrypto, origin, 
       response = await fetcher(path, { method, headers, body: body === undefined ? undefined : JSON.stringify(body), cache: "no-store" });
     } catch (error) {
       if (agent) agentCall("error");
-      throw error;
+      const unreachable = explained(0, "", { token, session, auth });
+      unreachable.cause = error;
+      throw unreachable;
     }
     if (agent) agentCall("done");
     if (!response.ok && response.status === 401 && !retried && session

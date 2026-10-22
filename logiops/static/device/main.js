@@ -595,7 +595,9 @@ async function act(work, success) {
       storeToken("");
       $("connection").textContent = "Token required";
       $("connection").className = "connection error";
-      message("This server needs the operator token. Open the operator console, paste it under Developer, and come back.");
+    } else if (error.status === 0) {
+      $("connection").textContent = "Offline";
+      $("connection").className = "connection error";
     }
     throw error;
   } finally { setBusy(false); }
@@ -909,7 +911,8 @@ const startup = createStartup({
     }
     $("connection").textContent = "Offline";
     $("connection").className = "connection error";
-    const reason = error instanceof TypeError ? "I couldn't reach LogiOps." : error.message || String(error);
+    const reason = error.status === 0 || error instanceof TypeError ? "I couldn't reach LogiOps."
+      : error.status >= 500 ? "LogiOps isn't answering right now." : error.message || String(error);
     message(`${reason} ${retryIn ? "Trying again shortly." : "Press Retry to try again."}`);
   },
   onSuccess: (recovered) => {

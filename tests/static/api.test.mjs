@@ -83,7 +83,7 @@ test("an agent call reports its phases so the device can show thinking and error
   } });
   await api.request("/incidents/SHIP-421/agent/investigate", "POST", {});
   await assert.rejects(api.request("/incidents/SHIP-421/agent/ask", "POST", {}));
-  await assert.rejects(api.request("/agent/briefing", "POST", {}), TypeError);
+  await assert.rejects(api.request("/agent/briefing", "POST", {}), (error) => error.status === 0 && /couldn't reach LogiOps/.test(error.message) && error.cause instanceof TypeError);
   assert.deepEqual(phases, ["request", "done", "request", "done", "error", "request", "error"]);
 });
 

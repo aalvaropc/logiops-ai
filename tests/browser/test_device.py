@@ -590,3 +590,47 @@ def test_a_touch_echo_show_reads_larger_type_without_scrolling(browser, replay_s
         assert errors == []
     finally:
         context.close()
+
+
+def test_a_refused_approve_and_pay_closes_its_card_and_charges_nothing(page, replay_server, page_errors, reset_demo):
+    page.set_viewport_size({"width": 1440, "height": 1000})
+    page.goto(f"{replay_server}/demo#SHIP-421")
+    expect(page.locator("#connection")).to_have_text("Connected")
+    say_on_device(page, "What's happening with SHIP-421?")
+    say_on_device(page, "book it")
+    expect(page.locator('[data-surface="confirm"]')).to_be_visible()
+    page.route("**/incidents/SHIP-421/approvals", lambda route: route.fulfill(
+        status=409, content_type="application/json", body='{"detail": "Plan is stale; investigate the incident again"}'))
+    page.click("#confirm-yes")
+    expect(page.locator('[data-surface="confirm"]')).to_be_hidden()
+    expect(page.locator("#device-spoken")).to_contain_text("Nothing was approved or charged")
+    assert page.evaluate("sessionStorage.getItem('logiops-purchase')") is None
+    assert "Nothing is waiting" in say_on_device(page, "yes")
+
+
+def test_a_recheck_after_a_new_spend_cap_shows_the_new_pick_everywhere(page, replay_server, reset_demo):
+    page.set_viewport_size({"width": 1440, "height": 1000})
+    page.goto(f"{replay_server}/demo#SHIP-433")
+    expect(page.locator("#connection")).to_have_text("Connected")
+    say_on_device(page, "What's happening with SHIP-433?")
+    say_on_device(page, "remember my spend cap is $250")
+    say_on_device(page, "Recheck")
+    say_on_device(page, "show the incident")
+    incident = page.locator('[data-surface="incident"]')
+    expect(incident).to_contain_text("$240")
+    expect(incident).not_to_contain_text("$390")
+
+
+def test_losing_the_network_says_so_in_plain_words_and_recovers(page, replay_server, reset_demo):
+    page.goto(f"{replay_server}/demo#SHIP-421")
+    expect(page.locator("#connection")).to_have_text("Connected")
+    page.route("**/*", lambda route: route.abort())
+    page.fill("#ask-input", "Any delays today?")
+    page.click("#ask")
+    expect(page.locator("#message")).to_contain_text("couldn't reach LogiOps")
+    expect(page.locator("#message")).not_to_contain_text("Failed to fetch")
+    expect(page.locator("#connection")).to_have_text("Offline")
+    page.unroute("**/*")
+    say_on_device(page, "show the incident")
+    say_on_device(page, "Any delays today?")
+    expect(page.locator("#connection")).to_have_text("Connected")

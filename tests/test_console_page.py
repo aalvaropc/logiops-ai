@@ -53,7 +53,7 @@ def test_the_developer_drawer_imports_a_scenario_pack():
     assert 'id="pack-result" class="developer-links" role="status" aria-live="polite"' in console
     assert 'request("/scenario/packs", "POST", pack)' in script and "error.detail?.errors" in script
     assert "Nothing was registered." in script and "until the server restarts" in script
-    assert "error.detail = detail;" in api and 'typeof detail === "string" ? detail : detail?.message' in api
+    assert "error.detail = detail;" in api and 'typeof detail === "string" ? detail : listed || detail?.message' in api
 
 
 def test_the_console_shows_who_the_approval_was_recorded_under():
