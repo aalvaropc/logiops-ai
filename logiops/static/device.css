@@ -410,6 +410,9 @@ input::placeholder { color: var(--ink-3); }
   .stage-note a { color: var(--shell); }
 }
 @media (max-width: 399px) {
+  .device-bar, .device-bar-right { gap: 6px; }
+  .device-brand span { margin-left: 6px; padding: 1px 5px; }
+  .bell, .account { padding: 0 10px; }
   .lifecycle ol { grid-template-columns: repeat(4, auto); }
   .lifecycle li { padding-inline: 4px; }
   .send { display: grid; place-items: center; width: 48px; padding: 0; }
@@ -419,7 +422,7 @@ input::placeholder { color: var(--ink-3); }
 @media (max-width: 479px) {
   .spoken { -webkit-line-clamp: 3; line-clamp: 3; }
   .talk.replied .heard { display: none; }
-  .device-bar-right:has(.bell:not([hidden])) .connection { font-size: 0; }
+  .device-bar-right:has(.bell:not([hidden])) .connection, .device-bar-right:has(.account:not([hidden])) .connection { font-size: 0; }
   .confirm-actions { position: sticky; bottom: -18px; z-index: 1; margin: 16px calc(-1 * var(--gutter)) 0; padding: 12px var(--gutter) 16px; border-top: 1px solid var(--hairline); background: var(--ground); }
   .bell-where { display: none; }
 }
