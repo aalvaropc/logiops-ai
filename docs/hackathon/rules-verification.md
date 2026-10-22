@@ -18,15 +18,16 @@ settle it; the drafted question is ready to send to the organizers.
    that. See `decisions.md` (D2, D-AMZ-23).
 
 3. **Where exactly are Product Feedback and Friction Logs submitted?**
-   Ask. The rules require the feedback; the form fields are only visible when
-   submitting. Draft: "Is Product Feedback a form field, a repository file or a
-   link?" Until answered: paste it in the form and keep `amazon-feedback.md` and
-   `amazon-friction-log.md` in the repository.
+   Answered by the submission form (2026-10-22): the feedback is five questions in
+   the form, the friction log is a URL field (it links to `amazon-friction-log.md`
+   in this repository), and feature requests are a text field. The files stay in
+   the repository.
 
 4. **Does the repo URL accept a tag/release URL instead of the default
    branch?**
-   Ask. Draft: "May the repository field point to a release or tag URL?" Until
-   answered: use the default branch and tag `amazon-v1.0` on the same commit.
+   Answered by the submission form (2026-10-22): the field asks for the project
+   repository URL, so it holds the repository; the tag `amazon-v1.0` names the
+   submitted commit.
 
 5. **Does this track require a live demo/endpoint during judging?**
    Answered: yes. The FAQ said a locally runnable repo is enough, but a later organizer

@@ -117,10 +117,17 @@ tomorrow") go to the agent and never act.
 ## The console
 
 The operator console at <http://127.0.0.1:8000/console> shows the same
-incident in full: inbox, plan cards with the Approve button, execution,
-bookings, preferences, the audit trail and a Developer drawer (operator token,
-stock-change control that invalidates an earlier approval, reset, links to the
-MCP endpoint). On the public deployment, paste the operator token there to
+incident at desk density in three columns:
+
+- the incident queue, with the preferences and a Developer drawer under it.
+  The drawer holds the operator token, a stock-change control that invalidates
+  an earlier approval, the scenario pack import, the reset and links to the MCP
+  endpoint;
+- the incident in the middle: route map, promise bars, plans table, Approve and
+  Execute, booking and audit trail;
+- an Agent rail with each MCP call lit as a station, and the conversation.
+
+The session's metrics sit in the top bar. On the public deployment, paste the operator token there to
 connect; it is kept for that browser tab only (`sessionStorage`), so a reload
 does not ask again and closing the tab forgets it.
 
@@ -140,8 +147,9 @@ npx @modelcontextprotocol/inspector --cli https://dir4g4n7eq982.cloudfront.net/m
 ```
 
 The first lists the 12 tools; the second returns SHIP-433's record. Without the
-header you are a guest: the read tools still answer, and execute, quote and book
-(`execute_approved_plan`, `quote_carrier_booking`, `book_carrier`) refuse with
+header you are a guest: the read tools still answer, and execute, quote, book and the
+booking lookup (`execute_approved_plan`, `quote_carrier_booking`, `book_carrier`,
+`get_booking`) refuse with
 `401` and the OAuth challenge, which the CLI reports as `auth_required`. To sign
 in from Inspector's web UI (`npx @modelcontextprotocol/inspector`), enter the
 client id and the scopes that `GET /auth/config` reports in its OAuth settings;
@@ -304,9 +312,8 @@ and then sends `MCP-Protocol-Version: 2025-11-25` on every request: `tools/list`
 and `resources/read` for the card, and `tools/call` for `list_incidents` (the
 inbox, with `GET /incidents` only as a fallback) and `list_alerts`. It passes a
 full `hostContext` (theme, display mode, container size, locale, time
-zone, device capabilities, safe-area insets), and its "Light plans card"
-toggle, under the simulated device on a desktop screen, sends
-`ui/notifications/host-context-changed`.
+zone, device capabilities, safe-area insets). The theme is always dark,
+and a window resize sends `ui/notifications/host-context-changed`.
 
 ## Carrier booking and payment
 

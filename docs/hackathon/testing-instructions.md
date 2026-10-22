@@ -43,7 +43,7 @@ LOGIOPS_AGENT_MODE=replay uv run uvicorn logiops.api:app --host 127.0.0.1 --port
 **Any MCP client first, if you like.** `npx @modelcontextprotocol/inspector --cli http://127.0.0.1:8000/mcp --transport http --method tools/list`
 lists the 12 tools from a standard client; `--method tools/call --tool-name get_shipment --tool-arg shipment_id=SHIP-433`
 returns one record. Against the deployed demo, add `--header "Authorization: Bearer <token>"`. Without it you are a
-guest: execute, quote and book answer `401` with the OAuth challenge (the CLI reports `auth_required`); to sign in from
+guest: execute, quote, book and `get_booking` answer `401` with the OAuth challenge (the CLI reports `auth_required`); to sign in from
 Inspector's web UI, enter the client id and scopes from `GET /auth/config` in its OAuth settings.
 The device is an MCP client too: in the browser's network panel, its posts to `/mcp` are `initialize`,
 `tools/list`, `resources/read` for the plans card and `tools/call` for `list_incidents` and `list_alerts`.
@@ -90,8 +90,8 @@ plans". It reads the shipment, asks before `investigate_incident`, and renders t
    left, the incident with its route, promise tracks and plans table in the
    middle (the Approve and Execute buttons, bookings and the audit trail), and the
    agent rail with each MCP call on the right; preferences and the Developer
-   drawer sit under the queue. The link in the top bar of each page keeps the
-   incident.
+   drawer sit under the queue. On a desktop screen, the link to the console
+   under the device keeps the incident.
 4. **Ask.** Type, or speak in Chrome or Edge: "What's happening with SHIP-421?". With
    "Read replies aloud" on, the deployed demo speaks with Amazon Polly (the local replay
    uses the browser's voice), and typing or the microphone cuts it off. The
@@ -177,7 +177,7 @@ plans". It reads the shipment, asks before `investigate_incident`, and renders t
    what it remembered. On the deployed demo this runs on Amazon Bedrock AgentCore
    Memory (per signed-in user); locally it runs on SQLite.
 15. **Sign in (deployed demo).** On the deployed demo without the token you are a guest.
-   You can read, ask the agent (on the replay model) and use the read tools. "Approve"
+   You can read, ask the agent (live within the day's guest share, then on the replay model) and use the read tools. "Approve"
    or "book it" asks you to sign in. Press the account button in the device's top bar
    (or say "link my account"); the operator token from the private testing
    instructions can be pasted in the console's Developer drawer instead:

@@ -68,7 +68,7 @@ Success means:
     answer that still fails is shown flagged, never hidden.
 - **The same MCP tools serve a person's assistant and an autonomous agent.**
   The server speaks MCP over Streamable HTTP, with OAuth 2.1, MCP Apps and an
-  Agent Skill, the protocols Alexa+ add-ons are built on. What we expect is left to
+  Agent Skill, the protocols Alexa+ add-ons are built on. What I expect is left to
   connect the real Alexa+ is in `docs/hackathon/alexa-plus-readiness.md`; it could not
   be verified, because the Alexa+ developer tools are partner-only.
 
@@ -89,8 +89,10 @@ Success means:
     it goes through the same REST and MCP endpoints a real integration would
     use.
 - **`/console`: the desk-side operator console.**
-  - It shows the inbox, the plans with Approve, Execute, bookings,
-    preferences, the audit trail and the session's metrics.
+  - It is a three-column desk. The incident queue is on the left. The incident
+    is in the middle: route map, promise bars, plans table, Approve and Execute,
+    booking and audit trail. An Agent rail with each MCP call and the
+    conversation is on the right, and the session's metrics sit in the top bar.
   - A Developer drawer holds the token, the stock change, the reset and the
     scenario pack import.
 - **Voice and screen split the work.**

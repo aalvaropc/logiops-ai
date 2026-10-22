@@ -10,6 +10,7 @@ and verifies the result.
 **The agent proposes. You approve. Code enforces it.**
 
 [Live demo](https://dir4g4n7eq982.cloudfront.net/demo) ·
+[Demo video](https://youtu.be/h30PVrBO8d0) ·
 [Run it locally](#run-it-locally) · [How it works](#how-it-works) ·
 [Reference](docs/reference.md)
 
@@ -163,9 +164,9 @@ setting in the [reference](docs/reference.md).
 Built for the **Amazon Developer Hackathon**: Alexa+ track, AWS Builder and Open
 Source mini challenges.
 
-| Tag | Devpost | Live demo | Open-source library |
-|---|---|---|---|
-| `amazon-v1.0` (to be tagged on 2026-10-22) | _pending_ | <https://dir4g4n7eq982.cloudfront.net/demo> | [`aalvaropc/mcp-apps-web-host`](https://github.com/aalvaropc/mcp-apps-web-host), MIT |
+| Tag | Devpost | Video | Live demo | Open-source library |
+|---|---|---|---|---|
+| `amazon-v1.0` | [devpost.com/software/logiops-ai](https://devpost.com/software/logiops-ai) | [youtu.be/h30PVrBO8d0](https://youtu.be/h30PVrBO8d0) (2:44) | <https://dir4g4n7eq982.cloudfront.net/demo> | [`aalvaropc/mcp-apps-web-host`](https://github.com/aalvaropc/mcp-apps-web-host), MIT |
 
 | Requirement | Where it is |
 |---|---|
@@ -181,7 +182,7 @@ The live demo stays up until judging ends (20 Nov 2026). It shares a
 daily budget of 40 model calls, and 20 of those calls are a guest share, so a
 judge meets the live agent without signing in; when a share is spent, or the
 model service is down, replies come from the scripted replay and say so. The operator token is in the
-private testing instructions. For judges:
+testing instructions on Devpost, which only judges and organizers see. For judges:
 [testing instructions](docs/hackathon/testing-instructions.md),
 [decisions](docs/hackathon/decisions.md) and
 [Alexa+ readiness](docs/hackathon/alexa-plus-readiness.md).
